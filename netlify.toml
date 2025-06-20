@@ -7,15 +7,17 @@
 
 [build.environment]
   NODE_VERSION = "18.17.0"
+  NETLIFY_NEXT_PLUGIN_SKIP = "false"
 
-# API routes handled by Next.js plugin
+# Next.js API routes
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/___netlify-handler"
   status = 200
+  force = true
 
-# Dynamic pages
+# All other routes
 [[redirects]]
   from = "/*"
-  to = "/index.html"
+  to = "/.netlify/functions/___netlify-handler"
   status = 200 
