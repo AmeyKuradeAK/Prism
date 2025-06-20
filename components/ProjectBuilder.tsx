@@ -133,11 +133,18 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
   // Auto-scroll console to bottom when new logs are added
   useEffect(() => {
     if (consoleRef.current) {
-      // Use requestAnimationFrame to ensure DOM has updated
-      requestAnimationFrame(() => {
+      // Use a small timeout to ensure DOM has fully updated and rendered
+      const scrollToBottom = () => {
         if (consoleRef.current) {
           consoleRef.current.scrollTop = consoleRef.current.scrollHeight
         }
+      }
+      
+      // Try multiple times to ensure it works
+      requestAnimationFrame(() => {
+        scrollToBottom()
+        // Also try after a small delay to handle slow renders
+        setTimeout(scrollToBottom, 50)
       })
     }
   }, [logs])
@@ -458,8 +465,8 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
           </div>
 
           {/* Console */}
-          <div className="flex-1 flex flex-col">
-            <div className="px-6 py-3 border-b border-gray-800 flex items-center justify-between">
+          <div className="flex-1 flex flex-col min-h-0">
+            <div className="px-6 py-3 border-b border-gray-800 flex items-center justify-between flex-shrink-0">
               <div className="flex items-center space-x-2">
                 <Terminal className="w-4 h-4 text-green-400" />
                 <span className="text-sm font-medium text-gray-200">Generation Log</span>
@@ -473,7 +480,7 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
             </div>
             <div 
               ref={consoleRef}
-              className="flex-1 p-4 overflow-auto bg-gray-950 text-green-400 font-mono text-sm scroll-smooth"
+              className="flex-1 p-4 overflow-y-auto overflow-x-hidden bg-gray-950 text-green-400 font-mono text-sm scroll-smooth min-h-0"
             >
               {logs.map((log, index) => (
                 <motion.div
