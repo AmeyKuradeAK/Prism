@@ -4,23 +4,26 @@ const isPublicRoute = createRouteMatcher([
   '/',
   '/sign-in(.*)',
   '/sign-up(.*)',
-  '/api/webhooks(.*)'
+  '/api/webhooks(.*)',
+  '/api/webhooks/clerk'
 ])
 
 export default clerkMiddleware(async (auth, request) => {
+  // Allow webhooks to pass through without authentication
+  if (request.nextUrl.pathname.startsWith('/api/webhooks/')) {
+    return
+  }
+
   if (!isPublicRoute(request)) {
     const { userId } = await auth()
     if (!userId) {
-      return new Response('Unauthorized', { status: 401 })
+      // Redirect to sign-in instead of returning 401
+      const signInUrl = new URL('/sign-in', request.url)
+      return Response.redirect(signInUrl)
     }
   }
 })
 
 export const config = {
-  matcher: [
-    // Skip Next.js internals and all static files, unless found in search params
-    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
-    // Always run for API routes
-    '/(api|trpc)(.*)',
-  ],
+  matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
 } 

@@ -28,6 +28,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Validate environment setup
+    const hasApiKey = !!process.env.MISTRAL_API_KEY && process.env.MISTRAL_API_KEY.length > 10
+    console.log(`🔑 API Key Status: ${hasApiKey ? 'Valid' : 'Missing/Invalid'}`)
+
     // Set up Server-Sent Events
     const encoder = new TextEncoder()
     let controller: ReadableStreamDefaultController<Uint8Array> | null = null
@@ -40,22 +44,29 @@ export async function POST(request: NextRequest) {
       file?: { path: string; content: string; isComplete: boolean }
     }) => {
       if (controller) {
-        const message = `data: ${JSON.stringify(data)}\n\n`
-        controller.enqueue(encoder.encode(message))
+        try {
+          const message = `data: ${JSON.stringify(data)}\n\n`
+          controller.enqueue(encoder.encode(message))
+        } catch (error) {
+          console.error('Error sending SSE data:', error)
+        }
       }
     }
 
     // Function to send logs
     const sendLog = (message: string) => {
+      console.log(`📱 [${new Date().toISOString()}] ${message}`)
       sendData({ type: 'log', message })
     }
 
     const stream = new ReadableStream({
       start(streamController) {
         controller = streamController
+        console.log('🚀 Started generation stream')
       },
       cancel() {
         // Cleanup if stream is cancelled
+        console.log('🛑 Generation stream cancelled')
         controller = null
       }
     })
@@ -63,49 +74,54 @@ export async function POST(request: NextRequest) {
     // Start generation process asynchronously
     ;(async () => {
       try {
-        sendLog('🔍 Analyzing your app requirements...')
-        sendLog(`📋 Prompt: "${prompt.substring(0, 100)}${prompt.length > 100 ? '...' : ''}"`)
+        sendLog('🔍 Starting AI app generation...')
+        sendLog(`📋 User Request: "${prompt.substring(0, 150)}${prompt.length > 150 ? '...' : ''}"`)
+        sendLog(`🔑 AI Features: ${hasApiKey ? 'Available' : 'Limited (using template only)'}`)
         
         const startTime = Date.now()
-        const allFiles: { [key: string]: string } = {}
         
-        // Use the new progressive generation with callbacks
-        const files = await generateRealExpoApp(prompt, userId, (progress: { type: string; message: string; file?: { path: string; content: string; isComplete: boolean } }) => {
+        // Use the enhanced generation with better error handling
+        const files = await generateRealExpoApp(prompt, userId, (progress: { 
+          type: string; 
+          message: string; 
+          file?: { path: string; content: string; isComplete: boolean } 
+        }) => {
           if (progress.type === 'log') {
             sendLog(progress.message)
-          } else if (progress.type === 'file_start') {
-            sendLog(progress.message)
+          } else if (progress.type === 'file_start' && progress.file) {
+            sendLog(`📄 Starting ${progress.file.path}...`)
             sendData({ 
               type: 'file_start', 
               file: progress.file 
             })
-          } else if (progress.type === 'file_progress') {
+          } else if (progress.type === 'file_progress' && progress.file) {
             sendData({ 
               type: 'file_progress', 
               file: progress.file 
             })
-          } else if (progress.type === 'file_complete') {
-            sendLog(`✅ ${progress.message}`)
+          } else if (progress.type === 'file_complete' && progress.file) {
+            sendLog(`✅ Completed ${progress.file.path}`)
             sendData({ 
               type: 'file_complete', 
               file: progress.file 
             })
-            // Store completed file
-            if (progress.file) {
-              allFiles[progress.file.path] = progress.file.content
-            }
           }
         })
         
         const duration = Date.now() - startTime
+        const fileCount = Object.keys(files).length
+        
         sendLog(`⏱️ Generation completed in ${Math.round(duration / 1000)}s`)
+        sendLog(`📦 Created ${fileCount} files with production-ready structure`)
         
-        sendLog('📱 Generated Expo SDK 53 app with latest React Native patterns')
-        sendLog(`📄 Created ${Object.keys(files).length} files with production-ready code`)
+        if (hasApiKey) {
+          sendLog('🤖 Enhanced with AI-generated custom features')
+        } else {
+          sendLog('📋 Using enhanced template (set MISTRAL_API_KEY for AI features)')
+        }
         
-        sendLog('🎨 Applied modern UI components and navigation')
-        sendLog('🔧 Configured TypeScript, ESLint, and build settings')
-        
+        sendLog('🎨 Includes TypeScript, modern React Native patterns')
+        sendLog('⚡ Expo SDK 53 with latest dependencies')
         sendLog('✅ Your React Native app is ready!')
         
         // Convert files object to array format expected by frontend
@@ -119,13 +135,48 @@ export async function POST(request: NextRequest) {
                 path.endsWith('.md') ? 'md' : 'txt'
         }))
         
+        // Validate that we have essential files
+        const hasAppTsx = filesArray.some(f => f.path === 'App.tsx')
+        const hasPackageJson = filesArray.some(f => f.path === 'package.json')
+        const hasAppJson = filesArray.some(f => f.path === 'app.json')
+        
+        if (!hasAppTsx || !hasPackageJson || !hasAppJson) {
+          sendLog('⚠️ Warning: Some essential files may be missing')
+          sendLog(`App.tsx: ${hasAppTsx ? '✓' : '✗'} | package.json: ${hasPackageJson ? '✓' : '✗'} | app.json: ${hasAppJson ? '✓' : '✗'}`)
+        }
+        
         sendData({ type: 'files', files: filesArray })
         sendData({ type: 'complete' })
+        
+        console.log(`✅ Generation completed successfully: ${fileCount} files in ${duration}ms`)
+        
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Generation failed'
-        sendLog(`❌ Error: ${errorMessage}`)
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
+        console.error('❌ Generation failed:', error)
+        console.error('Stack trace:', error instanceof Error ? error.stack : 'No stack trace')
+        
+        sendLog(`❌ Generation Error: ${errorMessage}`)
+        
+        // Try to provide helpful debugging info
+        if (errorMessage.includes('API') || errorMessage.includes('401')) {
+          sendLog('🔍 This might be an API key issue. Check your MISTRAL_API_KEY.')
+        } else if (errorMessage.includes('timeout') || errorMessage.includes('ECONNRESET')) {
+          sendLog('🔍 This might be a network issue. Please try again.')
+        } else if (errorMessage.includes('parse') || errorMessage.includes('JSON')) {
+          sendLog('🔍 This might be an AI response parsing issue.')
+        }
+        
         sendData({ type: 'error', message: errorMessage })
-      }
+              } finally {
+          // Always close the stream
+          if (controller) {
+            try {
+              (controller as ReadableStreamDefaultController<Uint8Array>).close()
+            } catch (error) {
+              console.error('Error closing stream:', error)
+            }
+          }
+        }
     })()
 
     return new Response(stream, {
@@ -140,11 +191,15 @@ export async function POST(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error('Generate API error:', error)
+    console.error('❌ Generate API error:', error)
     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
     
     return new Response(
-      JSON.stringify({ error: errorMessage }),
+      JSON.stringify({ 
+        error: errorMessage,
+        timestamp: new Date().toISOString(),
+        details: process.env.NODE_ENV === 'development' ? (error instanceof Error ? error.stack : 'No stack trace') : undefined
+      }),
       { 
         status: 500,
         headers: { 'Content-Type': 'application/json' }

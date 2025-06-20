@@ -12,6 +12,7 @@ declare global {
       MISTRAL_API_KEY: string
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: string
       CLERK_SECRET_KEY: string
+      CLERK_WEBHOOK_SECRET: string
       EXPO_ACCESS_TOKEN?: string
       NEXTAUTH_SECRET: string
       NEXTAUTH_URL: string

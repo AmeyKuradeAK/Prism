@@ -46,6 +46,7 @@
     "react-hot-toast": "^2.4.1",
     "react-syntax-highlighter": "^15.5.0",
     "recharts": "^2.15.3",
+    "svix": "^1.67.0",
     "tailwind-merge": "^2.5.4",
     "three": "^0.170.0",
     "uuid": "^10.0.0"

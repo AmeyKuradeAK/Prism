@@ -1,19 +1,15 @@
 import mongoose from 'mongoose'
 
 // Check for required environment variable
-const MONGODB_URI: string = process.env.MONGODB_URI || 'mongodb://localhost:27017/v0-flutter-dev'
+const MONGODB_URI: string = process.env.MONGODB_URI
 
-// Development mode flag
-const isDevelopment = process.env.NODE_ENV === 'development'
-const useLocalFallback = isDevelopment && (!process.env.MONGODB_URI || process.env.MONGODB_URI.includes('localhost'))
+if (!MONGODB_URI) {
+  throw new Error(
+    'Please define the MONGODB_URI environment variable inside .env'
+  )
+}
 
-console.log('🔧 Database Config:', {
-  isDevelopment,
-  useLocalFallback,
-  hasMongoURI: !!process.env.MONGODB_URI
-})
-
-// Define the global mongoose interface
+// Define the global mongoose interface for caching
 declare global {
   var mongoose: {
     conn: typeof import('mongoose') | null
@@ -28,68 +24,94 @@ if (!cached) {
   cached = global.mongoose = { conn: null, promise: null }
 }
 
-async function connectToDatabase() {
+async function connectToDatabase(): Promise<typeof mongoose> {
   // Return existing connection if available
   if (cached.conn) {
     return cached.conn
   }
 
-  // For development without MongoDB Atlas, return a mock connection
-  if (useLocalFallback) {
-    console.log('🔄 Using development mode - no database connection required')
-    // Create a minimal mock connection object
-    const mockConnection = {
-      connection: { readyState: 1 },
-      models: {},
-      model: () => ({
-        find: () => ({ sort: () => ({ lean: () => ({ limit: () => Promise.resolve([]) }) }) }),
-        findOne: () => Promise.resolve(null),
-        findOneAndUpdate: () => Promise.resolve(null),
-        save: () => Promise.resolve({ _id: 'mock-id', createdAt: new Date() }),
-        create: () => Promise.resolve({ _id: 'mock-id', createdAt: new Date() })
-      })
-    }
-    cached.conn = mockConnection as any
-    return mockConnection
-  }
-
   // Create new connection if no promise exists
   if (!cached.promise) {
-    const opts = {
+    const opts: mongoose.ConnectOptions = {
       bufferCommands: false,
-      serverSelectionTimeoutMS: 3000, // Faster timeout for development
-      socketTimeoutMS: 10000, // Shorter timeout
-      maxPoolSize: 5, // Smaller pool for development
-      minPoolSize: 1,
-      maxIdleTimeMS: 10000,
+      
+      // Connection timeouts
+      serverSelectionTimeoutMS: 5000, // Keep trying to send operations for 5 seconds
+      socketTimeoutMS: 45000, // Close sockets after 45 seconds of inactivity
+      
+      // Connection pool settings
+      maxPoolSize: 10, // Maintain up to 10 socket connections
+      minPoolSize: 5,  // Maintain a minimum of 5 socket connections
+      maxIdleTimeMS: 30000, // Close connections after 30 seconds of inactivity
+      
+      // Heartbeat settings
+      heartbeatFrequencyMS: 10000, // Check server status every 10 seconds
+      
+      // Retry settings
+      retryWrites: true,
+      retryReads: true,
     }
 
+    console.log('🔗 Connecting to MongoDB...')
+    
     cached.promise = mongoose.connect(MONGODB_URI, opts).then((mongoose) => {
-      console.log('✅ Connected to MongoDB')
+      console.log('✅ Successfully connected to MongoDB')
+      
+      // Set up connection event listeners
+      mongoose.connection.on('error', (error) => {
+        console.error('❌ MongoDB connection error:', error)
+      })
+      
+      mongoose.connection.on('disconnected', () => {
+        console.warn('⚠️ MongoDB disconnected')
+      })
+      
+      mongoose.connection.on('reconnected', () => {
+        console.log('🔄 MongoDB reconnected')
+      })
+      
       return mongoose
     }).catch((error) => {
-      console.error('❌ MongoDB connection failed:', error.message)
+      console.error('❌ Failed to connect to MongoDB:', error.message)
       cached.promise = null
-      throw error
+      throw new Error(`MongoDB connection failed: ${error.message}`)
     })
   }
 
   try {
     cached.conn = await cached.promise
+    return cached.conn
   } catch (error) {
     cached.promise = null
     console.error('❌ MongoDB connection error:', error)
-    
-    // In development, fall back to mock mode instead of throwing
-    if (isDevelopment) {
-      console.log('🔄 Falling back to development mode')
-      return connectToDatabase() // This will use the mock connection
-    }
-    
     throw error
   }
+}
 
-  return cached.conn
+// Health check function
+export async function checkDatabaseHealth(): Promise<boolean> {
+  try {
+    const connection = await connectToDatabase()
+    const state = connection.connection.readyState
+    return state === 1 // 1 = connected
+  } catch (error) {
+    console.error('Database health check failed:', error)
+    return false
+  }
+}
+
+// Close database connection
+export async function closeDatabaseConnection(): Promise<void> {
+  try {
+    if (cached.conn) {
+      await cached.conn.connection.close()
+      cached.conn = null
+      cached.promise = null
+      console.log('🔒 MongoDB connection closed')
+    }
+  } catch (error) {
+    console.error('Error closing MongoDB connection:', error)
+  }
 }
 
 export default connectToDatabase 
