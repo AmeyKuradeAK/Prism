@@ -5,7 +5,7 @@ import Project from '@/lib/database/models/Project'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const { userId } = await auth()
@@ -13,10 +13,12 @@ export async function GET(
       return Response.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const { id } = await context.params
+
     await connectToDatabase()
 
     const project = await Project.findOne({ 
-      _id: params.id, 
+      _id: id, 
       userId 
     })
 

@@ -75,7 +75,7 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
   const [selectedPlatforms, setSelectedPlatforms] = useState<Set<string>>(new Set(['android']))
   
   const consoleRef = useRef<HTMLDivElement>(null)
-  const autoSaveTimeoutRef = useRef<NodeJS.Timeout>()
+  const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   // Auto-save functionality
   const triggerAutoSave = () => {

@@ -2,10 +2,10 @@ import { NextRequest } from 'next/server'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { filename: string } }
+  context: { params: Promise<{ filename: string }> }
 ) {
   try {
-    const { filename } = params
+    const { filename } = await context.params
     
     // Check if it's a build file request
     if (filename && filename.startsWith('build-') && filename.endsWith('.apk')) {
