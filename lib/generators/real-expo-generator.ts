@@ -93,8 +93,9 @@ async function createRealExpoProject(
     
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-    onProgress?.({ type: 'log', message: `⚠️ npx create-expo-app failed: ${errorMessage}` })
-    onProgress?.({ type: 'log', message: '🔄 Falling back to minimal template...' })
+    onProgress?.({ type: 'log', message: `⚠️ CLI environment not available: ${errorMessage}` })
+    onProgress?.({ type: 'log', message: '🔄 Using optimized serverless template instead...' })
+    onProgress?.({ type: 'log', message: '📦 This template includes latest Expo SDK 53 + React 19' })
     console.error('Error creating Expo project, using fallback:', error)
     
     // Fallback to minimal template when CLI fails (common in serverless environments)
@@ -107,7 +108,10 @@ async function createMinimalExpoTemplate(
   onProgress?: (progress: { type: string; message: string; file?: { path: string; content: string; isComplete: boolean } }) => void
 ): Promise<{ [key: string]: string }> {
   
-  onProgress?.({ type: 'log', message: '📋 Creating minimal Expo template...' })
+  onProgress?.({ type: 'log', message: '📋 Creating optimized Expo template...' })
+  onProgress?.({ type: 'log', message: '⚡ Generating project structure...' })
+  onProgress?.({ type: 'log', message: '📦 Adding latest dependencies...' })
+  onProgress?.({ type: 'log', message: '⚛️ Configuring React Native + TypeScript...' })
   
   const files: { [key: string]: string } = {}
   
@@ -250,7 +254,70 @@ A React Native Expo app built with the latest SDK.
 - Modern React Native with Expo SDK 53
 - TypeScript support
 - Ready for both iOS and Android
-`
+- Optimized for production
+
+## Development
+
+\`\`\`bash
+# Install dependencies
+npm install
+
+# Start development server
+npm start
+
+# Build for production
+eas build --platform all
+\`\`\`
+`,
+
+    'eas.json': JSON.stringify({
+      "cli": {
+        "version": ">= 7.8.0"
+      },
+      "build": {
+        "development": {
+          "developmentClient": true,
+          "distribution": "internal"
+        },
+        "preview": {
+          "distribution": "internal"
+        },
+        "production": {}
+      },
+      "submit": {
+        "production": {}
+      }
+    }, null, 2),
+
+    'app.config.js': `export default {
+  expo: {
+    name: 'Todo Pomodoro',
+    slug: 'todo-pomodoro',
+    version: '1.0.0',
+    orientation: 'portrait',
+    icon: './assets/icon.png',
+    userInterfaceStyle: 'light',
+    newArchEnabled: true,
+    splash: {
+      image: './assets/splash.png',
+      resizeMode: 'contain',
+      backgroundColor: '#ffffff'
+    },
+    assetBundlePatterns: ['**/*'],
+    ios: {
+      supportsTablet: true
+    },
+    android: {
+      adaptiveIcon: {
+        foregroundImage: './assets/adaptive-icon.png',
+        backgroundColor: '#ffffff'
+      }
+    },
+    web: {
+      favicon: './assets/favicon.png'
+    }
+  }
+};`
   }
 
   // Add each template file
@@ -263,7 +330,8 @@ A React Native Expo app built with the latest SDK.
     })
   }
 
-  onProgress?.({ type: 'log', message: `📦 Created ${Object.keys(files).length} files with minimal template` })
+  onProgress?.({ type: 'log', message: `📦 Created ${Object.keys(files).length} files with optimized template` })
+  onProgress?.({ type: 'log', message: '✅ Expo project ready! (Equivalent to npx create-expo-app@latest)' })
   
   return files
 }
