@@ -385,13 +385,17 @@ async function enhanceWithAI(
 ): Promise<{ [key: string]: string }> {
   
   // Check for API key
-  if (!process.env.MISTRAL_API_KEY || process.env.MISTRAL_API_KEY.length < 10) {
+  const apiKey = process.env.MISTRAL_API_KEY
+  onProgress?.({ type: 'log', message: `🔑 Checking API key... ${apiKey ? 'Found' : 'Missing'}` })
+  
+  if (!apiKey || apiKey.length < 10) {
     onProgress?.({ type: 'log', message: '⚠️ Mistral API key not configured properly' })
     onProgress?.({ type: 'log', message: '📦 Using base Expo template with enhanced dependencies' })
     return baseFiles
   }
   
   onProgress?.({ type: 'log', message: '🤖 Enhancing with AI-generated features...' })
+  onProgress?.({ type: 'log', message: `🎯 AI will create ${analysis.estimatedScreens} screens for: ${analysis.coreFeatures.join(', ')}` })
   
   try {
     const enhancementPrompt = `You are building a React Native Expo app based on this user request: "${prompt}"
@@ -471,7 +475,8 @@ Create a FULLY FUNCTIONAL ${analysis.appType.toLowerCase()} with these features:
     
     if (parsedFiles.length === 0) {
       onProgress?.({ type: 'log', message: '⚠️ No files parsed from AI response, checking response format...' })
-      console.log('AI Response sample:', generatedContent.substring(0, 500))
+      onProgress?.({ type: 'log', message: `📋 Response preview: "${generatedContent.substring(0, 200)}..."` })
+      console.log('Full AI Response:', generatedContent)
       onProgress?.({ type: 'log', message: '⚠️ Using base CLI template instead' })
       return baseFiles
     }
