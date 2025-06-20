@@ -115,12 +115,12 @@ async function createMinimalExpoTemplate(
   
   const files: { [key: string]: string } = {}
   
-  // Essential files for a working Expo app
+  // EXACT structure from npx create-expo-app@latest --template blank-typescript
   const templates = {
     'package.json': JSON.stringify({
       "name": "expo-todo-pomodoro",
       "version": "1.0.0",
-      "main": "node_modules/expo/AppEntry.js",
+      "main": "expo/AppEntry.js",
       "scripts": {
         "start": "expo start",
         "android": "expo start --android",
@@ -131,41 +131,40 @@ async function createMinimalExpoTemplate(
         "expo": "~53.0.0",
         "expo-status-bar": "~2.0.0",
         "react": "19.1.0",
-        "react-native": "0.76.8",
-        "@react-native-async-storage/async-storage": "1.25.0",
-        "react-native-vector-icons": "^10.0.0"
+        "react-native": "0.76.8"
       },
       "devDependencies": {
-        "@babel/core": "^7.20.0",
+        "@babel/core": "^7.25.0",
         "@types/react": "~19.0.0",
         "@types/react-native": "~0.76.0",
-        "typescript": "~5.3.3"
+        "typescript": "^5.3.0"
       },
       "private": true
     }, null, 2),
 
     'app.json': JSON.stringify({
       "expo": {
-        "name": "Todo Pomodoro",
-        "slug": "todo-pomodoro",
+        "name": "expo-todo-pomodoro",
+        "slug": "expo-todo-pomodoro",
         "version": "1.0.0",
         "orientation": "portrait",
         "icon": "./assets/icon.png",
         "userInterfaceStyle": "light",
-        "newArchEnabled": true,
         "splash": {
           "image": "./assets/splash.png",
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
         },
-        "assetBundlePatterns": ["**/*"],
+        "assetBundlePatterns": [
+          "**/*"
+        ],
         "ios": {
           "supportsTablet": true
         },
         "android": {
           "adaptiveIcon": {
             "foregroundImage": "./assets/adaptive-icon.png",
-            "backgroundColor": "#ffffff"
+            "backgroundColor": "#FFFFFF"
           }
         },
         "web": {
@@ -175,14 +174,12 @@ async function createMinimalExpoTemplate(
     }, null, 2),
 
     'App.tsx': `import { StatusBar } from 'expo-status-bar';
-import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 export default function App() {
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Todo & Pomodoro</Text>
-      <Text style={styles.subtitle}>Your productivity companion</Text>
+      <Text>Open up App.tsx to start working on your app!</Text>
       <StatusBar style="auto" />
     </View>
   );
@@ -195,18 +192,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#666',
-  },
 });`,
 
-    'babel.config.js': `module.exports = function(api) {
+    'babel.config.js': `module.exports = function (api) {
   api.cache(true);
   return {
     presets: ['babel-preset-expo'],
@@ -222,102 +210,47 @@ const styles = StyleSheet.create({
 
     'metro.config.js': `const { getDefaultConfig } = require('expo/metro-config');
 
-module.exports = getDefaultConfig(__dirname);`,
+const config = getDefaultConfig(__dirname);
 
-    '.gitignore': `node_modules/
+module.exports = config;`,
+
+    '.gitignore': `# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
+
+# dependencies
+node_modules/
+
+# Expo
 .expo/
 dist/
-npm-debug.*
+web-build/
+
+# Native
+*.orig.*
 *.jks
 *.p8
 *.p12
 *.key
 *.mobileprovision
-*.orig.*
-web-build/
+
+# Metro
+.metro-health-check*
+
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
 
 # macOS
-.DS_Store`,
+.DS_Store
+*.pem
 
-    'README.md': `# Todo & Pomodoro App
+# local env files
+.env*.local
 
-A React Native Expo app built with the latest SDK.
+# typescript
+*.tsbuildinfo`,
 
-## Getting Started
 
-1. Install dependencies: \`npm install\`
-2. Start the app: \`npm start\`
-3. Use Expo Go app to scan QR code
-
-## Features
-
-- Modern React Native with Expo SDK 53
-- TypeScript support
-- Ready for both iOS and Android
-- Optimized for production
-
-## Development
-
-\`\`\`bash
-# Install dependencies
-npm install
-
-# Start development server
-npm start
-
-# Build for production
-eas build --platform all
-\`\`\`
-`,
-
-    'eas.json': JSON.stringify({
-      "cli": {
-        "version": ">= 7.8.0"
-      },
-      "build": {
-        "development": {
-          "developmentClient": true,
-          "distribution": "internal"
-        },
-        "preview": {
-          "distribution": "internal"
-        },
-        "production": {}
-      },
-      "submit": {
-        "production": {}
-      }
-    }, null, 2),
-
-    'app.config.js': `export default {
-  expo: {
-    name: 'Todo Pomodoro',
-    slug: 'todo-pomodoro',
-    version: '1.0.0',
-    orientation: 'portrait',
-    icon: './assets/icon.png',
-    userInterfaceStyle: 'light',
-    newArchEnabled: true,
-    splash: {
-      image: './assets/splash.png',
-      resizeMode: 'contain',
-      backgroundColor: '#ffffff'
-    },
-    assetBundlePatterns: ['**/*'],
-    ios: {
-      supportsTablet: true
-    },
-    android: {
-      adaptiveIcon: {
-        foregroundImage: './assets/adaptive-icon.png',
-        backgroundColor: '#ffffff'
-      }
-    },
-    web: {
-      favicon: './assets/favicon.png'
-    }
-  }
-};`
   }
 
   // Add each template file
