@@ -393,42 +393,64 @@ async function enhanceWithAI(
   onProgress?.({ type: 'log', message: '🤖 Enhancing with AI-generated features...' })
   
   try {
-    const enhancementPrompt = `Create a production-ready React Native Expo app based on this request: "${prompt}"
+    const enhancementPrompt = `You are building a React Native Expo app based on this user request: "${prompt}"
 
-Requirements Analysis:
+ANALYSIS:
 - App Type: ${analysis.appType}
-- Core Features: ${analysis.coreFeatures.join(', ')}
-- Native Features: ${Object.entries(analysis.nativeFeatures).filter(([_, enabled]) => enabled).map(([feature]) => feature).join(', ')}
-- Complexity Level: ${analysis.complexity}
+- Features: ${analysis.coreFeatures.join(', ')}
+- Estimated Screens: ${analysis.estimatedScreens}
+- Native Features: ${Object.entries(analysis.nativeFeatures).filter(([_, enabled]) => enabled).map(([feature]) => feature).join(', ') || 'None'}
 
-Instructions:
-1. Create a complete, working React Native app with latest Expo SDK
-2. Use modern TypeScript patterns and proper type definitions
-3. Include proper navigation structure if multiple screens are needed
-4. Add appropriate native dependencies in package.json
-5. Configure app.json with necessary permissions and plugins
-6. Create clean, production-ready code with proper error handling
-7. Use modern React hooks and functional components
-8. Include responsive design that works on both iOS and Android
+REQUIREMENTS:
+1. Build a COMPLETE working app with actual functionality
+2. Create multiple screens/components as needed for the features
+3. Add proper navigation between screens
+4. Include data management (useState, useEffect, AsyncStorage)
+5. Add proper TypeScript types for all components
+6. Create reusable components in separate files
+7. Style with modern React Native styling
+8. Handle loading states and error cases
 
-Output format - use this exact structure for each file:
-===FILE: filename===
-[complete file content]
+IMPORTANT: You must output COMPLETE working files, not just snippets. Each file should be fully functional.
+
+OUTPUT FORMAT - Use this EXACT structure:
+===FILE: App.tsx===
+[complete App.tsx file with navigation setup]
 ===END===
 
-Focus on creating a working MVP that demonstrates the requested functionality.`
+===FILE: package.json===
+[complete package.json with all needed dependencies]
+===END===
+
+===FILE: components/TodoItem.tsx===
+[complete component file]
+===END===
+
+===FILE: screens/HomeScreen.tsx===
+[complete screen file]
+===END===
+
+Continue this pattern for ALL files needed. Include:
+- Navigation setup in App.tsx
+- Screen components in screens/ folder
+- Reusable components in components/ folder  
+- Types in types/ folder if needed
+- Utils in utils/ folder if needed
+- Updated package.json with navigation and other dependencies
+
+Create a FULLY FUNCTIONAL ${analysis.appType.toLowerCase()} with these features: ${analysis.coreFeatures.join(', ')}`
 
     const response = await mistral.chat.complete({
       model: 'mistral-large-latest',
       messages: [
         { 
           role: 'system', 
-          content: 'You are an expert React Native Expo developer. Generate clean, production-ready code with proper TypeScript types and modern patterns. Always include complete working files.' 
+          content: 'You are an expert React Native Expo developer. You create COMPLETE, WORKING applications. Always output full files with proper structure, navigation, state management, and styling. Use modern TypeScript patterns and React Native best practices. Include all necessary imports and exports.' 
         },
         { role: 'user', content: enhancementPrompt }
       ],
-      temperature: 0.3,
-      maxTokens: 8000
+      temperature: 0.2,
+      maxTokens: 16000
     })
 
     const responseContent = response.choices[0]?.message?.content || ''
@@ -439,12 +461,17 @@ Focus on creating a working MVP that demonstrates the requested functionality.`
         : String(responseContent)
     
     onProgress?.({ type: 'log', message: '🔄 Parsing AI-generated code...' })
+    onProgress?.({ type: 'log', message: `📝 AI response length: ${generatedContent.length} characters` })
     
     // Parse generated files
     const parsedFiles = parseCodeFromResponse(generatedContent)
     
+    onProgress?.({ type: 'log', message: `🔍 Found ${parsedFiles.length} files in AI response` })
+    
     if (parsedFiles.length === 0) {
-      onProgress?.({ type: 'log', message: '⚠️ No files parsed from AI response, using CLI template' })
+      onProgress?.({ type: 'log', message: '⚠️ No files parsed from AI response, checking response format...' })
+      console.log('AI Response sample:', generatedContent.substring(0, 500))
+      onProgress?.({ type: 'log', message: '⚠️ Using base CLI template instead' })
       return baseFiles
     }
     
@@ -525,11 +552,25 @@ export async function generateRealExpoApp(
           packageJson.dependencies['react-native-maps'] = '1.18.0'
         }
         
-        // Add navigation if needed
+        // Add navigation dependencies for multi-screen apps
         if (analysis.estimatedScreens > 1) {
           packageJson.dependencies['@react-navigation/native'] = '^7.0.0'
           packageJson.dependencies['@react-navigation/stack'] = '^7.0.0'
           packageJson.dependencies['@react-navigation/bottom-tabs'] = '^7.0.0'
+          packageJson.dependencies['react-native-screens'] = '~4.1.0'
+          packageJson.dependencies['react-native-safe-area-context'] = '4.14.0'
+        }
+        
+        // Add common dependencies for most apps
+        packageJson.dependencies['@react-native-async-storage/async-storage'] = '1.25.0'
+        
+        // Add specific dependencies based on app type
+        if (analysis.appType.toLowerCase().includes('todo') || analysis.appType.toLowerCase().includes('task')) {
+          packageJson.dependencies['react-native-vector-icons'] = '^10.0.0'
+        }
+        
+        if (analysis.appType.toLowerCase().includes('timer') || analysis.appType.toLowerCase().includes('pomodoro')) {
+          packageJson.dependencies['react-native-vector-icons'] = '^10.0.0'
         }
         
         baseFiles['package.json'] = JSON.stringify(packageJson, null, 2)
