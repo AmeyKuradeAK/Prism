@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
-import { generateRealExpoApp } from '@/lib/generators/real-expo-generator'
+import { generateV0StyleApp } from '@/lib/generators/expo-v0-generator'
 
 export async function POST(request: NextRequest) {
   try {
@@ -80,8 +80,8 @@ export async function POST(request: NextRequest) {
         
         const startTime = Date.now()
         
-        // Use the enhanced generation with better error handling
-        const files = await generateRealExpoApp(prompt, userId, (progress: { 
+        // Use V0.dev-style generation for better results
+        const files = await generateV0StyleApp(prompt, userId, (progress: { 
           type: string; 
           message: string; 
           file?: { path: string; content: string; isComplete: boolean } 
