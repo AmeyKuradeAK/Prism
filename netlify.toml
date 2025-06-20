@@ -6,15 +6,15 @@
   package = "@netlify/plugin-nextjs"
 
 [build.environment]
-  NEXT_PRIVATE_TARGET = "server"
+  NODE_VERSION = "18.17.0"
 
-# Handle API routes
+# API routes handled by Next.js plugin
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/___netlify-handler"
   status = 200
-  
-# Handle dynamic routes
+
+# Dynamic pages
 [[redirects]]
   from = "/*"
   to = "/index.html"
