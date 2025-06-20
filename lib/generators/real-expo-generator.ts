@@ -43,9 +43,11 @@ async function createRealExpoProject(
     const createCommand = `npx create-expo-app@latest ${appName} --template blank-typescript --yes`
     onProgress?.({ type: 'log', message: `📦 Executing: ${createCommand}` })
     
+    // Add timeout to prevent hanging in serverless environment
     execSync(createCommand, { 
       cwd: tempDir,
-      stdio: 'pipe'
+      stdio: 'pipe',
+      timeout: 120000 // 2 minutes timeout
     })
     
     onProgress?.({ type: 'log', message: '✅ Latest Expo project created successfully!' })
@@ -73,7 +75,7 @@ async function createRealExpoProject(
               message: `✅ Read ${relativeFilePath}`,
               file: { path: relativeFilePath, content, isComplete: true }
             })
-    } catch (error) {
+          } catch (error) {
             console.warn(`Could not read file ${relativeFilePath}:`, error)
           }
         }
@@ -89,14 +91,181 @@ async function createRealExpoProject(
     
     return files
     
-    } catch (error) {
+  } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-    onProgress?.({ type: 'log', message: `❌ Failed to create Expo project: ${errorMessage}` })
-    console.error('Error creating Expo project:', error)
+    onProgress?.({ type: 'log', message: `⚠️ npx create-expo-app failed: ${errorMessage}` })
+    onProgress?.({ type: 'log', message: '🔄 Falling back to minimal template...' })
+    console.error('Error creating Expo project, using fallback:', error)
     
-    // Don't provide fallback - CLI failure indicates serious environment issues
-    throw new Error(`Failed to create Expo project with CLI: ${errorMessage}. Please ensure npm/npx is installed and you have internet connectivity.`)
+    // Fallback to minimal template when CLI fails (common in serverless environments)
+    return createMinimalExpoTemplate(onProgress)
   }
+}
+
+// Fallback minimal template for when npx create-expo-app fails
+async function createMinimalExpoTemplate(
+  onProgress?: (progress: { type: string; message: string; file?: { path: string; content: string; isComplete: boolean } }) => void
+): Promise<{ [key: string]: string }> {
+  
+  onProgress?.({ type: 'log', message: '📋 Creating minimal Expo template...' })
+  
+  const files: { [key: string]: string } = {}
+  
+  // Essential files for a working Expo app
+  const templates = {
+    'package.json': JSON.stringify({
+      "name": "expo-todo-pomodoro",
+      "version": "1.0.0",
+      "main": "node_modules/expo/AppEntry.js",
+      "scripts": {
+        "start": "expo start",
+        "android": "expo start --android",
+        "ios": "expo start --ios",
+        "web": "expo start --web"
+      },
+      "dependencies": {
+        "expo": "~53.0.0",
+        "expo-status-bar": "~2.0.0",
+        "react": "19.1.0",
+        "react-native": "0.76.8",
+        "@react-native-async-storage/async-storage": "1.25.0",
+        "react-native-vector-icons": "^10.0.0"
+      },
+      "devDependencies": {
+        "@babel/core": "^7.20.0",
+        "@types/react": "~19.0.0",
+        "@types/react-native": "~0.76.0",
+        "typescript": "~5.3.3"
+      },
+      "private": true
+    }, null, 2),
+
+    'app.json': JSON.stringify({
+      "expo": {
+        "name": "Todo Pomodoro",
+        "slug": "todo-pomodoro",
+        "version": "1.0.0",
+        "orientation": "portrait",
+        "icon": "./assets/icon.png",
+        "userInterfaceStyle": "light",
+        "newArchEnabled": true,
+        "splash": {
+          "image": "./assets/splash.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff"
+        },
+        "assetBundlePatterns": ["**/*"],
+        "ios": {
+          "supportsTablet": true
+        },
+        "android": {
+          "adaptiveIcon": {
+            "foregroundImage": "./assets/adaptive-icon.png",
+            "backgroundColor": "#ffffff"
+          }
+        },
+        "web": {
+          "favicon": "./assets/favicon.png"
+        }
+      }
+    }, null, 2),
+
+    'App.tsx': `import { StatusBar } from 'expo-status-bar';
+import React from 'react';
+import { StyleSheet, Text, View } from 'react-native';
+
+export default function App() {
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Todo & Pomodoro</Text>
+      <Text style={styles.subtitle}>Your productivity companion</Text>
+      <StatusBar style="auto" />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: '#666',
+  },
+});`,
+
+    'babel.config.js': `module.exports = function(api) {
+  api.cache(true);
+  return {
+    presets: ['babel-preset-expo'],
+  };
+};`,
+
+    'tsconfig.json': JSON.stringify({
+      "extends": "expo/tsconfig.base",
+      "compilerOptions": {
+        "strict": true
+      }
+    }, null, 2),
+
+    'metro.config.js': `const { getDefaultConfig } = require('expo/metro-config');
+
+module.exports = getDefaultConfig(__dirname);`,
+
+    '.gitignore': `node_modules/
+.expo/
+dist/
+npm-debug.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+web-build/
+
+# macOS
+.DS_Store`,
+
+    'README.md': `# Todo & Pomodoro App
+
+A React Native Expo app built with the latest SDK.
+
+## Getting Started
+
+1. Install dependencies: \`npm install\`
+2. Start the app: \`npm start\`
+3. Use Expo Go app to scan QR code
+
+## Features
+
+- Modern React Native with Expo SDK 53
+- TypeScript support
+- Ready for both iOS and Android
+`
+  }
+
+  // Add each template file
+  for (const [filePath, content] of Object.entries(templates)) {
+    files[filePath] = content
+    onProgress?.({
+      type: 'file_complete',
+      message: `✅ Created ${filePath}`,
+      file: { path: filePath, content, isComplete: true }
+    })
+  }
+
+  onProgress?.({ type: 'log', message: `📦 Created ${Object.keys(files).length} files with minimal template` })
+  
+  return files
 }
 
 // Analyze prompt to understand requirements - ENHANCED VERSION
