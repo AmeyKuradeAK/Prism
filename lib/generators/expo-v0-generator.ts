@@ -312,16 +312,18 @@ ALWAYS generate COMPLETE, FUNCTIONAL code that works immediately after running '
   onProgress?.({ type: 'log', message: `🔑 API Key present: ${process.env.MISTRAL_API_KEY ? 'Yes' : 'No'}` })
   
   try {
-    // Use Mistral Medium for best results
-    const models = ['mistral-medium-latest', 'mistral-small-latest', 'magistral-small-latest']
-    let modelToUse = models[Math.min(attempt - 1, models.length - 1)]
+    // Select model based on complexity (use faster model for reliability)
+    const modelToUse = 'mistral-small-latest' // Changed from mistral-medium-latest for reliability
     
     onProgress?.({ type: 'log', message: `🎯 Using model: ${modelToUse}` })
     onProgress?.({ type: 'log', message: `🔗 Making API request to Mistral...` })
     
-    // Add timeout to prevent hanging
+    // Skip connection test to avoid rate limiting (1 RPS limit)
+    onProgress?.({ type: 'log', message: `⚡ Proceeding directly to generation (rate limit: 1 RPS)` })
+    
+    // Add timeout to prevent hanging (smaller model is faster)
     const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('API request timed out after 60 seconds')), 60000)
+      setTimeout(() => reject(new Error('API request timed out after 30 seconds')), 30000)
     )
     
     const apiCallPromise = mistral.chat.complete({
@@ -381,10 +383,20 @@ ALWAYS generate COMPLETE, FUNCTIONAL code that works immediately after running '
         { role: 'user', content: v0StylePrompt }
       ],
       temperature: 0.1, // Lower for more consistent output
-      maxTokens: 20000  // Higher for complete apps
+      maxTokens: 10000  // Optimized for smaller model
     })
 
+    onProgress?.({ type: 'log', message: `⏱️ Waiting for AI response (should complete in 10-20 seconds)...` })
+    
+    // Add progress indicators during the wait (shorter intervals for faster model)
+    const progressInterval = setInterval(() => {
+      onProgress?.({ type: 'log', message: `🤖 AI is generating your app files... (still working)` })
+    }, 5000) // Every 5 seconds
+
     const response = await Promise.race([apiCallPromise, timeoutPromise]) as any
+    
+    clearInterval(progressInterval)
+    onProgress?.({ type: 'log', message: `✅ AI response received successfully!` })
 
     const responseContent = response.choices[0]?.message?.content || ''
     const content = typeof responseContent === 'string' 
@@ -425,9 +437,63 @@ ALWAYS generate COMPLETE, FUNCTIONAL code that works immediately after running '
       onProgress?.({ type: 'log', message: `🔍 Rate limit hit. Please wait and try again.` })
     }
     
+    // Try with smaller model and simpler request on first attempt
+    if (attempt === 1 && errorMessage.includes('timeout')) {
+      onProgress?.({ type: 'log', message: `🔄 Trying with simplified request and faster model...` })
+      
+      // Add delay to respect 1 RPS rate limit
+      onProgress?.({ type: 'log', message: `⏳ Waiting 2 seconds for rate limit...` })
+      await new Promise(resolve => setTimeout(resolve, 2000))
+      
+      try {
+        const simplePrompt = `Create a basic React Native Expo app: "${prompt.substring(0, 200)}..."
+
+Generate COMPLETE working files with latest versions. Use format: ===FILE: filename=== content ===END===
+
+MUST INCLUDE:
+- package.json (with latest Expo, React Native, TypeScript)
+- app.json (with Expo Router)
+- app/_layout.tsx (basic layout)
+- app/index.tsx (main screen)
+- components/TodoItem.tsx (basic component)
+- types/index.ts (TypeScript interfaces)
+
+Use npx expo start commands, TypeScript, and modern patterns. Make it a working ${analysis.appType}.`
+
+        const simpleResponse = await mistral.chat.complete({
+          model: 'mistral-small-latest', // Faster model
+          messages: [
+            {
+              role: 'system',
+              content: `Generate a working React Native Expo app. Use format: ===FILE: filename=== content ===END===. Use latest versions, TypeScript, Expo Router. Be concise but complete.`
+            },
+            { role: 'user', content: simplePrompt }
+          ],
+          temperature: 0.1,
+          maxTokens: 8000 // Much smaller
+        })
+
+        const simpleContent = simpleResponse.choices[0]?.message?.content || ''
+        if (simpleContent && simpleContent.length > 100) {
+          onProgress?.({ type: 'log', message: `✅ Simplified generation successful` })
+          const content = typeof simpleContent === 'string' 
+            ? simpleContent 
+            : Array.isArray(simpleContent) 
+              ? simpleContent.map(chunk => chunk.type === 'text' ? chunk.text : '').join('')
+              : String(simpleContent)
+          const files = await parseV0StyleResponse(content, onProgress)
+          if (Object.keys(files).length > 0) {
+            return files
+          }
+        }
+      } catch (simpleError) {
+        onProgress?.({ type: 'log', message: `❌ Simplified generation also failed` })
+      }
+    }
+    
     if (attempt < maxAttempts) {
-      const delay = baseDelay * Math.pow(2, attempt - 1) // Exponential backoff
-      onProgress?.({ type: 'log', message: `⏳ Retrying in ${delay/1000}s...` })
+      const delay = Math.max(baseDelay * Math.pow(2, attempt - 1), 2000) // Minimum 2s for rate limit
+      onProgress?.({ type: 'log', message: `⏳ Retrying in ${delay/1000}s... (respecting 1 RPS limit)` })
       
       await new Promise(resolve => setTimeout(resolve, delay))
       return generateCompleteApp(prompt, analysis, onProgress, attempt + 1)
@@ -466,57 +532,31 @@ async function simulateProgressiveWriting(
   }
 }
 
-// V0.dev Style: Clean file parsing
+// Parse V0.dev style response and simulate progressive writing
 async function parseV0StyleResponse(
-  response: string, 
+  response: string,
   onProgress?: (progress: { type: string; message: string; file?: { path: string; content: string; isComplete: boolean } }) => void
 ): Promise<{ [key: string]: string }> {
   const files: { [key: string]: string } = {}
   
-  onProgress?.({ type: 'log', message: `🔍 Raw response length: ${response.length} characters` })
+  onProgress?.({ type: 'log', message: `📄 Parsing AI response (${response.length} characters)...` })
   
-  // Log first 500 characters to debug format
-  onProgress?.({ type: 'log', message: `📝 Response preview: ${response.substring(0, 500)}...` })
-  
-  // V0.dev uses clear file markers - more robust pattern
+  // Enhanced file parsing with multiple patterns
   const filePattern = /===FILE:\s*([^\r\n]+)===\r?\n([\s\S]*?)(?====END===|===FILE:|$)/g
   let match
-  let matchCount = 0
-  
-  onProgress?.({ type: 'log', message: `🔍 Looking for file patterns...` })
+  let fileCount = 0
   
   while ((match = filePattern.exec(response)) !== null) {
-    matchCount++
     const filePath = match[1].trim()
-    let content = match[2].trim()
-    
-    // Remove ===END=== if it exists at the end
-    content = content.replace(/===END===\s*$/, '').trim()
-    
-    onProgress?.({ type: 'log', message: `📄 Found file ${matchCount}: ${filePath} (${content.length} chars)` })
+    const content = match[2].trim()
     
     if (filePath && content) {
-      // Send file start event
-      onProgress?.({
-        type: 'file_start',
-        message: `📄 Creating ${filePath}`,
-        file: { path: filePath, content: '', isComplete: false }
-      })
+      fileCount++
+      onProgress?.({ type: 'log', message: `📁 Parsing file ${fileCount}: ${filePath}` })
       
       // Simulate progressive writing like v0.dev
       await simulateProgressiveWriting(filePath, content, onProgress)
-      
-      // Add to files object
       files[filePath] = content
-      
-      // Send file complete event
-      onProgress?.({
-        type: 'file_complete',
-        message: `✅ Created ${filePath}`,
-        file: { path: filePath, content, isComplete: true }
-      })
-    } else {
-      onProgress?.({ type: 'log', message: `⚠️ Skipping empty file: ${filePath}` })
     }
   }
   
