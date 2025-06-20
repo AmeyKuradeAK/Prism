@@ -11,7 +11,12 @@ export default function StreamingConsole({ logs, isGenerating, error }: Streamin
   // Auto-scroll to bottom when new logs are added
   useEffect(() => {
     if (consoleRef.current) {
-      consoleRef.current.scrollTop = consoleRef.current.scrollHeight
+      // Use requestAnimationFrame to ensure DOM has updated
+      requestAnimationFrame(() => {
+        if (consoleRef.current) {
+          consoleRef.current.scrollTop = consoleRef.current.scrollHeight
+        }
+      })
     }
   }, [logs])
 
@@ -61,7 +66,7 @@ export default function StreamingConsole({ logs, isGenerating, error }: Streamin
 
       <div
         ref={consoleRef}
-        className="h-80 bg-slate-900 p-4 font-mono text-sm overflow-y-auto scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-800"
+        className="h-80 bg-slate-900 p-4 font-mono text-sm overflow-y-auto scroll-smooth scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-800"
       >
         {logs.length === 0 && !error ? (
           <div className="flex items-center justify-center h-full text-slate-500">

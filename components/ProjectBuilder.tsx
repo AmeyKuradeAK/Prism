@@ -130,10 +130,15 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
     }
   }, [files])
 
-  // Auto-scroll console
+  // Auto-scroll console to bottom when new logs are added
   useEffect(() => {
     if (consoleRef.current) {
-      consoleRef.current.scrollTop = consoleRef.current.scrollHeight
+      // Use requestAnimationFrame to ensure DOM has updated
+      requestAnimationFrame(() => {
+        if (consoleRef.current) {
+          consoleRef.current.scrollTop = consoleRef.current.scrollHeight
+        }
+      })
     }
   }, [logs])
 
@@ -468,7 +473,7 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
             </div>
             <div 
               ref={consoleRef}
-              className="flex-1 p-4 overflow-auto bg-gray-950 text-green-400 font-mono text-sm"
+              className="flex-1 p-4 overflow-auto bg-gray-950 text-green-400 font-mono text-sm scroll-smooth"
             >
               {logs.map((log, index) => (
                 <motion.div
