@@ -80,6 +80,18 @@ export async function POST(request: NextRequest) {
         
         const startTime = Date.now()
         
+        // Validate API key format
+        if (hasApiKey) {
+          const apiKeyLength = process.env.MISTRAL_API_KEY?.length || 0
+          sendLog(`🔑 API Key length: ${apiKeyLength} characters`)
+          
+          if (apiKeyLength < 20) {
+            sendLog('⚠️ Warning: API key seems too short')
+          }
+        }
+        
+        sendLog('🚀 Initializing V0.dev-style generation...')
+        
         // Use V0.dev-style generation for better results
         const files = await generateV0StyleApp(prompt, userId, (progress: { 
           type: string; 
@@ -108,6 +120,7 @@ export async function POST(request: NextRequest) {
           }
         })
         
+        // Send final completion with all files
         const duration = Date.now() - startTime
         const fileCount = Object.keys(files).length
         
@@ -135,7 +148,7 @@ export async function POST(request: NextRequest) {
                 path.endsWith('.md') ? 'md' : 'txt'
         }))
         
-        // Validate that we have essential files
+        // Final validation and send
         const hasAppTsx = filesArray.some(f => f.path === 'App.tsx')
         const hasPackageJson = filesArray.some(f => f.path === 'package.json')
         const hasAppJson = filesArray.some(f => f.path === 'app.json')
@@ -145,7 +158,10 @@ export async function POST(request: NextRequest) {
           sendLog(`App.tsx: ${hasAppTsx ? '✓' : '✗'} | package.json: ${hasPackageJson ? '✓' : '✗'} | app.json: ${hasAppJson ? '✓' : '✗'}`)
         }
         
+        // Send files data
         sendData({ type: 'files', files: filesArray })
+        
+        // Mark as complete
         sendData({ type: 'complete' })
         
         console.log(`✅ Generation completed successfully: ${fileCount} files in ${duration}ms`)

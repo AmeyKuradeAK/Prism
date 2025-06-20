@@ -70,6 +70,9 @@ export default function AppBuilder() {
   const [projectName, setProjectName] = useState('')
   const [projectDescription, setProjectDescription] = useState('')
 
+  // Track which file is currently being written for UI feedback
+  const [currentlyWritingFile, setCurrentlyWritingFile] = useState<string>('')
+
   // Load manual template if mode is manual
   useEffect(() => {
     if (mode === 'manual') {
@@ -180,6 +183,50 @@ export default function AppBuilder() {
                   currentStep: data.message,
                   progress: Math.min(prev.progress + 10, 90)
                 }))
+              } else if (data.type === 'file_start' && data.file) {
+                // Show file being created (like v0.dev)
+                setBuildInfo(prev => ({
+                  ...prev,
+                  currentStep: `Creating ${data.file.path}...`,
+                  progress: Math.min(prev.progress + 5, 85)
+                }))
+                setCurrentlyWritingFile(data.file.path)
+              } else if (data.type === 'file_progress' && data.file) {
+                // Update file content progressively (like typing animation)
+                setBuildInfo(prev => ({
+                  ...prev,
+                  files: {
+                    ...prev.files,
+                    [data.file.path]: data.file.content
+                  },
+                  currentStep: data.message || `Writing ${data.file.path}...`,
+                  progress: Math.min(prev.progress + 1, 89) // Small increments for smooth progress
+                }))
+                
+                // Auto-select file being written for live preview
+                if (!selectedFile || selectedFile !== data.file.path) {
+                  setSelectedFile(data.file.path)
+                  setActiveView('code')
+                }
+                setCurrentlyWritingFile(data.file.path)
+              } else if (data.type === 'file_complete' && data.file) {
+                // File completed - add to files and show progress
+                setBuildInfo(prev => ({
+                  ...prev,
+                  files: {
+                    ...prev.files,
+                    [data.file.path]: data.file.content
+                  },
+                  currentStep: `✅ Completed ${data.file.path}`,
+                  progress: Math.min(prev.progress + 8, 90)
+                }))
+                
+                // Auto-select first file for preview
+                if (!selectedFile && data.file.path) {
+                  setSelectedFile(data.file.path)
+                  setActiveView('code')
+                }
+                setCurrentlyWritingFile('') // Clear writing state
               } else if (data.type === 'files') {
                 // Convert files array back to object format
                 const filesObject: { [key: string]: string } = {}
@@ -195,6 +242,7 @@ export default function AppBuilder() {
                 })
                 
                 setActiveView('code')
+                setCurrentlyWritingFile('') // Clear writing state when generation completes
               } else if (data.type === 'error') {
                 throw new Error(data.message || 'Generation failed')
               }
@@ -781,9 +829,24 @@ export default function AppBuilder() {
                           }`}
                         >
                           {getFileIcon(filepath)}
-                          <span className={dir !== 'root' ? 'ml-4' : ''}>
+                          <span className={`flex-1 text-left ${dir !== 'root' ? 'ml-4' : ''}`}>
                             {filepath.split('/').pop()}
                           </span>
+                          
+                          {/* Show writing indicator */}
+                          {currentlyWritingFile === filepath && (
+                            <div className="flex items-center space-x-1">
+                              <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></div>
+                              <span className="text-xs text-green-400">Writing</span>
+                            </div>
+                          )}
+                          
+                          {/* Show character count for completed files */}
+                          {buildInfo.files[filepath] && currentlyWritingFile !== filepath && (
+                            <span className="text-xs text-white/40">
+                              {buildInfo.files[filepath].length}
+                            </span>
+                          )}
                         </button>
                       ))}
                     </div>
@@ -822,15 +885,74 @@ export default function AppBuilder() {
             {buildInfo.status === 'completed' && activeView === 'code' && selectedFile && (
               <div className="flex-1 overflow-hidden">
                 <div className="p-4 border-b border-white/10">
-                  <div className="flex items-center space-x-2">
-                    {getFileIcon(selectedFile)}
-                    <span className="text-white font-medium">{selectedFile}</span>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      {getFileIcon(selectedFile)}
+                      <span className="text-white font-medium">{selectedFile}</span>
+                      {currentlyWritingFile === selectedFile && (
+                        <div className="flex items-center space-x-2">
+                          <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                          <span className="text-xs text-green-400">Writing...</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="text-xs text-white/60">
+                      {buildInfo.files[selectedFile]?.length || 0} characters
+                    </div>
                   </div>
                 </div>
-                <div className="flex-1 overflow-y-auto p-4">
+                <div className="flex-1 overflow-y-auto p-4 relative">
                   <pre className="text-sm text-white/80 bg-black/40 rounded-xl p-4 overflow-x-auto">
                     <code>{buildInfo.files[selectedFile]}</code>
                   </pre>
+                  
+                  {/* Show typing cursor when this file is being written */}
+                  {currentlyWritingFile === selectedFile && buildInfo.files[selectedFile] && (
+                    <div className="absolute bottom-6 right-6">
+                      <div className="flex items-center space-x-2 bg-black/60 text-white px-3 py-2 rounded-lg text-xs backdrop-blur-sm border border-white/10">
+                        <div className="w-1 h-4 bg-green-400 animate-pulse"></div>
+                        <span>AI is writing this file...</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Show generation progress even when files are being created */}
+            {buildInfo.status === 'generating' && Object.keys(buildInfo.files).length > 0 && activeView === 'code' && selectedFile && (
+              <div className="flex-1 overflow-hidden">
+                <div className="p-4 border-b border-white/10">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      {getFileIcon(selectedFile)}
+                      <span className="text-white font-medium">{selectedFile}</span>
+                      {currentlyWritingFile === selectedFile && (
+                        <div className="flex items-center space-x-2">
+                          <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                          <span className="text-xs text-green-400">Writing...</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="text-xs text-white/60">
+                      {buildInfo.files[selectedFile]?.length || 0} characters
+                    </div>
+                  </div>
+                </div>
+                <div className="flex-1 overflow-y-auto p-4 relative">
+                  <pre className="text-sm text-white/80 bg-black/40 rounded-xl p-4 overflow-x-auto">
+                    <code>{buildInfo.files[selectedFile] || ''}</code>
+                  </pre>
+                  
+                  {/* Show typing cursor when this file is being written */}
+                  {currentlyWritingFile === selectedFile && (
+                    <div className="absolute bottom-6 right-6">
+                      <div className="flex items-center space-x-2 bg-black/60 text-white px-3 py-2 rounded-lg text-xs backdrop-blur-sm border border-white/10">
+                        <div className="w-1 h-4 bg-green-400 animate-pulse"></div>
+                        <span>AI is writing this file...</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

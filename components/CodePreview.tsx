@@ -198,57 +198,81 @@ export default function CodePreview({ files, isGenerating, prompt }: CodePreview
         {/* Code Viewer */}
         <div className="flex-1 flex flex-col">
           {selectedFileData ? (
-            <>
+            <div className="flex-1 flex flex-col">
               {/* File Header */}
-              <div className="bg-slate-800 text-white px-4 py-2 flex items-center justify-between">
+              <div className="flex items-center justify-between bg-slate-100 px-4 py-2 border-b border-slate-200">
                 <div className="flex items-center space-x-2">
-                  <span className="text-lg">{getFileIcon(selectedFileData.path)}</span>
-                  <span className="text-sm font-mono">{selectedFileData.path}</span>
+                  <span className="text-base">{getFileIcon(selectedFileData.path.split('/').pop() || '')}</span>
+                  <span className="text-sm font-medium text-slate-700">{selectedFileData.path}</span>
+                  {isGenerating && selectedFileData.content && (
+                    <div className="flex items-center space-x-1">
+                      <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                      <span className="text-xs text-green-600">Writing...</span>
+                    </div>
+                  )}
                 </div>
-                <div className="flex items-center space-x-2">
-                  <button
-                    onClick={() => handleCopyFile(selectedFileData)}
-                    className="p-1 hover:bg-slate-700 rounded transition-colors"
-                    title="Copy file content"
-                  >
-                    {copiedFile === selectedFileData.path ? (
-                      <Check className="w-4 h-4 text-green-400" />
-                    ) : (
-                      <Copy className="w-4 h-4" />
-                    )}
-                  </button>
-                </div>
+                <button
+                  onClick={() => handleCopyFile(selectedFileData)}
+                  className="flex items-center space-x-1 px-2 py-1 bg-white border border-slate-200 rounded text-xs hover:bg-slate-50 transition-colors"
+                >
+                  {copiedFile === selectedFileData.path ? (
+                    <>
+                      <Check className="w-3 h-3 text-green-500" />
+                      <span className="text-green-500">Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3 h-3 text-slate-500" />
+                      <span className="text-slate-500">Copy</span>
+                    </>
+                  )}
+                </button>
               </div>
 
               {/* Code Content */}
-              <div className="flex-1 overflow-auto">
-                <SyntaxHighlighter
-                  language={getLanguage(selectedFileData.type)}
-                  style={oneDark}
-                  customStyle={{
-                    margin: 0,
-                    borderRadius: 0,
-                    fontSize: '13px',
-                    lineHeight: '1.5'
-                  }}
-                  showLineNumbers
-                  wrapLines
-                >
-                  {selectedFileData.content}
-                </SyntaxHighlighter>
+              <div className="flex-1 overflow-auto bg-slate-900 relative">
+                {selectedFileData.content ? (
+                  <div className="relative">
+                    <SyntaxHighlighter
+                      language={getLanguage(selectedFileData.type)}
+                      style={oneDark}
+                      customStyle={{
+                        margin: 0,
+                        padding: '1rem',
+                        background: 'transparent',
+                        fontSize: '0.875rem',
+                        lineHeight: '1.5'
+                      }}
+                      showLineNumbers
+                    >
+                      {selectedFileData.content}
+                    </SyntaxHighlighter>
+                    
+                    {/* Typing cursor effect when content is being written */}
+                    {isGenerating && selectedFileData.content && (
+                      <div className="absolute bottom-4 right-4">
+                        <div className="flex items-center space-x-1 bg-black/50 text-white px-2 py-1 rounded text-xs">
+                          <div className="w-1 h-3 bg-green-400 animate-pulse"></div>
+                          <span>AI Writing...</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center h-full">
+                    <div className="text-center text-slate-400">
+                      <FileText className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                      <p>File content will appear here</p>
+                    </div>
+                  </div>
+                )}
               </div>
-            </>
+            </div>
           ) : (
-            <div className="flex-1 flex items-center justify-center text-slate-500">
-              <div className="text-center">
-                <File className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                <p className="font-medium">Select a file to preview</p>
-                <p className="text-sm mt-1">
-                  {files.length > 0 
-                    ? 'Choose a file from the explorer to view its contents'
-                    : 'Files will appear here after generation'
-                  }
-                </p>
+            <div className="flex-1 flex items-center justify-center bg-slate-50">
+              <div className="text-center text-slate-400">
+                <File className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                <p>Select a file to view its content</p>
               </div>
             </div>
           )}
