@@ -386,7 +386,8 @@ async function enhanceWithAI(
   
   // Check for API key
   if (!process.env.MISTRAL_API_KEY || process.env.MISTRAL_API_KEY.length < 10) {
-    onProgress?.({ type: 'log', message: '⚠️ Mistral API key not configured properly, using CLI-generated template' })
+    onProgress?.({ type: 'log', message: '⚠️ Mistral API key not configured properly' })
+    onProgress?.({ type: 'log', message: '📦 Using base Expo template with enhanced dependencies' })
     return baseFiles
   }
   
