@@ -186,11 +186,18 @@ Continue this pattern for ALL remaining files. Create:
 
 IMPORTANT: Make it a fully functional ${analysis.appType} with working ${analysis.features.join(', ')}.`
 
-  onProgress?.({ type: 'log', message: '🤖 Generating complete app with AI...' })
+  onProgress?.({ type: 'log', message: '🤖 Generating complete app with Mistral Medium...' })
+  onProgress?.({ type: 'log', message: `🔑 API Key present: ${process.env.MISTRAL_API_KEY ? 'Yes' : 'No'}` })
   
   try {
+    // Use Mistral Medium for best results
+    const models = ['mistral-medium-latest', 'mistral-small-latest', 'magistral-small-latest']
+    let modelToUse = models[Math.min(attempt - 1, models.length - 1)]
+    
+    onProgress?.({ type: 'log', message: `🎯 Using model: ${modelToUse}` })
+    
     const response = await mistral.chat.complete({
-      model: 'mistral-large-latest',
+      model: modelToUse,
       messages: [
         {
           role: 'system',
