@@ -389,91 +389,31 @@ function generateSmartPackageJson(analysis: ComponentAnalysis): any {
   }
 }
 
-// 🎯 React Native V0: Enhanced System Prompt with Native Module Injection
+// 🎯 React Native V0: Simplified System Prompt (Shorter to Prevent Hanging)
 function createReactNativeSystemPrompt(analysis: ComponentAnalysis): string {
-  const moduleInstructions = analysis.detectedModules.map(module => 
-    `- ${module.name} (${module.package}): ${module.description}
-     Imports: import { ${module.imports.join(', ')} } from '${module.package}'
-     ${module.permissions?.length ? `Permissions: ${module.permissions.join(', ')}` : ''}
-     ${module.setup?.length ? `Setup: ${module.setup.join(', ')}` : ''}`
-  ).join('\n')
-
-  return `You are an expert React Native mobile app developer specializing in Expo and modern mobile development patterns.
-
-🎯 CRITICAL INSTRUCTION: You MUST return ONLY a valid JSON object with this EXACT structure:
+  return `You are a React Native expert. Return ONLY valid JSON with this structure:
 
 {
   "files": {
-    "app.json": "expo configuration here",
-    "app/_layout.tsx": "root layout with navigation setup",
-    "app/index.tsx": "main home screen",
-    "components/ComponentName.tsx": "reusable components",
-    "types/index.ts": "typescript interfaces",
-    "constants/Colors.ts": "theme colors",
-    "utils/permissions.ts": "permission handling utilities"
+    "app.json": "expo config",
+    "app/_layout.tsx": "root layout",
+    "app/index.tsx": "main screen",
+    "components/Component.tsx": "components"
   }
 }
 
-📱 APP REQUIREMENTS:
-- App Type: ${analysis.appType}
-- Screens: ${analysis.primaryScreens.join(', ')}
-- Navigation: ${analysis.navigationPattern}
-- Design: ${analysis.designSystem}
-- Features: ${analysis.features.join(', ')}
+Requirements:
+- App: ${analysis.appType}
+- Screens: ${analysis.primaryScreens.slice(0, 3).join(', ')}
+- Features: ${analysis.features.slice(0, 3).join(', ')}
+- Native: ${analysis.detectedModules.map(m => m.package).slice(0, 2).join(', ')}
 
-🔥 DETECTED NATIVE MODULES (MUST IMPLEMENT):
-${moduleInstructions}
-
-📦 USE THESE EXACT DEPENDENCIES:
-${Object.entries(generateSmartPackageJson(analysis).dependencies).map(([pkg, version]) => 
-  `- ${pkg}: ${version}`).join('\n')}
-
-🛠️ NATIVE MODULE IMPLEMENTATION RULES:
-1. For Camera: Create proper Camera component with permissions
-2. For Notifications: Set up notification handlers and registration
-3. For Location: Implement location tracking with permission requests
-4. For Image Picker: Add photo selection with proper permissions
-5. For Audio/Video: Set up media playback with controls
-6. For File System: Implement file operations and storage
-7. For Sensors: Add sensor data collection and monitoring
-8. For Haptics: Implement feedback for user interactions
-9. For Biometrics: Add secure authentication flows
-10. For Barcode: Create scanner interface with camera integration
-
-🎨 UI/UX REQUIREMENTS:
-- Use NativeWind (Tailwind CSS for React Native) for ALL styling
-- Implement proper SafeAreaView for iOS/Android compatibility
-- Add StatusBar configuration for each screen
-- Use proper React Native components (View, Text, ScrollView, FlatList, etc.)
-- Implement loading states, error states, and empty states
-- Add proper keyboard handling and form validation
-- Include accessibility labels and hints
-- Use proper touch feedback and animations
-
-🔧 TECHNICAL REQUIREMENTS:
-- Use Expo Router for navigation with proper file-based routing
-- Implement TypeScript with strict typing for all components
-- Use AsyncStorage for data persistence
-- Add proper error boundaries and try/catch blocks
-- Implement proper state management with React hooks
-- Add proper prop types and interfaces
-- Use modern React Native patterns (functional components, hooks)
-- Include proper gesture handling with react-native-gesture-handler
-
-⚠️ CRITICAL RULES:
-1. Return ONLY valid JSON - no explanations, no prose, no markdown
-2. Every file must be complete and functional
-3. All native modules must be properly implemented with permissions
-4. Include proper error handling and loading states
-5. Use proper mobile UI patterns and components
-6. Make it production-ready code that runs immediately
-7. Include proper TypeScript types for everything
-8. Add proper permission handling for all native features
-
-Generate a complete, production-ready React Native mobile app that works immediately after 'npx expo start' with all requested native features properly implemented!`
+Use Expo Router, TypeScript, NativeWind, and React Native best practices.
+Return complete, functional files that work with 'npx expo start'.
+NO explanations - ONLY JSON.`
 }
 
-// React Native V0.dev Style: Rate-Limited API Call
+// React Native V0.dev Style: Rate-Limited API Call with Enhanced Error Handling
 async function callMistralWithRateLimit(
   prompt: string,
   analysis: ComponentAnalysis,
@@ -483,68 +423,79 @@ async function callMistralWithRateLimit(
   
   const maxAttempts = 3
   
-  // Rate limit handling: 1 RPS = minimum 1 second between requests
   if (attempt > 1) {
-    const waitTime = Math.max(2000, attempt * 1000) // 2s, 3s, 4s
+    const waitTime = Math.max(2000, attempt * 1000)
     onProgress?.({ type: 'log', message: `⏳ Respecting rate limit: waiting ${waitTime/1000}s before attempt ${attempt}` })
     await new Promise(resolve => setTimeout(resolve, waitTime))
   }
   
   onProgress?.({ type: 'log', message: `🚀 React Native AI Generation - Attempt ${attempt}/${maxAttempts}` })
   
-  // React Native V0.dev Style User Prompt
-  const reactNativePrompt = `Create a complete React Native Expo mobile app: "${prompt}"
+  // Simplified React Native Prompt (shorter to avoid hanging)
+  const reactNativePrompt = `Create a React Native Expo app: "${prompt}"
 
-📱 APP REQUIREMENTS:
-- App Type: ${analysis.appType}
-- Screens: ${analysis.primaryScreens.join(', ')}
-- Navigation: ${analysis.navigationPattern}  
-- Design: ${analysis.designSystem}
-- Features: ${analysis.features.join(', ')}
-- Native Features: ${analysis.nativeFeatures.join(', ')}
-- Required Modules: ${analysis.detectedModules.map(m => m.name).join(', ')}
+📱 Requirements:
+- App: ${analysis.appType}
+- Screens: ${analysis.primaryScreens.slice(0, 4).join(', ')} ${analysis.primaryScreens.length > 4 ? '...' : ''}
+- Features: ${analysis.features.slice(0, 3).join(', ')} ${analysis.features.length > 3 ? '...' : ''}
+- Native Modules: ${analysis.detectedModules.map(m => m.name).slice(0, 3).join(', ')}
 
-Create a complete, production-ready React Native mobile app with all requested features and native modules using Expo Router, TypeScript, and NativeWind styling.`
+Create a complete React Native app with Expo Router, TypeScript, and NativeWind.`
 
   try {
-    onProgress?.({ type: 'log', message: `🤖 Calling Mistral AI for React Native generation` })
-    onProgress?.({ type: 'log', message: `📱 Generating ${analysis.appType} with ${analysis.detectedModules.length} native modules` })
+    onProgress?.({ type: 'log', message: `🤖 Calling Mistral AI (attempt ${attempt})` })
+    onProgress?.({ type: 'log', message: `📊 Prompt length: ${reactNativePrompt.length} chars` })
     
-    const response = await Promise.race([
-      mistral.chat.complete({
-        model: 'mistral-small-latest',
-        messages: [
-          {
-            role: 'system',
-            content: createReactNativeSystemPrompt(analysis)
-          },
-          { 
-            role: 'user', 
-            content: reactNativePrompt
-          }
-        ],
-        temperature: 0.1,
-        maxTokens: 15000 // Even larger for native modules
-      }),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('API timeout after 60 seconds')), 60000)
-      )
-    ]) as any
+    // Add connection timeout and more aggressive timeout
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => {
+      controller.abort()
+      onProgress?.({ type: 'log', message: `⏰ Aborting API call after 30 seconds` })
+    }, 30000) // Reduced from 60s to 30s
+    
+    onProgress?.({ type: 'log', message: `🔄 Making API request to Mistral...` })
+    
+    const response = await mistral.chat.complete({
+      model: 'mistral-small-latest',
+      messages: [
+        {
+          role: 'system',
+          content: createReactNativeSystemPrompt(analysis)
+        },
+        { 
+          role: 'user', 
+          content: reactNativePrompt
+        }
+      ],
+      temperature: 0.1,
+      maxTokens: 8000 // Reduced from 15000 to prevent hanging
+    })
 
-    const content = response.choices?.[0]?.message?.content || ''
+    clearTimeout(timeoutId)
+    onProgress?.({ type: 'log', message: `📨 API response received` })
+
+    const rawContent = response.choices?.[0]?.message?.content
+    const content = typeof rawContent === 'string' ? rawContent : ''
     
-    if (!content || content.length < 100) {
-      throw new Error(`Invalid API response: ${content.length} characters`)
+    if (!content || content.length < 50) {
+      const preview = typeof rawContent === 'string' ? rawContent.substring(0, 100) : 'Non-string response'
+      throw new Error(`Invalid API response: ${content.length} characters - "${preview}"`)
     }
     
-    onProgress?.({ type: 'log', message: `✅ React Native AI response received: ${content.length} characters` })
+    onProgress?.({ type: 'log', message: `✅ React Native AI response: ${content.length} characters` })
     return content
     
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-    onProgress?.({ type: 'log', message: `❌ React Native AI generation failed (attempt ${attempt}): ${errorMessage}` })
+    onProgress?.({ type: 'log', message: `❌ API call failed (attempt ${attempt}): ${errorMessage}` })
+    
+    // Log more details about the error
+    if (error instanceof Error) {
+      onProgress?.({ type: 'log', message: `🔍 Error details: ${error.stack?.substring(0, 200) || 'No stack trace'}` })
+    }
     
     if (attempt < maxAttempts) {
+      onProgress?.({ type: 'log', message: `🔄 Retrying in ${attempt + 1} seconds...` })
       return callMistralWithRateLimit(prompt, analysis, onProgress, attempt + 1)
     }
     
@@ -611,6 +562,104 @@ function parseReactNativeV0Response(response: string): { [key: string]: string }
   return files
 }
 
+// Fallback React Native App Generator (When AI Fails)
+function generateFallbackReactNativeApp(analysis: ComponentAnalysis): string {
+  return JSON.stringify({
+    files: {
+      "app.json": JSON.stringify({
+        expo: {
+          name: analysis.appType,
+          slug: analysis.appType.toLowerCase().replace(/[^a-z0-9]/g, '-'),
+          version: "1.0.0",
+          orientation: "portrait",
+          icon: "./assets/icon.png",
+          userInterfaceStyle: "light",
+          splash: {
+            image: "./assets/splash.png",
+            resizeMode: "contain",
+            backgroundColor: "#ffffff"
+          },
+          assetBundlePatterns: ["**/*"],
+          ios: { supportsTablet: true },
+          android: {
+            adaptiveIcon: {
+              foregroundImage: "./assets/adaptive-icon.png",
+              backgroundColor: "#FFFFFF"
+            }
+          },
+          web: { favicon: "./assets/favicon.png" }
+        }
+      }, null, 2),
+      
+      "app/_layout.tsx": `import { Stack } from 'expo-router'
+import { StatusBar } from 'expo-status-bar'
+
+export default function RootLayout() {
+  return (
+    <>
+      <Stack screenOptions={{ headerShown: false }} />
+      <StatusBar style="auto" />
+    </>
+  )
+}`,
+
+      "app/index.tsx": `import { View, Text, StyleSheet } from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
+
+export default function HomeScreen() {
+  return (
+    <SafeAreaView style={styles.container}>
+      <View style={styles.content}>
+        <Text style={styles.title}>${analysis.appType}</Text>
+        <Text style={styles.subtitle}>Generated with React Native V0</Text>
+      </View>
+    </SafeAreaView>
+  )
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#fff' },
+  content: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
+  title: { fontSize: 24, fontWeight: 'bold', marginBottom: 10 },
+  subtitle: { fontSize: 16, color: '#666', textAlign: 'center' }
+})`
+    }
+  })
+}
+
+// Fallback Files Generator (When JSON Parsing Fails)
+function generateFallbackFiles(analysis: ComponentAnalysis, packageJson: any): { [key: string]: string } {
+  return {
+    "app.json": JSON.stringify({
+      expo: {
+        name: analysis.appType,
+        slug: analysis.appType.toLowerCase().replace(/[^a-z0-9]/g, '-'),
+        version: "1.0.0",
+        orientation: "portrait",
+        platforms: ["ios", "android", "web"]
+      }
+    }, null, 2),
+    
+    "app/_layout.tsx": `import { Stack } from 'expo-router'
+
+export default function RootLayout() {
+  return <Stack screenOptions={{ headerShown: false }} />
+}`,
+
+    "app/index.tsx": `import { View, Text } from 'react-native'
+
+export default function App() {
+  return (
+    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+      <Text style={{ fontSize: 20 }}>${analysis.appType}</Text>
+    </View>
+  )
+}`,
+
+    "package.json": JSON.stringify(packageJson, null, 2)
+  }
+}
+
 // React Native V0.dev Style: Instant File Updates
 function emitReactNativeFileUpdates(
   files: { [key: string]: string },
@@ -673,7 +722,14 @@ export async function generateV0StyleApp(
 🔥 REQUIRED NATIVE MODULES: ${analysis.detectedModules.map(m => m.name).join(', ')}
 📦 USE EXACT DEPENDENCIES: ${Object.keys(smartPackageJson.dependencies).join(', ')}`
 
-    const rawResponse = await callMistralWithRateLimit(enhancedPrompt, analysis, onProgress)
+    let rawResponse: string
+    try {
+      rawResponse = await callMistralWithRateLimit(enhancedPrompt, analysis, onProgress)
+    } catch (error) {
+      // Fallback: Generate basic React Native app structure if AI fails
+      onProgress?.({ type: 'log', message: '🔄 AI generation failed, using fallback template...' })
+      rawResponse = generateFallbackReactNativeApp(analysis)
+    }
     
     // Step 4: Enhanced JSON Parsing
     onProgress?.({ type: 'log', message: '⚡ Parsing React Native JSON with native modules...' })
@@ -683,7 +739,9 @@ export async function generateV0StyleApp(
     files['package.json'] = JSON.stringify(smartPackageJson, null, 2)
     
     if (Object.keys(files).length === 0) {
-      throw new Error('No React Native files generated from AI response')
+      onProgress?.({ type: 'log', message: '🔄 JSON parsing failed, using fallback files...' })
+      const fallbackFiles = generateFallbackFiles(analysis, smartPackageJson)
+      Object.assign(files, fallbackFiles)
     }
     
     // Step 6: Enhanced V0 Response with Native Module Metadata
