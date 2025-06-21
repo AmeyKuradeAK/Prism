@@ -197,7 +197,7 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
     if (!prompt.trim()) return
     
     setIsGenerating(true)
-    setLogs([])
+    setLogs(['🚀 Starting AI-powered React Native generation with solid Expo base...'])
     setFiles({})
     setProgressFiles({})
     setActiveFile(null)
@@ -690,6 +690,9 @@ ${Object.keys(files).map(path => `- ${path}`).join('\n')}
                   <span className="flex items-center space-x-1">
                     <Cloud className="w-3 h-3 text-purple-400" />
                     <span className="text-purple-400">In-Memory VFS</span>
+                    <span className="text-xs bg-purple-400/20 text-purple-300 px-2 py-0.5 rounded-full">
+                      {(JSON.stringify(files).length / 1024).toFixed(1)}KB
+                    </span>
                   </span>
                   <span>•</span>
                   <div className="flex items-center space-x-1">
@@ -914,6 +917,23 @@ ${Object.keys(files).map(path => `- ${path}`).join('\n')}
               <div className="text-center mt-8 text-gray-500">
                 <Folder className="w-8 h-8 mx-auto mb-2 opacity-50" />
                 <p className="text-sm">No files generated yet</p>
+                <p className="text-xs text-gray-600 mt-2">Files will be stored in memory like v0.dev</p>
+              </div>
+            )}
+            
+            {/* Memory Status Panel */}
+            {Object.keys(files).length > 0 && (
+              <div className="p-3 mx-3 mb-3 bg-purple-900/20 border border-purple-700/30 rounded-lg">
+                <div className="flex items-center space-x-2 mb-2">
+                  <div className="w-2 h-2 bg-purple-400 rounded-full animate-pulse"></div>
+                  <span className="text-xs font-medium text-purple-300">In-Memory File System</span>
+                </div>
+                <div className="text-xs text-purple-200/70 space-y-1">
+                  <div>📁 Files: {Object.keys(files).length}</div>
+                  <div>💾 Size: {(JSON.stringify(files).length / 1024).toFixed(1)}KB</div>
+                  <div>🔄 Status: {autoSaveStatus === 'saved' ? 'Synced to DB' : 'Syncing...'}</div>
+                  <div>⚡ Persistence: Until page reload</div>
+                </div>
               </div>
             )}
           </div>

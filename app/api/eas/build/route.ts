@@ -70,6 +70,10 @@ export async function POST(request: NextRequest) {
     console.log(`🔧 Native modules detected: ${nativeModules.join(', ')}`)
     console.log(`✅ Build queued: ${buildId}`)
 
+    // Initialize build status for polling
+    const { initializeBuildStatus } = await import('./[buildId]/route')
+    initializeBuildStatus(buildId, platform)
+
     return NextResponse.json({
       success: true,
       buildId,
@@ -84,7 +88,7 @@ export async function POST(request: NextRequest) {
         platform,
         userId,
         createdAt: new Date().toISOString(),
-        expoSdkVersion: '52.0.0'
+        expoSdkVersion: '53.0.0'
       },
       message: `EAS Build started for ${platform}`
     })

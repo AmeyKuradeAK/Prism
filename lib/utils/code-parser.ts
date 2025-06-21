@@ -3,12 +3,18 @@ import { GeneratedFile } from '@/types'
 export function parseCodeFromResponse(response: string): GeneratedFile[] {
   const files: GeneratedFile[] = []
   
-  // Enhanced pattern to match file markers
+  // Enhanced and more flexible patterns to match file markers
   const fileMarkerPatterns = [
-    /===FILE:\s*([^\n\r]+)===\n([\s\S]*?)(?===END===|===FILE:|$)/gi,
-    /```([a-zA-Z]*)\s*:\s*([^\n\r]+)\n([\s\S]*?)```/gi,
-    /\/\*\*\s*FILE:\s*([^\n\r]+)\s*\*\/\n([\s\S]*?)(?=\/\*\*\s*FILE:|$)/gi,
-    /\/\/\s*FILE:\s*([^\n\r]+)\n([\s\S]*?)(?=\/\/\s*FILE:|$)/gi
+    // Standard ===FILE: format - most flexible
+    /===FILE:\s*([^\n\r]+?)===\s*\n([\s\S]*?)(?====FILE:|===END===|$)/gi,
+    // Alternative format with END marker
+    /===([^=\n\r]+)===\s*\n([\s\S]*?)(?====|$)/gi,
+    // Code blocks with file paths
+    /```(?:typescript|tsx|javascript|js|json|md|yaml|yml|css|scss|html)?\s*(?:\/\/|#)?\s*([^\n\r]+\.[\w]+)\s*\n([\s\S]*?)```/gi,
+    // File path comments followed by code
+    /(?:\/\/|#)\s*(?:FILE|Path):\s*([^\n\r]+)\s*\n([\s\S]*?)(?=(?:\/\/|#)\s*(?:FILE|Path):|$)/gi,
+    // React/JS file patterns
+    /\/\*\s*([^\n\r]+\.(?:tsx?|jsx?|json|md))\s*\*\/\s*\n([\s\S]*?)(?=\/\*.*?\.(?:tsx?|jsx?|json|md)|$)/gi
   ]
   
   // Try each pattern
@@ -19,19 +25,20 @@ export function parseCodeFromResponse(response: string): GeneratedFile[] {
       let content: string
       
       if (match.length === 4) {
-        // Pattern with language specifier
-        filename = match[2].trim()
-        content = match[3].trim()
+        // Pattern with language specifier (like ```tsx app/home.tsx)
+        filename = match[3] || match[2] || match[1]
+        content = match[4] || match[3] || match[2]
       } else {
         // Standard pattern
         filename = match[1].trim()
         content = match[2].trim()
       }
       
-      // Clean up filename
-      filename = filename.replace(/^["']|["']$/g, '').trim()
+      // Normalize and clean up filename
+      filename = normalizeFilePath(filename)
+      content = cleanupContent(content)
       
-      if (filename && content) {
+      if (filename && content && content.length > 10) {
         files.push({
           path: filename,
           content: content,
@@ -100,15 +107,38 @@ function determineFileType(filename: string): GeneratedFile['type'] {
       return 'tsx'
     case 'ts':
       return 'ts'
+    case 'jsx':
     case 'js':
       return 'js'
     case 'json':
       return 'json'
     case 'md':
+    case 'markdown':
       return 'md'
+    case 'yaml':
+    case 'yml':
+    case 'css':
+    case 'scss':
+    case 'sass':
+    case 'html':
+    case 'xml':
+    case 'env':
+    case 'gitignore':
+    case 'eslintrc':
+    case 'prettierrc':
+      return 'txt'
     default:
       return 'txt'
   }
+}
+
+// Add function to normalize file paths and create nested structures
+function normalizeFilePath(path: string): string {
+  return path
+    .replace(/^["']|["']$/g, '') // Remove quotes
+    .replace(/^\/+|\/+$/g, '') // Remove leading/trailing slashes
+    .replace(/\/+/g, '/') // Normalize multiple slashes
+    .trim()
 }
 
 function guessFilename(content: string, index: number): string {
@@ -183,8 +213,12 @@ function cleanupContent(content: string): string {
   return content
     .replace(/^===FILE:.*?===/gmi, '')
     .replace(/^===END===/gmi, '')
-    .replace(/^```[\w]*\n?/gm, '')
-    .replace(/\n```$/gm, '')
+    .replace(/^===.*?===/gmi, '') // Remove any other === markers
+    .replace(/^```[\w]*\s*(?:\/\/|#)?\s*[^\n]*\n?/gm, '') // Remove code block headers
+    .replace(/\n```$/gm, '') // Remove closing code blocks
+    .replace(/^\/\*.*?\*\/\s*\n?/gm, '') // Remove JS file comments
+    .replace(/^\/\/\s*(?:FILE|Path):.*?\n/gmi, '') // Remove file path comments
+    .replace(/^\s*$\n/gm, '') // Remove empty lines
     .trim()
 }
 
@@ -228,4 +262,67 @@ export function formatFileSize(bytes: number): string {
   const i = Math.floor(Math.log(bytes) / Math.log(k))
   
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+}
+
+export function mergePackageJsonDependencies(basePackageJson: string, aiPackageJson: string): string {
+  try {
+    const baseObj = JSON.parse(basePackageJson)
+    const aiObj = JSON.parse(aiPackageJson)
+    
+    // Merge dependencies intelligently
+    const merged = {
+      ...baseObj,
+      ...aiObj,
+      dependencies: {
+        ...baseObj.dependencies,
+        ...aiObj.dependencies
+      },
+      devDependencies: {
+        ...baseObj.devDependencies,
+        ...aiObj.devDependencies
+      },
+      scripts: {
+        ...baseObj.scripts,
+        ...aiObj.scripts
+      }
+    }
+    
+    return JSON.stringify(merged, null, 2)
+  } catch (error) {
+    console.warn('Failed to merge package.json files:', error)
+    // Return AI version if merge fails
+    return aiPackageJson
+  }
+}
+
+export function extractAndValidateFiles(files: GeneratedFile[]): GeneratedFile[] {
+  const validatedFiles: GeneratedFile[] = []
+  const packageJsonFiles: GeneratedFile[] = []
+  
+  for (const file of files) {
+    // Handle package.json specially
+    if (file.path === 'package.json') {
+      packageJsonFiles.push(file)
+      continue
+    }
+    
+    // Validate file content
+    if (file.content.length < 5) continue
+    
+    // Ensure proper file structure
+    const normalizedPath = normalizeFilePath(file.path)
+    if (!normalizedPath || normalizedPath.includes('..')) continue
+    
+    validatedFiles.push({
+      ...file,
+      path: normalizedPath
+    })
+  }
+  
+  // Handle package.json merging
+  if (packageJsonFiles.length > 0) {
+    validatedFiles.push(packageJsonFiles[packageJsonFiles.length - 1])
+  }
+  
+  return validatedFiles
 } 
