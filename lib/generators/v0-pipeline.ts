@@ -102,12 +102,20 @@ export function analyzePrompt(prompt: string): AppAnalysis {
 // 🚀 Main V0.dev Pipeline
 export async function runV0Pipeline(prompt: string): Promise<{ [key: string]: string }> {
   console.log('🚀 Starting V0.dev-style pipeline...')
+  console.log(`🌐 Pipeline Environment: ${typeof process !== 'undefined' ? process.env?.NODE_ENV || 'unknown' : 'no-process'}`)
   
   try {
     // STEP 1: Prompt Analysis (like v0.dev)
     console.log('📊 Step 1: Analyzing prompt...')
     const analysis = analyzePrompt(prompt)
     console.log(`✅ Detected: ${analysis.type} app (${analysis.complexity}) with ${analysis.features.length} features`)
+    console.log(`📋 Analysis details:`, {
+      type: analysis.type,
+      complexity: analysis.complexity,
+      features: analysis.features,
+      screens: analysis.screens,
+      components: analysis.components
+    })
     
     // STEP 2: Plan Formation (like v0.dev)
     console.log('🎯 Step 2: Creating generation plan...')
@@ -116,8 +124,20 @@ export async function runV0Pipeline(prompt: string): Promise<{ [key: string]: st
     
     // STEP 3: Base Template (like v0.dev Next.js base)
     console.log('📱 Step 3: Instantiating base template...')
+    console.log(`📛 Calling generateExpoBaseTemplate with appName: "${plan.appName}"`)
+    
     const baseFiles = generateExpoBaseTemplate(plan.appName)
+    
     console.log(`✅ Base template: ${Object.keys(baseFiles).length} files`)
+    console.log(`📁 Base template files: ${Object.keys(baseFiles).slice(0, 5).join(', ')}${Object.keys(baseFiles).length > 5 ? '...' : ''}`)
+    
+    // Verify base template has content
+    const baseFilesWithContent = Object.entries(baseFiles).filter(([_, content]) => content && content.length > 0)
+    console.log(`📊 Base files with content: ${baseFilesWithContent.length}/${Object.keys(baseFiles).length}`)
+    
+    if (Object.keys(baseFiles).length === 0) {
+      throw new Error('Base template generation failed - no files returned')
+    }
     
     // STEP 4: LLM Generation (like v0.dev) - Enhanced error handling
     console.log('🧠 Step 4: LLM generating components...')
