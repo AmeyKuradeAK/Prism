@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { generateV0StyleApp } from '@/lib/generators/expo-v0-generator'
+import { generateExpoBaseTemplate } from '@/lib/generators/templates/expo-base-template'
 
 export async function POST(request: NextRequest) {
   try {
@@ -71,12 +72,31 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function GET() {
-  return NextResponse.json({
-    message: 'React Native V0 Test API',
-    usage: 'POST with { "prompt": "your app description" }',
-    example: {
-      prompt: "Build a simple todo app with task management"
-    }
-  })
+export async function GET(request: NextRequest) {
+  try {
+    console.log('🧪 Testing base template generation...')
+    
+    const files = generateExpoBaseTemplate('TestApp')
+    
+    console.log(`✅ Base template test successful: ${Object.keys(files).length} files`)
+    console.log(`📁 Files: ${Object.keys(files).join(', ')}`)
+    
+    return Response.json({
+      success: true,
+      message: 'Base template test successful',
+      fileCount: Object.keys(files).length,
+      files: Object.keys(files),
+      sampleFile: {
+        path: 'package.json',
+        content: files['package.json']?.substring(0, 200) + '...'
+      }
+    })
+  } catch (error) {
+    console.error('❌ Base template test failed:', error)
+    return Response.json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined
+    }, { status: 500 })
+  }
 } 
