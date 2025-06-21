@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
     console.log(`✅ Build queued: ${buildId}`)
 
     // Initialize build status for polling
-    const { initializeBuildStatus } = await import('./[buildId]/route')
+    const { initializeBuildStatus } = await import('@/lib/eas-build/build-status')
     initializeBuildStatus(buildId, platform)
 
     return NextResponse.json({
