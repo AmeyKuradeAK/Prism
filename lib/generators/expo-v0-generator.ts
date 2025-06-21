@@ -418,7 +418,8 @@ async function callMistralDirectAPI(
   prompt: string,
   analysis: ComponentAnalysis,
   onProgress?: (progress: { type: string; message: string; file?: GeneratedFile }) => void,
-  attempt: number = 1
+  attempt: number = 1,
+  maxTokens: number = 3000
 ): Promise<string> {
   
   const maxAttempts = 3
@@ -492,7 +493,7 @@ Create a complete React Native app with Expo Router, TypeScript, and NativeWind.
             }
           ],
           temperature: 0.1,
-          max_tokens: 3000 // Reduced for Netlify Free
+          max_tokens: maxTokens
         }),
         signal: controller.signal
       })
@@ -561,6 +562,128 @@ Create a complete React Native app with Expo Router, TypeScript, and NativeWind.
     
     throw new Error(`AI generation failed after ${maxAttempts} attempts: ${errorMessage}`)
   }
+}
+
+// Chunked AI Generation - Multiple focused requests with rate limiting
+async function generateAppInChunks(
+  basePrompt: string,
+  analysis: ComponentAnalysis,
+  onProgress?: (progress: { type: string; message: string; file?: GeneratedFile }) => void
+): Promise<string> {
+  
+  const chunks = [
+    {
+      name: "Project Structure & Config",
+      prompt: `Generate ONLY the project configuration files for: "${basePrompt}"
+      
+Return JSON with these files ONLY:
+- app.json (Expo config)
+- package.json (dependencies)
+- app/_layout.tsx (root layout)
+
+App: ${analysis.appType}
+Native Modules: ${analysis.detectedModules.map(m => m.name).join(', ')}
+
+Return ONLY valid JSON: {"files": {"app.json": "...", "package.json": "...", "app/_layout.tsx": "..."}}`,
+      maxTokens: 2000
+    },
+    
+    {
+      name: "Main Screen & Navigation", 
+      prompt: `Generate the main screen for: "${basePrompt}"
+      
+Return JSON with this file ONLY:
+- app/index.tsx (main home screen with navigation)
+
+App: ${analysis.appType}
+Screens: ${analysis.primaryScreens.slice(0, 3).join(', ')}
+Features: ${analysis.features.slice(0, 3).join(', ')}
+
+Return ONLY valid JSON: {"files": {"app/index.tsx": "..."}}`,
+      maxTokens: 2000
+    },
+    
+    {
+      name: "Core Components",
+      prompt: `Generate core components for: "${basePrompt}"
+      
+Return JSON with these files ONLY:
+- components/TaskItem.tsx (if todo app)
+- components/Timer.tsx (if timer app)  
+- components/Button.tsx (reusable button)
+
+App: ${analysis.appType}
+Features: ${analysis.features.join(', ')}
+
+Return ONLY valid JSON: {"files": {"components/Component.tsx": "..."}}`,
+      maxTokens: 2000
+    },
+    
+    {
+      name: "Additional Screens",
+      prompt: `Generate additional screens for: "${basePrompt}"
+      
+Return JSON with screen files:
+- app/tasks.tsx (task list screen)
+- app/timer.tsx (timer screen)
+- app/settings.tsx (settings screen)
+
+App: ${analysis.appType}
+Screens: ${analysis.primaryScreens.join(', ')}
+
+Return ONLY valid JSON: {"files": {"app/screen.tsx": "..."}}`,
+      maxTokens: 2000
+    }
+  ]
+  
+  const allFiles: { [key: string]: string } = {}
+  
+  for (let i = 0; i < chunks.length; i++) {
+    const chunk = chunks[i]
+    
+    onProgress?.({ type: 'log', message: `📦 Chunk ${i + 1}/${chunks.length}: ${chunk.name}` })
+    onProgress?.({ type: 'log', message: `🎯 Generating focused content (${chunk.maxTokens} tokens max)...` })
+    
+    try {
+      const chunkResponse = await callMistralDirectAPI(
+        chunk.prompt, 
+        analysis, 
+        onProgress, 
+        1, 
+        chunk.maxTokens
+      )
+      
+      // Parse the chunk response
+      const chunkFiles = parseReactNativeV0Response(chunkResponse)
+      
+      // Merge files
+      Object.entries(chunkFiles).forEach(([path, content]) => {
+        if (content && content.length > 10) {
+          allFiles[path] = content
+          onProgress?.({ type: 'log', message: `✅ Generated ${path} (${content.length} chars)` })
+        }
+      })
+      
+      onProgress?.({ type: 'log', message: `✅ Chunk ${i + 1} complete: ${Object.keys(chunkFiles).length} files` })
+      
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      onProgress?.({ type: 'log', message: `❌ Chunk ${i + 1} failed: ${errorMessage}` })
+      onProgress?.({ type: 'log', message: `🔄 Continuing with remaining chunks...` })
+    }
+    
+    // Rate limiting: 2-3 second gap between requests (Mistral 1 RPS limit)
+    if (i < chunks.length - 1) {
+      const waitTime = 2500 + Math.random() * 500 // 2.5-3s random delay
+      onProgress?.({ type: 'log', message: `⏳ Rate limiting: waiting ${Math.round(waitTime/100)/10}s before next chunk...` })
+      await new Promise(resolve => setTimeout(resolve, waitTime))
+    }
+  }
+  
+  onProgress?.({ type: 'log', message: `🎉 All chunks complete! Generated ${Object.keys(allFiles).length} files total` })
+  
+  // Return as JSON string format expected by the parser
+  return JSON.stringify({ files: allFiles })
 }
 
 // Legacy function for backward compatibility
@@ -700,11 +823,11 @@ export async function generateV0StyleApp(
 
     let rawResponse: string
     
-    // PURE AI GENERATION - NO MANUAL TEMPLATES!
-    onProgress?.({ type: 'log', message: '🤖 PURE AI GENERATION - No manual fallbacks!' })
-    onProgress?.({ type: 'log', message: '🚀 Using direct Mistral API call for better Netlify compatibility...' })
+    // PURE AI GENERATION - CHUNKED REQUESTS!
+    onProgress?.({ type: 'log', message: '🤖 PURE AI GENERATION - Multi-request chunked approach!' })
+    onProgress?.({ type: 'log', message: '🔄 Breaking generation into focused chunks with 2-3s gaps (Mistral 1 RPS limit)...' })
     
-    rawResponse = await callMistralDirectAPI(enhancedPrompt, analysis, onProgress)
+    rawResponse = await generateAppInChunks(enhancedPrompt, analysis, onProgress)
     
     // Step 4: Enhanced JSON Parsing
     onProgress?.({ type: 'log', message: '⚡ Parsing React Native JSON with native modules...' })
