@@ -413,7 +413,8 @@ PROFESSIONAL REACT NATIVE STRUCTURE - Generate files in these folders:
 REQUIREMENTS:
 - Use Expo SDK 53, React Native 0.76, TypeScript
 - Use NativeWind for styling (className props)
-- Use Expo Router for navigation
+- Use Expo Router ONLY for navigation (NO React Navigation!)
+- Navigation files go in app/ folder (app/_layout.tsx, app/index.tsx, app/screens/)
 - Generate REAL, WORKING functionality - NO placeholders
 - Include proper state management with useState/useEffect
 - Add actual user interactions (buttons, forms, lists)
@@ -493,30 +494,30 @@ export async function generateReactNativePlan(
   // 2. Main Home Screen (Always Required)
   chunks.push({
     name: "Home Screen",
-    prompt: `Generate screens/HomeScreen.tsx for ${analysis.appType}. Include navigation buttons to: ${analysis.primaryScreens.join(', ')}. Real functionality, state management, NativeWind styling. NO placeholders.`,
+    prompt: `Generate app/index.tsx for ${analysis.appType} using Expo Router. Include navigation to: ${analysis.primaryScreens.join(', ')} using Link components or router.push. Real functionality, state management, NativeWind styling. NO placeholders.`,
     maxTokens: 1500,
     priority: 2,
     essential: true,
     retryStrategies: [
-      'Create simpler home screen with basic navigation',
-      'Generate minimal home screen with essential features only',
-      'Focus on working navigation without complex state'
+      'Create simpler home screen with basic Expo Router navigation',
+      'Generate minimal app/index.tsx with essential Expo Router features only',
+      'Focus on working Expo Router navigation without complex state'
     ]
   })
   
-  // 3. Generate chunks for each primary screen
+  // 3. Generate chunks for each primary screen (Expo Router format)
   analysis.primaryScreens.forEach((screen, index) => {
     if (index < 6) { // Limit to 6 main screens to avoid too many chunks
       chunks.push({
         name: `${screen} Screen`,
-        prompt: `Generate screens/${screen}Screen.tsx for ${analysis.appType}. Include real functionality related to ${screen.toLowerCase()}, proper state management, forms, data handling, and NativeWind styling. Make it fully functional.`,
+        prompt: `Generate app/${screen.toLowerCase()}.tsx for ${analysis.appType} using Expo Router. Include real functionality related to ${screen.toLowerCase()}, proper state management, forms, data handling, and NativeWind styling. Use Expo Router navigation (Link, router.push). Make it fully functional.`,
         maxTokens: 1500,
         priority: 3 + index,
         essential: index < 2, // First 2 screens are essential
         retryStrategies: [
-          `Create simpler ${screen} screen with basic functionality`,
-          `Generate minimal ${screen} screen with core features only`,
-          `Focus on working ${screen} interface without complex logic`
+          `Create simpler ${screen} screen with basic Expo Router functionality`,
+          `Generate minimal ${screen} screen with core features and Expo Router navigation`,
+          `Focus on working ${screen} interface with simple Expo Router setup`
         ]
       })
     }
@@ -536,17 +537,17 @@ export async function generateReactNativePlan(
     ]
   })
   
-  // 5. Navigation Setup
+  // 5. Navigation Setup (Expo Router)
   chunks.push({
-    name: "Navigation",
-    prompt: `Generate navigation/AppNavigator.tsx for ${analysis.appType}. Set up navigation between all screens: ${analysis.primaryScreens.join(', ')}. Use appropriate navigation pattern (${analysis.navigationPattern}). Working navigation with proper routing.`,
+    name: "Navigation Layout",
+    prompt: `Generate app/_layout.tsx for ${analysis.appType} using Expo Router. Set up navigation between screens: ${analysis.primaryScreens.join(', ')}. Use Expo Router Stack or Tabs pattern. Include proper TypeScript and navigation setup. DO NOT use React Navigation - use Expo Router only.`,
     maxTokens: 1200,
     priority: 11,
     essential: true,
     retryStrategies: [
-      'Create simple stack navigation between screens',
-      'Generate basic navigation without complex patterns',
-      'Focus on working navigation setup'
+      'Create simple Expo Router stack layout with basic navigation',
+      'Generate minimal app/_layout.tsx with Expo Router Stack',
+      'Focus on working Expo Router setup without complex patterns'
     ]
   })
   
