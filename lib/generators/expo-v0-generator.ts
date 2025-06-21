@@ -456,38 +456,58 @@ Create a complete React Native app with Expo Router, TypeScript, and NativeWind.
     onProgress?.({ type: 'log', message: `🔄 Making direct fetch to Mistral API...` })
     
     const startTime = Date.now()
-    const timeout = process.env.NODE_ENV === 'production' ? 25000 : 30000
+    // Netlify Free: 10s max, use 9s to be safe
+    const timeout = process.env.NODE_ENV === 'production' ? 9000 : 15000
     
-    // Direct fetch call to Mistral API
+    onProgress?.({ type: 'log', message: `Prompt length: ${reactNativePrompt.length} chars` })
+    onProgress?.({ type: 'log', message: `Request started at: ${new Date().toISOString()}` })
+    
+    // Direct fetch call to Mistral API with AbortController
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), timeout)
+    const timeoutId = setTimeout(() => {
+      onProgress?.({ type: 'log', message: `⏰ Aborting request after ${timeout/1000}s timeout` })
+      controller.abort()
+    }, timeout)
     
-    const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.MISTRAL_API_KEY}`,
-        'User-Agent': 'Netlify-Function/1.0'
-      },
-      body: JSON.stringify({
-        model: 'mistral-small-latest',
-        messages: [
-          {
-            role: 'system',
-            content: createReactNativeSystemPrompt(analysis)
-          },
-          {
-            role: 'user',
-            content: reactNativePrompt
-          }
-        ],
-        temperature: 0.1,
-        max_tokens: 6000
-      }),
-      signal: controller.signal
-    })
+    let response: Response
     
-    clearTimeout(timeoutId)
+    try {
+      response = await fetch('https://api.mistral.ai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.MISTRAL_API_KEY}`,
+          'User-Agent': 'Netlify-Function/1.0'
+        },
+        body: JSON.stringify({
+          model: 'mistral-small-latest',
+          messages: [
+            {
+              role: 'system',
+              content: createReactNativeSystemPrompt(analysis)
+            },
+            {
+              role: 'user',
+              content: reactNativePrompt.length > 800 ? reactNativePrompt.substring(0, 800) + '...' : reactNativePrompt
+            }
+          ],
+          temperature: 0.1,
+          max_tokens: 3000 // Reduced for Netlify Free
+        }),
+        signal: controller.signal
+      })
+      
+      clearTimeout(timeoutId)
+      
+    } catch (err: any) {
+      clearTimeout(timeoutId)
+      
+      if (err.name === 'AbortError') {
+        throw new Error(`⏰ Mistral fetch timed out on Netlify after ${timeout/1000}s`)
+      }
+      
+      throw new Error(`🌐 Network error: ${err.message}`)
+    }
     
     const networkTime = Date.now() - startTime
     onProgress?.({ type: 'log', message: `📨 API response received in ${networkTime}ms` })
@@ -511,25 +531,30 @@ Create a complete React Native app with Expo Router, TypeScript, and NativeWind.
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     onProgress?.({ type: 'log', message: `❌ Direct API call failed (attempt ${attempt}): ${errorMessage}` })
     
-    // Enhanced error diagnostics
+    // Enhanced error diagnostics for Netlify
     if (error instanceof Error) {
-      if (errorMessage.includes('AbortError') || errorMessage.includes('timeout')) {
-        const timeoutSecs = process.env.NODE_ENV === 'production' ? 25 : 30
-        onProgress?.({ type: 'log', message: `⏰ Request timeout after ${timeoutSecs}s` })
+      if (errorMessage.includes('AbortError') || errorMessage.includes('timed out')) {
+        const timeoutSecs = process.env.NODE_ENV === 'production' ? 9 : 15
+        onProgress?.({ type: 'log', message: `⏰ Netlify timeout - request took longer than ${timeoutSecs}s` })
+        onProgress?.({ type: 'log', message: `💡 Try reducing prompt length or using shorter requests` })
       } else if (errorMessage.includes('401')) {
         onProgress?.({ type: 'log', message: `🔑 API key authentication failed` })
       } else if (errorMessage.includes('429')) {
         onProgress?.({ type: 'log', message: `🚦 Rate limit exceeded` })
+      } else if (errorMessage.includes('Network error')) {
+        onProgress?.({ type: 'log', message: `🌐 Network connectivity issue on Netlify` })
       } else if (errorMessage.includes('fetch')) {
-        onProgress?.({ type: 'log', message: `🌐 Network connectivity issue` })
+        onProgress?.({ type: 'log', message: `🌐 Fetch failed - possible Netlify networking issue` })
       }
       
       onProgress?.({ type: 'log', message: `🔍 Error details: ${error.message}` })
+      onProgress?.({ type: 'log', message: `🔍 Attempt ${attempt}/${maxAttempts}` })
     }
     
     if (attempt < maxAttempts) {
-      const waitTime = attempt * 2000
-      onProgress?.({ type: 'log', message: `🔄 Retrying in ${waitTime/1000} seconds...` })
+      // Exponential backoff: 1s, 2s, 4s
+      const waitTime = Math.min(1000 * Math.pow(2, attempt - 1), 4000)
+      onProgress?.({ type: 'log', message: `🔄 Retrying in ${waitTime/1000}s (exponential backoff)...` })
       await new Promise(resolve => setTimeout(resolve, waitTime))
       return callMistralDirectAPI(prompt, analysis, onProgress, attempt + 1)
     }
