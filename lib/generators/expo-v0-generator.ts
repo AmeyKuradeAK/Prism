@@ -459,30 +459,63 @@ Create a complete React Native app with Expo Router, TypeScript, and NativeWind.
     const startTime = Date.now()
     
     // Netlify-optimized timeout (shorter for serverless)
-    const netlifyTimeout = process.env.NODE_ENV === 'production' ? 20000 : 30000
+    const netlifyTimeout = process.env.NODE_ENV === 'production' ? 25000 : 30000
     
-    const response = await Promise.race([
-      mistral.chat.complete({
-        model: 'mistral-small-latest',
-        messages: [
-          {
-            role: 'system',
-            content: createReactNativeSystemPrompt(analysis)
-          },
-          { 
-            role: 'user', 
-            content: reactNativePrompt
-          }
-        ],
-        temperature: 0.1,
-        maxTokens: 6000 // Reduced for Netlify performance
-      }),
-      new Promise((_, reject) => {
-        setTimeout(() => {
-          reject(new Error(`API request timeout after ${netlifyTimeout/1000} seconds (Netlify optimized)`))
-        }, netlifyTimeout)
-      })
-    ]) as any
+    // Add retry logic for network errors
+    let lastError: Error | null = null
+    let response: any = null
+    
+    for (let retry = 0; retry < 2; retry++) {
+      try {
+        if (retry > 0) {
+          onProgress?.({ type: 'log', message: `🔄 Retry ${retry + 1}/2 after network error` })
+          await new Promise(resolve => setTimeout(resolve, 2000))
+        }
+        
+        response = await Promise.race([
+          mistral.chat.complete({
+            model: 'mistral-small-latest',
+            messages: [
+              {
+                role: 'system',
+                content: createReactNativeSystemPrompt(analysis)
+              },
+              { 
+                role: 'user', 
+                content: reactNativePrompt
+              }
+            ],
+            temperature: 0.1,
+            maxTokens: 6000 // Reduced for Netlify performance
+          }),
+          new Promise((_, reject) => {
+            setTimeout(() => {
+              reject(new Error(`API request timeout after ${netlifyTimeout/1000} seconds (Netlify optimized)`))
+            }, netlifyTimeout)
+          })
+        ]) as any
+        
+        // If we get here, the request succeeded
+        break
+        
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error('Unknown network error')
+        
+        if (lastError.message.includes('network error') || 
+            lastError.message.includes('fetch') ||
+            lastError.message.includes('ECONNRESET')) {
+          onProgress?.({ type: 'log', message: `🌐 Network error on attempt ${retry + 1}: ${lastError.message}` })
+          if (retry < 1) continue // Try again
+        }
+        
+        // For non-network errors, don't retry
+        throw lastError
+      }
+    }
+    
+    if (!response && lastError) {
+      throw lastError
+    }
 
     const networkTime = Date.now() - startTime
     onProgress?.({ type: 'log', message: `📨 API response received in ${networkTime}ms` })
