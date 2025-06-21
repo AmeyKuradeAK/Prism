@@ -221,12 +221,21 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
         throw new Error(error.details || 'Failed to generate with base template')
       }
 
-      const { files: generatedFiles } = await response.json()
+      const responseData = await response.json()
+      console.log('🔍 API Response:', responseData)
+      
+      const { files: generatedFiles } = responseData
+      
+      if (!generatedFiles || typeof generatedFiles !== 'object') {
+        throw new Error(`Invalid files response: ${typeof generatedFiles}`)
+      }
       
       setLogs(prev => [...prev, `✅ Generated ${Object.keys(generatedFiles).length} files with solid base template!`])
+      setLogs(prev => [...prev, `📁 Files: ${Object.keys(generatedFiles).slice(0, 5).join(', ')}...`])
 
       // Set all files in state
       setFiles(generatedFiles)
+      console.log('📁 Files set in state:', Object.keys(generatedFiles))
       
       // Update progress files for UI
       Object.entries(generatedFiles).forEach(([path, fileContent]) => {
@@ -463,6 +472,67 @@ ${Object.keys(files).map(path => `- ${path}`).join('\n')}
     })
   }
 
+  // Test function to load base template directly
+  const testBaseTemplate = () => {
+    setLogs(['🧪 Testing base template directly...'])
+    
+    // Import and use the base template directly
+    import('@/lib/generators/templates/expo-base-template').then(({ generateExpoBaseTemplate }) => {
+      const testFiles = generateExpoBaseTemplate('TestApp')
+      
+      setLogs(prev => [...prev, `✅ Base template loaded: ${Object.keys(testFiles).length} files`])
+      setFiles(testFiles)
+      
+      // Set first file as active
+      const firstFile = Object.keys(testFiles)[0]
+      if (firstFile) {
+        setActiveFile(firstFile)
+      }
+      
+      setLogs(prev => [...prev, '🎉 Test complete - check Project Files!'])
+    }).catch(error => {
+      setLogs(prev => [...prev, `❌ Test failed: ${error.message}`])
+    })
+  }
+
+  // Comprehensive V0.dev Pipeline Test
+  const testV0Pipeline = async () => {
+    setLogs(['🚀 Testing complete V0.dev pipeline...'])
+    setFiles({})
+    setActiveFile(null)
+
+    try {
+      // Test the full pipeline
+      const { runV0Pipeline } = await import('@/lib/generators/v0-pipeline')
+      
+      setLogs(prev => [...prev, '📊 Step 1: Analyzing test prompt...'])
+      const testPrompt = 'Create a simple todo app with add and delete tasks'
+      
+      setLogs(prev => [...prev, '🎯 Step 2: Running complete V0.dev pipeline...'])
+      const pipelineFiles = await runV0Pipeline(testPrompt)
+      
+      setLogs(prev => [...prev, `✅ Pipeline complete: ${Object.keys(pipelineFiles).length} files generated`])
+      setLogs(prev => [...prev, `📁 Files: ${Object.keys(pipelineFiles).slice(0, 5).join(', ')}...`])
+      
+      // Set files in state
+      setFiles(pipelineFiles)
+      
+      // Set first file as active
+      const firstFile = Object.keys(pipelineFiles)[0]
+      if (firstFile) {
+        setActiveFile(firstFile)
+      }
+      
+      setLogs(prev => [...prev, '🎉 V0.dev pipeline test complete!'])
+      setLogs(prev => [...prev, '💾 Files should now appear in Project Files panel'])
+      
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      setLogs(prev => [...prev, `❌ V0.dev pipeline test failed: ${errorMessage}`])
+      console.error('V0.dev Pipeline Test Error:', error)
+    }
+  }
+
   return (
     <div className="h-screen flex flex-col bg-gray-950 text-gray-100">
       {/* Header */}
@@ -592,6 +662,23 @@ ${Object.keys(files).map(path => `- ${path}`).join('\n')}
                 </>
               )}
             </button>
+            
+            {/* Test buttons for debugging */}
+            <div className="mt-2 space-y-2">
+              <button
+                onClick={testBaseTemplate}
+                className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-all text-sm"
+              >
+                <span>🧪 Test Base Template</span>
+              </button>
+              
+              <button
+                onClick={testV0Pipeline}
+                className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-purple-700 text-purple-100 rounded-lg hover:bg-purple-600 transition-all text-sm"
+              >
+                <span>🚀 Test V0.dev Pipeline</span>
+              </button>
+            </div>
           </div>
 
           {/* Console */}

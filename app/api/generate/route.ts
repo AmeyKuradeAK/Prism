@@ -1,7 +1,5 @@
 import { NextRequest } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
-import { generateExpoApp } from '@/lib/generators/expo-generator'
-import { generateExpoBaseTemplate } from '@/lib/generators/templates/expo-base-template'
 
 export async function POST(request: NextRequest) {
   try {
@@ -29,52 +27,38 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.log(`🚀 Single call generation for: "${prompt.substring(0, 100)}..."`)
-    console.log(`📱 Using solid expo-base-template: ${useBaseTemplate ? 'YES' : 'NO'}`)
+    console.log(`🚀 V0-style React Native generation for: "${prompt.substring(0, 100)}..."`)
 
-    let files: { [key: string]: string } = {}
-
-    try {
-      // Try the full generation first
-      console.log('🔄 Attempting full generation with generateExpoApp...')
-      files = await generateExpoApp(
-        prompt,
-        userId,
-        (progress: { message: string }) => {
-          console.log(`📋 Progress: ${progress.message}`)
-        }
-      )
-      console.log(`✅ Full generation successful: ${Object.keys(files).length} files`)
-    } catch (mainError) {
-      console.error('❌ Main generation failed:', mainError)
-      console.log('🔄 Falling back to base template only...')
-      
-      try {
-        // Fallback to just the base template
-        const appName = prompt.split(' ').slice(0, 2).join(' ').replace(/[^a-zA-Z0-9\s]/g, '').trim() || 'ExpoApp'
-        files = generateExpoBaseTemplate(appName)
-        console.log(`✅ Base template fallback successful: ${Object.keys(files).length} files`)
-      } catch (baseError) {
-        console.error('❌ Even base template failed:', baseError)
-        throw new Error(`Both main generation and base template failed. Main: ${mainError}. Base: ${baseError}`)
+    // 🚀 USE COMPLETE V0.DEV PIPELINE
+    const { runV0Pipeline } = await import('@/lib/generators/v0-pipeline')
+    const validatedFiles = await runV0Pipeline(prompt)
+    
+    // 📊 FINAL RESULT - Enhanced debugging
+    console.log(`✅ V0-style generation complete: ${Object.keys(validatedFiles).length} files`)
+    console.log(`📁 All files: ${Object.keys(validatedFiles).join(', ')}`)
+    
+    // Verify files have content
+    const filesWithContent = Object.entries(validatedFiles).filter(([_, content]) => content && content.length > 0)
+    console.log(`📊 Files with content: ${filesWithContent.length}/${Object.keys(validatedFiles).length}`)
+    
+    const responseData = {
+      success: true,
+      files: validatedFiles,
+      message: `Generated ${Object.keys(validatedFiles).length} files with v0.dev-style pipeline`,
+      fileCount: Object.keys(validatedFiles).length,
+      totalSize: Object.values(validatedFiles).reduce((size, content) => size + content.length, 0),
+      pipeline: 'v0-style: base-template + llm-injection + ast-validation',
+      debug: {
+        hasFiles: Object.keys(validatedFiles).length > 0,
+        firstFile: Object.keys(validatedFiles)[0],
+        firstFileSize: validatedFiles[Object.keys(validatedFiles)[0]]?.length || 0
       }
     }
-
-    if (Object.keys(files).length === 0) {
-      throw new Error('No files were generated')
-    }
-
-    console.log(`✅ Final result: ${Object.keys(files).length} files successfully generated`)
-    console.log(`📁 Files: ${Object.keys(files).slice(0, 5).join(', ')}${Object.keys(files).length > 5 ? '...' : ''}`)
+    
+    console.log(`📤 Returning response with ${Object.keys(responseData.files).length} files`)
 
     return new Response(
-      JSON.stringify({
-        success: true,
-        files,
-        message: `Generated ${Object.keys(files).length} files with solid Expo base template`,
-        fileCount: Object.keys(files).length,
-        totalSize: Object.values(files).reduce((size, content) => size + content.length, 0)
-      }),
+      JSON.stringify(responseData),
       { 
         status: 200,
         headers: { 'Content-Type': 'application/json' }
@@ -83,12 +67,14 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
-    console.error('❌ Generation completely failed:', error)
+    console.error('❌ V0-style generation failed:', error)
     
     return new Response(
       JSON.stringify({ 
         error: 'Failed to generate app',
-        details: errorMessage
+        details: errorMessage,
+        pipeline: 'v0-style generation pipeline error',
+        stack: error instanceof Error ? error.stack : undefined
       }),
       { 
         status: 500,
@@ -97,3 +83,10 @@ export async function POST(request: NextRequest) {
     )
   }
 } 
+
+// Old functions removed - now using complete v0-pipeline.ts with proper:
+// - Prompt parsing & classification
+// - Plan formation (components, layout, functionality) 
+// - Code generation (LLM + Templates + Rules)
+// - AST validation & auto-fix
+// - Build validation & error recovery 

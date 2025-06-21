@@ -27,7 +27,7 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import PromptInput from './PromptInput'
-import { generateExpoApp } from '@/lib/generators/expo-generator'
+import { runV0Pipeline } from '@/lib/generators/v0-pipeline'
 
 interface BuildInfo {
   status: 'idle' | 'generating' | 'completed' | 'error'
@@ -137,7 +137,7 @@ export default function AppBuilder() {
     }))
 
     try {
-      const templateFiles = await generateExpoApp('Basic Expo Template', userId || 'anonymous')
+      const templateFiles = await runV0Pipeline('Basic Expo Template')
       
       setBuildInfo({
         status: 'completed',
