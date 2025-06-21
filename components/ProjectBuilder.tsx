@@ -197,270 +197,73 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
     if (!prompt.trim()) return
     
     setIsGenerating(true)
-    setLogs(['🚀 Starting AI-powered React Native generation with solid Expo base...'])
+    setLogs(['🚀 Starting single AI call with solid Expo base template...'])
     setFiles({})
     setProgressFiles({})
     setActiveFile(null)
     
     try {
-      // Step 1: Get generation plan (fast, server-side)
-      setLogs(prev => [...prev, '🧠 Getting generation plan from server...'])
+      // Use the new solid expo-base-template generator
+      setLogs(prev => [...prev, '📱 Getting solid Expo base template with AI enhancements...'])
+      setLogs(prev => [...prev, '🎯 Single call - no chunking (1-2 minutes)...'])
       
-      const planResponse = await fetch('/api/generate-plan', {
+      const response = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt })
+        body: JSON.stringify({ 
+          prompt: prompt,
+          useBaseTemplate: true
+        })
       })
 
-      if (!planResponse.ok) {
-        const error = await planResponse.json()
-        throw new Error(error.details || 'Failed to get generation plan')
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.details || 'Failed to generate with base template')
       }
 
-      const planData = await planResponse.json()
-      const plan = planData.plan
+      const { files: generatedFiles } = await response.json()
       
-      setLogs(prev => [...prev, `✅ Plan ready: ${plan.chunks.length} chunks, estimated ${plan.metadata.estimatedTime}`])
-      setLogs(prev => [...prev, '🚀 Starting client-side AI generation (no timeouts!)'])
+      setLogs(prev => [...prev, `✅ Generated ${Object.keys(generatedFiles).length} files with solid base template!`])
 
-      // Step 2: Execute plan using streaming proxy (bypasses Netlify timeouts)
-      setLogs(prev => [...prev, '🚀 Starting streaming AI generation (bypasses Netlify timeouts!)'])
-      const allFiles: { [key: string]: string } = {}
+      // Set all files in state
+      setFiles(generatedFiles)
       
-      // Add pre-generated package.json
-      allFiles['package.json'] = JSON.stringify(plan.smartPackageJson, null, 2)
-      setLogs(prev => [...prev, '✅ Added smart package.json with auto-detected dependencies'])
-
-      for (let i = 0; i < plan.chunks.length; i++) {
-        const chunk = plan.chunks[i]
-        
-        setLogs(prev => [...prev, `📦 Chunk ${i + 1}/${plan.chunks.length}: ${chunk.name}`])
-        setLogs(prev => [...prev, `🎯 Streaming AI call (prompt: ${chunk.prompt.length} chars, max tokens: ${chunk.maxTokens})...`])
-
-        // Intelligent retry logic with strategy adaptation
-        let success = false
-        let retryCount = 0
-        const maxRetries = chunk.essential ? 5 : 3 // More retries for essential chunks
-        
-        while (!success && retryCount < maxRetries) {
-          try {
-            if (retryCount > 0) {
-              const retryDelay = Math.pow(2, retryCount) * 1000 // 2s, 4s, 8s, 16s, 32s
-              const strategy = chunk.retryStrategies?.[Math.min(retryCount - 1, chunk.retryStrategies.length - 1)]
-              setLogs(prev => [...prev, `🔄 Retry ${retryCount}/${maxRetries} after ${retryDelay/1000}s...`])
-              if (strategy) {
-                setLogs(prev => [...prev, `💡 Strategy: ${strategy}`])
-              }
-              await new Promise(resolve => setTimeout(resolve, retryDelay))
+      // Update progress files for UI
+      Object.entries(generatedFiles).forEach(([path, fileContent]) => {
+        if (typeof fileContent === 'string' && fileContent.length > 0) {
+          setProgressFiles(prev => ({
+            ...prev,
+            [path]: {
+              path,
+              content: fileContent,
+              isComplete: true
             }
-            
-            // Streaming AI call with adaptive strategy
-            let currentPrompt = chunk.prompt
-            let currentTokens = chunk.maxTokens
-            
-            // Apply retry strategy if this is a retry
-            if (retryCount > 0 && chunk.retryStrategies) {
-              const strategyIndex = Math.min(retryCount - 1, chunk.retryStrategies.length - 1)
-              const strategy = chunk.retryStrategies[strategyIndex]
-              
-              // Modify prompt based on strategy
-              currentPrompt = `${strategy}. ${currentPrompt}`
-              currentTokens = Math.max(800, currentTokens - (retryCount * 200)) // Reduce tokens on retry
-            }
-            
-            const response = await fetch('/api/ai-stream', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                messages: [
-                  {
-                    role: 'system',
-                    content: plan.systemPrompt
-                  },
-                  {
-                    role: 'user',
-                    content: currentPrompt
-                  }
-                ],
-                maxTokens: currentTokens,
-                temperature: retryCount > 0 ? 0.3 : 0.1 // Increase creativity on retry
-              })
-            })
-
-            if (!response.ok) {
-              const errorText = await response.text()
-              throw new Error(`Streaming AI error: ${response.status} - ${errorText}`)
-            }
-
-            // Handle streaming response
-            const reader = response.body?.getReader()
-            const decoder = new TextDecoder()
-            let content = ''
-
-            if (!reader) {
-              throw new Error('No response stream available')
-            }
-
-            while (true) {
-              const { done, value } = await reader.read()
-              if (done) break
-
-              const chunk = decoder.decode(value)
-              const lines = chunk.split('\n')
-
-                             for (const line of lines) {
-                 if (line.startsWith('data: ')) {
-                   try {
-                     const data = JSON.parse(line.slice(6))
-                     console.log('Streaming data received:', data)
-                     
-                     if (data.type === 'success') {
-                       content = data.content
-                       console.log('AI content received:', content?.length, 'characters')
-                     } else if (data.type === 'error') {
-                       console.error('AI stream error:', data)
-                       throw new Error(data.message + (data.details ? ': ' + data.details : '') + (data.debug ? ' Debug: ' + JSON.stringify(data.debug) : ''))
-                     }
-                   } catch (parseError) {
-                     console.log('Parse error for line:', line, parseError)
-                   }
-                 }
-               }
-            }
-
-            if (!content || typeof content !== 'string' || content.length < 10) {
-              throw new Error(`Invalid AI response: ${content?.length || 0} characters`)
-            }
-
-            // Parse the chunk response
-            const chunkFiles = parseV0Response(content)
-            
-            if (Object.keys(chunkFiles).length === 0) {
-              throw new Error('No files generated from AI response')
-            }
-            
-            // Merge files
-            Object.entries(chunkFiles).forEach(([path, fileContent]) => {
-              if (fileContent && fileContent.length > 10) {
-                allFiles[path] = fileContent
-                setLogs(prev => [...prev, `✅ Generated ${path} (${fileContent.length} chars)`])
-                
-                // Update progress files for UI
-                setProgressFiles(prev => ({
-                  ...prev,
-                  [path]: {
-                    path,
-                    content: fileContent,
-                    isComplete: true
-                  }
-                }))
-                
-                // Set as active file
-                setActiveFile(path)
-              }
-            })
-            
-            setLogs(prev => [...prev, `✅ Chunk ${i + 1} complete: ${Object.keys(chunkFiles).length} files`])
-            success = true
-            
-          } catch (error) {
-            retryCount++
-            const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-            
-            // Check if it's a CORS or network error
-            if (errorMessage.includes('CORS') || errorMessage.includes('Network') || errorMessage.includes('fetch')) {
-              console.error('Network/CORS Error:', error)
-              setLogs(prev => [...prev, `❌ Network error: Mistral API may not allow direct browser calls (CORS issue)`])
-              break // Don't retry CORS errors
-            }
-            
-            if (retryCount >= maxRetries) {
-              setLogs(prev => [...prev, `❌ Chunk ${i + 1} failed after ${maxRetries} retries: ${errorMessage}`])
-              setLogs(prev => [...prev, `🔄 Continuing with remaining chunks...`])
-            } else {
-              setLogs(prev => [...prev, `⚠️ Chunk ${i + 1} attempt ${retryCount} failed: ${errorMessage}`])
-            }
-          }
-        }
-        
-        // Rate limiting: Respect Mistral's 1 RPS limit (increased gap)
-        if (i < plan.chunks.length - 1) {
-          const waitTime = 5000 + Math.random() * 2000 // 5-7 seconds
-          setLogs(prev => [...prev, `⏳ Rate limiting: waiting ${Math.round(waitTime/100)/10}s...`])
-          await new Promise(resolve => setTimeout(resolve, waitTime))
-        }
-      }
-      
-      // Intelligent validation - ensure we have a working app
-      const essentialFiles = ['App.tsx', 'app.json', 'package.json']
-      const hasEssentialFiles = essentialFiles.every(file => 
-        Object.keys(allFiles).some(path => path.includes(file))
-      )
-      
-      const hasScreens = Object.keys(allFiles).some(path => path.includes('screens/'))
-      const totalFiles = Object.keys(allFiles).length
-      
-      if (!hasEssentialFiles) {
-        setLogs(prev => [...prev, '⚠️ Missing essential files - attempting emergency generation...'])
-        
-        // Emergency generation for essential files
-        try {
-          const emergencyResponse = await fetch('/api/ai-stream', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              messages: [{
-                role: 'system',
-                content: 'Generate minimal working React Native Expo app files.'
-              }, {
-                role: 'user',
-                content: 'Generate App.tsx, app.json, and babel.config.js for a basic working Expo app with navigation.'
-              }],
-              maxTokens: 1000,
-              temperature: 0.1
-            })
-          })
+          }))
           
-          if (emergencyResponse.ok) {
-            // Handle emergency response (simplified for brevity)
-            setLogs(prev => [...prev, '🚑 Emergency files generated'])
-          }
-        } catch (error) {
-          setLogs(prev => [...prev, '❌ Emergency generation failed'])
+          setLogs(prev => [...prev, `✅ Added ${path} (${fileContent.length} chars)`])
         }
+      })
+      
+      // Set the first file as active
+      const firstFile = Object.keys(generatedFiles)[0]
+      if (firstFile) {
+        setActiveFile(firstFile)
       }
-      
-      if (totalFiles < 3) {
-        setLogs(prev => [...prev, '⚠️ AI generation incomplete - insufficient files generated'])
-        setLogs(prev => [...prev, '❌ Pure AI generation failed - please try again'])
-        setIsGenerating(false)
-        return
-      }
-      
-      setLogs(prev => [...prev, `🎉 Generation complete! ${Object.keys(allFiles).length} files total`])
-      
-      // 🔧 STEP 4: Apply Professional Project Structure
-      setLogs(prev => [...prev, '🔧 Applying professional project structure...'])
-      const structuredFiles = fixProjectStructure(allFiles)
-      
-      // Analyze the final structure
-      const analysis = analyzeProjectStructure(structuredFiles)
-      setLogs(prev => [...prev, `📁 Structure: ${Object.keys(analysis.structure).join(', ')} folders`])
-      setLogs(prev => [...prev, `📊 Files: ${analysis.fileTypes.screen || 0} screens, ${analysis.fileTypes.component || 0} components`])
-      setLogs(prev => [...prev, '✅ Professional folder structure applied'])
-      
+
+      setLogs(prev => [...prev, '🎉 Complete Expo app generated successfully!'])
       setLogs(prev => [...prev, '💾 Files stored in in-memory VFS (V0.dev style)'])
-      setLogs(prev => [...prev, '📦 Ready for ZIP download - no disk writes needed!'])
-      setLogs(prev => [...prev, '🚀 This is a REAL, working React Native app with proper structure!'])
       
-      // Set final structured files
-      setFiles(structuredFiles)
+      // Trigger auto-save if we have files
+      if (Object.keys(generatedFiles).length > 0) {
+        triggerAutoSave()
+      }
+
       setIsGenerating(false)
-      
+
     } catch (error) {
-      setLogs(prev => [...prev, `❌ Failed to generate: ${error}`])
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      console.error('❌ Generation error:', error)
+      setLogs(prev => [...prev, `❌ Generation failed: ${errorMessage}`])
       setIsGenerating(false)
     }
   }
@@ -659,8 +462,6 @@ ${Object.keys(files).map(path => `- ${path}`).join('\n')}
       return newSet
     })
   }
-
-
 
   return (
     <div className="h-screen flex flex-col bg-gray-950 text-gray-100">
