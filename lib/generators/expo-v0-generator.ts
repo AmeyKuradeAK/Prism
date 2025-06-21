@@ -413,8 +413,8 @@ Return complete, functional files that work with 'npx expo start'.
 NO explanations - ONLY JSON.`
 }
 
-// React Native V0.dev Style: Rate-Limited API Call with Enhanced Error Handling
-async function callMistralWithRateLimit(
+// Direct Mistral API Call (Bypassing SDK for Netlify)
+async function callMistralDirectAPI(
   prompt: string,
   analysis: ComponentAnalysis,
   onProgress?: (progress: { type: string; message: string; file?: GeneratedFile }) => void,
@@ -424,14 +424,14 @@ async function callMistralWithRateLimit(
   const maxAttempts = 3
   
   if (attempt > 1) {
-    const waitTime = Math.max(1000, attempt * 1000) // Shorter waits for Netlify
-    onProgress?.({ type: 'log', message: `⏳ Respecting rate limit: waiting ${waitTime/1000}s before attempt ${attempt}` })
+    const waitTime = Math.max(1000, attempt * 1000)
+    onProgress?.({ type: 'log', message: `⏳ Waiting ${waitTime/1000}s before attempt ${attempt}` })
     await new Promise(resolve => setTimeout(resolve, waitTime))
   }
   
-  onProgress?.({ type: 'log', message: `🚀 React Native AI Generation - Attempt ${attempt}/${maxAttempts}` })
+  onProgress?.({ type: 'log', message: `🚀 Direct Mistral API Call - Attempt ${attempt}/${maxAttempts}` })
   
-  // Simplified React Native Prompt (shorter to avoid hanging)
+  // Simplified React Native Prompt
   const reactNativePrompt = `Create a React Native Expo app: "${prompt}"
 
 📱 Requirements:
@@ -443,130 +443,109 @@ async function callMistralWithRateLimit(
 Create a complete React Native app with Expo Router, TypeScript, and NativeWind.`
 
   try {
-    onProgress?.({ type: 'log', message: `🤖 Calling Mistral AI (attempt ${attempt})` })
+    onProgress?.({ type: 'log', message: `🤖 Direct API call to Mistral (attempt ${attempt})` })
     onProgress?.({ type: 'log', message: `📊 Prompt length: ${reactNativePrompt.length} chars` })
     
-    // Validate API key first
+    // Validate API key
     if (!process.env.MISTRAL_API_KEY || process.env.MISTRAL_API_KEY.length < 10) {
-      throw new Error('Invalid or missing MISTRAL_API_KEY in Netlify environment')
+      throw new Error('Invalid or missing MISTRAL_API_KEY')
     }
     
     onProgress?.({ type: 'log', message: `🔑 API Key validated (${process.env.MISTRAL_API_KEY.length} chars)` })
     onProgress?.({ type: 'log', message: `🌐 Environment: ${process.env.NODE_ENV || 'unknown'}` })
-    onProgress?.({ type: 'log', message: `🔄 Making API request to Mistral...` })
+    onProgress?.({ type: 'log', message: `🔄 Making direct fetch to Mistral API...` })
     
-    // Add network diagnostics
     const startTime = Date.now()
+    const timeout = process.env.NODE_ENV === 'production' ? 25000 : 30000
     
-    // Netlify-optimized timeout (shorter for serverless)
-    const netlifyTimeout = process.env.NODE_ENV === 'production' ? 25000 : 30000
+    // Direct fetch call to Mistral API
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), timeout)
     
-    // Add retry logic for network errors
-    let lastError: Error | null = null
-    let response: any = null
+    const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.MISTRAL_API_KEY}`,
+        'User-Agent': 'Netlify-Function/1.0'
+      },
+      body: JSON.stringify({
+        model: 'mistral-small-latest',
+        messages: [
+          {
+            role: 'system',
+            content: createReactNativeSystemPrompt(analysis)
+          },
+          {
+            role: 'user',
+            content: reactNativePrompt
+          }
+        ],
+        temperature: 0.1,
+        max_tokens: 6000
+      }),
+      signal: controller.signal
+    })
     
-    for (let retry = 0; retry < 2; retry++) {
-      try {
-        if (retry > 0) {
-          onProgress?.({ type: 'log', message: `🔄 Retry ${retry + 1}/2 after network error` })
-          await new Promise(resolve => setTimeout(resolve, 2000))
-        }
-        
-        response = await Promise.race([
-          mistral.chat.complete({
-            model: 'mistral-small-latest',
-            messages: [
-              {
-                role: 'system',
-                content: createReactNativeSystemPrompt(analysis)
-              },
-              { 
-                role: 'user', 
-                content: reactNativePrompt
-              }
-            ],
-            temperature: 0.1,
-            maxTokens: 6000 // Reduced for Netlify performance
-          }),
-          new Promise((_, reject) => {
-            setTimeout(() => {
-              reject(new Error(`API request timeout after ${netlifyTimeout/1000} seconds (Netlify optimized)`))
-            }, netlifyTimeout)
-          })
-        ]) as any
-        
-        // If we get here, the request succeeded
-        break
-        
-      } catch (error) {
-        lastError = error instanceof Error ? error : new Error('Unknown network error')
-        
-        if (lastError.message.includes('network error') || 
-            lastError.message.includes('fetch') ||
-            lastError.message.includes('ECONNRESET')) {
-          onProgress?.({ type: 'log', message: `🌐 Network error on attempt ${retry + 1}: ${lastError.message}` })
-          if (retry < 1) continue // Try again
-        }
-        
-        // For non-network errors, don't retry
-        throw lastError
-      }
-    }
+    clearTimeout(timeoutId)
     
-    if (!response && lastError) {
-      throw lastError
-    }
-
     const networkTime = Date.now() - startTime
     onProgress?.({ type: 'log', message: `📨 API response received in ${networkTime}ms` })
-
-    const rawContent = response.choices?.[0]?.message?.content
-    const content = typeof rawContent === 'string' ? rawContent : ''
     
-    if (!content || content.length < 50) {
-      const preview = typeof rawContent === 'string' ? rawContent.substring(0, 100) : 'Non-string response'
-      throw new Error(`Invalid API response: ${content.length} characters - "${preview}"`)
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`Mistral API error: ${response.status} - ${errorText}`)
     }
     
-    onProgress?.({ type: 'log', message: `✅ React Native AI response: ${content.length} characters` })
+    const data = await response.json()
+    const content = data.choices?.[0]?.message?.content
+    
+    if (!content || typeof content !== 'string' || content.length < 50) {
+      throw new Error(`Invalid API response: ${content?.length || 0} characters`)
+    }
+    
+    onProgress?.({ type: 'log', message: `✅ AI response: ${content.length} characters` })
     return content
     
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-    onProgress?.({ type: 'log', message: `❌ API call failed (attempt ${attempt}): ${errorMessage}` })
+    onProgress?.({ type: 'log', message: `❌ Direct API call failed (attempt ${attempt}): ${errorMessage}` })
     
-    // Enhanced error diagnostics for Netlify
+    // Enhanced error diagnostics
     if (error instanceof Error) {
-      // Check for specific network error types
-      if (errorMessage.includes('network error') || errorMessage.includes('fetch')) {
-        onProgress?.({ type: 'log', message: `🌐 Netlify network connectivity issue detected` })
-        onProgress?.({ type: 'log', message: `🔍 Check Netlify function logs and Mistral API status` })
-      } else if (errorMessage.includes('timeout')) {
-        onProgress?.({ type: 'log', message: `⏰ Netlify function timeout - API may be overloaded` })
-        onProgress?.({ type: 'log', message: `💡 Consider upgrading Netlify plan for longer timeouts` })
-      } else if (errorMessage.includes('401') || errorMessage.includes('unauthorized')) {
-        onProgress?.({ type: 'log', message: `🔑 API key authentication failed in Netlify environment` })
-        onProgress?.({ type: 'log', message: `💡 Check Netlify environment variables` })
-      } else if (errorMessage.includes('429') || errorMessage.includes('rate limit')) {
-        onProgress?.({ type: 'log', message: `🚦 Rate limit exceeded - waiting before retry` })
-      } else if (errorMessage.includes('ENOTFOUND') || errorMessage.includes('DNS')) {
-        onProgress?.({ type: 'log', message: `🌐 DNS resolution failed in Netlify environment` })
+      if (errorMessage.includes('AbortError') || errorMessage.includes('timeout')) {
+        const timeoutSecs = process.env.NODE_ENV === 'production' ? 25 : 30
+        onProgress?.({ type: 'log', message: `⏰ Request timeout after ${timeoutSecs}s` })
+      } else if (errorMessage.includes('401')) {
+        onProgress?.({ type: 'log', message: `🔑 API key authentication failed` })
+      } else if (errorMessage.includes('429')) {
+        onProgress?.({ type: 'log', message: `🚦 Rate limit exceeded` })
+      } else if (errorMessage.includes('fetch')) {
+        onProgress?.({ type: 'log', message: `🌐 Network connectivity issue` })
       }
       
-      onProgress?.({ type: 'log', message: `🔍 Error type: ${error.name}` })
-      onProgress?.({ type: 'log', message: `🔍 Netlify context: ${process.env.CONTEXT || 'unknown'}` })
-      onProgress?.({ type: 'log', message: `🔍 Full error: ${error.stack?.substring(0, 300) || 'No stack trace'}` })
+      onProgress?.({ type: 'log', message: `🔍 Error details: ${error.message}` })
     }
     
     if (attempt < maxAttempts) {
-      const waitTime = attempt * 1500 // Shorter wait for Netlify
+      const waitTime = attempt * 2000
       onProgress?.({ type: 'log', message: `🔄 Retrying in ${waitTime/1000} seconds...` })
       await new Promise(resolve => setTimeout(resolve, waitTime))
-      return callMistralWithRateLimit(prompt, analysis, onProgress, attempt + 1)
+      return callMistralDirectAPI(prompt, analysis, onProgress, attempt + 1)
     }
     
-    throw new Error(`React Native AI generation failed after ${maxAttempts} attempts: ${errorMessage}`)
+    throw new Error(`AI generation failed after ${maxAttempts} attempts: ${errorMessage}`)
   }
+}
+
+// Legacy function for backward compatibility
+async function callMistralWithRateLimit(
+  prompt: string,
+  analysis: ComponentAnalysis,
+  onProgress?: (progress: { type: string; message: string; file?: GeneratedFile }) => void,
+  attempt: number = 1
+): Promise<string> {
+  return callMistralDirectAPI(prompt, analysis, onProgress, attempt)
 }
 
 // React Native V0.dev Style: Enhanced JSON Parser
@@ -628,103 +607,9 @@ function parseReactNativeV0Response(response: string): { [key: string]: string }
   return files
 }
 
-// Fallback React Native App Generator (When AI Fails)
-function generateFallbackReactNativeApp(analysis: ComponentAnalysis): string {
-  return JSON.stringify({
-    files: {
-      "app.json": JSON.stringify({
-        expo: {
-          name: analysis.appType,
-          slug: analysis.appType.toLowerCase().replace(/[^a-z0-9]/g, '-'),
-          version: "1.0.0",
-          orientation: "portrait",
-          icon: "./assets/icon.png",
-          userInterfaceStyle: "light",
-          splash: {
-            image: "./assets/splash.png",
-            resizeMode: "contain",
-            backgroundColor: "#ffffff"
-          },
-          assetBundlePatterns: ["**/*"],
-          ios: { supportsTablet: true },
-          android: {
-            adaptiveIcon: {
-              foregroundImage: "./assets/adaptive-icon.png",
-              backgroundColor: "#FFFFFF"
-            }
-          },
-          web: { favicon: "./assets/favicon.png" }
-        }
-      }, null, 2),
-      
-      "app/_layout.tsx": `import { Stack } from 'expo-router'
-import { StatusBar } from 'expo-status-bar'
 
-export default function RootLayout() {
-  return (
-    <>
-      <Stack screenOptions={{ headerShown: false }} />
-      <StatusBar style="auto" />
-    </>
-  )
-}`,
 
-      "app/index.tsx": `import { View, Text, StyleSheet } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
 
-export default function HomeScreen() {
-  return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.content}>
-        <Text style={styles.title}>${analysis.appType}</Text>
-        <Text style={styles.subtitle}>Generated with React Native V0</Text>
-      </View>
-    </SafeAreaView>
-  )
-}
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  content: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
-  title: { fontSize: 24, fontWeight: 'bold', marginBottom: 10 },
-  subtitle: { fontSize: 16, color: '#666', textAlign: 'center' }
-})`
-    }
-  })
-}
-
-// Fallback Files Generator (When JSON Parsing Fails)
-function generateFallbackFiles(analysis: ComponentAnalysis, packageJson: any): { [key: string]: string } {
-  return {
-    "app.json": JSON.stringify({
-      expo: {
-        name: analysis.appType,
-        slug: analysis.appType.toLowerCase().replace(/[^a-z0-9]/g, '-'),
-        version: "1.0.0",
-        orientation: "portrait",
-        platforms: ["ios", "android", "web"]
-      }
-    }, null, 2),
-    
-    "app/_layout.tsx": `import { Stack } from 'expo-router'
-
-export default function RootLayout() {
-  return <Stack screenOptions={{ headerShown: false }} />
-}`,
-
-    "app/index.tsx": `import { View, Text } from 'react-native'
-
-export default function App() {
-  return (
-    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-      <Text style={{ fontSize: 20 }}>${analysis.appType}</Text>
-    </View>
-  )
-}`,
-
-    "package.json": JSON.stringify(packageJson, null, 2)
-  }
-}
 
 // React Native V0.dev Style: Instant File Updates
 function emitReactNativeFileUpdates(
@@ -789,13 +674,12 @@ export async function generateV0StyleApp(
 📦 USE EXACT DEPENDENCIES: ${Object.keys(smartPackageJson.dependencies).join(', ')}`
 
     let rawResponse: string
-    try {
-      rawResponse = await callMistralWithRateLimit(enhancedPrompt, analysis, onProgress)
-    } catch (error) {
-      // Fallback: Generate basic React Native app structure if AI fails
-      onProgress?.({ type: 'log', message: '🔄 AI generation failed, using fallback template...' })
-      rawResponse = generateFallbackReactNativeApp(analysis)
-    }
+    
+    // PURE AI GENERATION - NO MANUAL TEMPLATES!
+    onProgress?.({ type: 'log', message: '🤖 PURE AI GENERATION - No manual fallbacks!' })
+    onProgress?.({ type: 'log', message: '🚀 Using direct Mistral API call for better Netlify compatibility...' })
+    
+    rawResponse = await callMistralDirectAPI(enhancedPrompt, analysis, onProgress)
     
     // Step 4: Enhanced JSON Parsing
     onProgress?.({ type: 'log', message: '⚡ Parsing React Native JSON with native modules...' })
@@ -805,9 +689,7 @@ export async function generateV0StyleApp(
     files['package.json'] = JSON.stringify(smartPackageJson, null, 2)
     
     if (Object.keys(files).length === 0) {
-      onProgress?.({ type: 'log', message: '🔄 JSON parsing failed, using fallback files...' })
-      const fallbackFiles = generateFallbackFiles(analysis, smartPackageJson)
-      Object.assign(files, fallbackFiles)
+      throw new Error('❌ AI generation failed and JSON parsing returned no files. Pure AI generation mode - no fallbacks!')
     }
     
     // Step 6: Enhanced V0 Response with Native Module Metadata
