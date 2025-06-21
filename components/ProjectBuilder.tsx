@@ -223,7 +223,8 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
       setLogs(prev => [...prev, `✅ Plan ready: ${plan.chunks.length} chunks, estimated ${plan.metadata.estimatedTime}`])
       setLogs(prev => [...prev, '🚀 Starting client-side AI generation (no timeouts!)'])
 
-      // Step 2: Execute plan client-side (no timeouts!)
+      // Step 2: Execute plan using streaming proxy (bypasses Netlify timeouts)
+      setLogs(prev => [...prev, '🚀 Starting streaming AI generation (bypasses Netlify timeouts!)'])
       const allFiles: { [key: string]: string } = {}
       
       // Add pre-generated package.json
@@ -234,7 +235,7 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
         const chunk = plan.chunks[i]
         
         setLogs(prev => [...prev, `📦 Chunk ${i + 1}/${plan.chunks.length}: ${chunk.name}`])
-        setLogs(prev => [...prev, `🎯 Client-side AI call (no Netlify timeout!)...`])
+        setLogs(prev => [...prev, `🎯 Streaming AI call (bypasses Netlify timeout!)...`])
 
         // Retry logic with exponential backoff
         let success = false
@@ -249,8 +250,8 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
               await new Promise(resolve => setTimeout(resolve, retryDelay))
             }
             
-            // Use secure proxy for AI calls (30s timeout, API key protected)
-            const response = await fetch('/api/ai-proxy', {
+            // Streaming AI call (bypasses Netlify timeouts!)
+            const response = await fetch('/api/ai-stream', {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json'
@@ -272,12 +273,42 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
             })
 
             if (!response.ok) {
-              const error = await response.json()
-              throw new Error(error.details || 'AI proxy error')
+              const errorText = await response.text()
+              throw new Error(`Streaming AI error: ${response.status} - ${errorText}`)
             }
 
-            const data = await response.json()
-            const content = data.content
+            // Handle streaming response
+            const reader = response.body?.getReader()
+            const decoder = new TextDecoder()
+            let content = ''
+
+            if (!reader) {
+              throw new Error('No response stream available')
+            }
+
+            while (true) {
+              const { done, value } = await reader.read()
+              if (done) break
+
+              const chunk = decoder.decode(value)
+              const lines = chunk.split('\n')
+
+              for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                  try {
+                    const data = JSON.parse(line.slice(6))
+                    
+                    if (data.type === 'success') {
+                      content = data.content
+                    } else if (data.type === 'error') {
+                      throw new Error(data.message + (data.details ? ': ' + data.details : ''))
+                    }
+                  } catch (parseError) {
+                    // Ignore JSON parse errors for non-JSON lines
+                  }
+                }
+              }
+            }
 
             if (!content || typeof content !== 'string' || content.length < 10) {
               throw new Error(`Invalid AI response: ${content?.length || 0} characters`)
@@ -317,6 +348,13 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
           } catch (error) {
             retryCount++
             const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+            
+            // Check if it's a CORS or network error
+            if (errorMessage.includes('CORS') || errorMessage.includes('Network') || errorMessage.includes('fetch')) {
+              console.error('Network/CORS Error:', error)
+              setLogs(prev => [...prev, `❌ Network error: Mistral API may not allow direct browser calls (CORS issue)`])
+              break // Don't retry CORS errors
+            }
             
             if (retryCount >= maxRetries) {
               setLogs(prev => [...prev, `❌ Chunk ${i + 1} failed after ${maxRetries} retries: ${errorMessage}`])
