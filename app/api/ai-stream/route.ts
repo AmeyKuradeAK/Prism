@@ -63,10 +63,24 @@ export async function POST(request: NextRequest) {
           const data = await response.json()
           const content = data.choices?.[0]?.message?.content
 
+          console.log('AI Response Debug:', {
+            hasChoices: !!data.choices,
+            choicesLength: data.choices?.length,
+            hasMessage: !!data.choices?.[0]?.message,
+            contentLength: content?.length,
+            fullResponse: JSON.stringify(data, null, 2)
+          })
+
           if (!content) {
             controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
               type: 'error', 
-              message: 'Invalid AI response' 
+              message: 'Invalid AI response',
+              debug: {
+                hasChoices: !!data.choices,
+                choicesLength: data.choices?.length,
+                hasMessage: !!data.choices?.[0]?.message,
+                response: JSON.stringify(data, null, 2).substring(0, 500)
+              }
             })}\n\n`))
             controller.close()
             return

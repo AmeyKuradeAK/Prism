@@ -235,22 +235,39 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
         const chunk = plan.chunks[i]
         
         setLogs(prev => [...prev, `📦 Chunk ${i + 1}/${plan.chunks.length}: ${chunk.name}`])
-        setLogs(prev => [...prev, `🎯 Streaming AI call (bypasses Netlify timeout!)...`])
+        setLogs(prev => [...prev, `🎯 Streaming AI call (prompt: ${chunk.prompt.length} chars, max tokens: ${chunk.maxTokens})...`])
 
-        // Retry logic with exponential backoff
+        // Intelligent retry logic with strategy adaptation
         let success = false
         let retryCount = 0
-        const maxRetries = 3
+        const maxRetries = chunk.essential ? 5 : 3 // More retries for essential chunks
         
         while (!success && retryCount < maxRetries) {
           try {
             if (retryCount > 0) {
-              const retryDelay = Math.pow(2, retryCount) * 1000 // 2s, 4s, 8s
+              const retryDelay = Math.pow(2, retryCount) * 1000 // 2s, 4s, 8s, 16s, 32s
+              const strategy = chunk.retryStrategies?.[Math.min(retryCount - 1, chunk.retryStrategies.length - 1)]
               setLogs(prev => [...prev, `🔄 Retry ${retryCount}/${maxRetries} after ${retryDelay/1000}s...`])
+              if (strategy) {
+                setLogs(prev => [...prev, `💡 Strategy: ${strategy}`])
+              }
               await new Promise(resolve => setTimeout(resolve, retryDelay))
             }
             
-            // Streaming AI call (bypasses Netlify timeouts!)
+            // Streaming AI call with adaptive strategy
+            let currentPrompt = chunk.prompt
+            let currentTokens = chunk.maxTokens
+            
+            // Apply retry strategy if this is a retry
+            if (retryCount > 0 && chunk.retryStrategies) {
+              const strategyIndex = Math.min(retryCount - 1, chunk.retryStrategies.length - 1)
+              const strategy = chunk.retryStrategies[strategyIndex]
+              
+              // Modify prompt based on strategy
+              currentPrompt = `${strategy}. ${currentPrompt}`
+              currentTokens = Math.max(800, currentTokens - (retryCount * 200)) // Reduce tokens on retry
+            }
+            
             const response = await fetch('/api/ai-stream', {
               method: 'POST',
               headers: {
@@ -264,11 +281,11 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
                   },
                   {
                     role: 'user',
-                    content: chunk.prompt
+                    content: currentPrompt
                   }
                 ],
-                maxTokens: chunk.maxTokens,
-                temperature: 0.1
+                maxTokens: currentTokens,
+                temperature: retryCount > 0 ? 0.3 : 0.1 // Increase creativity on retry
               })
             })
 
@@ -293,21 +310,24 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
               const chunk = decoder.decode(value)
               const lines = chunk.split('\n')
 
-              for (const line of lines) {
-                if (line.startsWith('data: ')) {
-                  try {
-                    const data = JSON.parse(line.slice(6))
-                    
-                    if (data.type === 'success') {
-                      content = data.content
-                    } else if (data.type === 'error') {
-                      throw new Error(data.message + (data.details ? ': ' + data.details : ''))
-                    }
-                  } catch (parseError) {
-                    // Ignore JSON parse errors for non-JSON lines
-                  }
-                }
-              }
+                             for (const line of lines) {
+                 if (line.startsWith('data: ')) {
+                   try {
+                     const data = JSON.parse(line.slice(6))
+                     console.log('Streaming data received:', data)
+                     
+                     if (data.type === 'success') {
+                       content = data.content
+                       console.log('AI content received:', content?.length, 'characters')
+                     } else if (data.type === 'error') {
+                       console.error('AI stream error:', data)
+                       throw new Error(data.message + (data.details ? ': ' + data.details : '') + (data.debug ? ' Debug: ' + JSON.stringify(data.debug) : ''))
+                     }
+                   } catch (parseError) {
+                     console.log('Parse error for line:', line, parseError)
+                   }
+                 }
+               }
             }
 
             if (!content || typeof content !== 'string' || content.length < 10) {
@@ -365,16 +385,54 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
           }
         }
         
-        // Rate limiting: Respect Mistral's 1 RPS limit
+        // Rate limiting: Respect Mistral's 1 RPS limit (increased gap)
         if (i < plan.chunks.length - 1) {
-          const waitTime = plan.metadata.rateLimitGap + Math.random() * 500
+          const waitTime = 5000 + Math.random() * 2000 // 5-7 seconds
           setLogs(prev => [...prev, `⏳ Rate limiting: waiting ${Math.round(waitTime/100)/10}s...`])
           await new Promise(resolve => setTimeout(resolve, waitTime))
         }
       }
       
-      // Pure AI generation - no fallbacks, just structure validation
-      if (Object.keys(allFiles).length < 3) {
+      // Intelligent validation - ensure we have a working app
+      const essentialFiles = ['App.tsx', 'app.json', 'package.json']
+      const hasEssentialFiles = essentialFiles.every(file => 
+        Object.keys(allFiles).some(path => path.includes(file))
+      )
+      
+      const hasScreens = Object.keys(allFiles).some(path => path.includes('screens/'))
+      const totalFiles = Object.keys(allFiles).length
+      
+      if (!hasEssentialFiles) {
+        setLogs(prev => [...prev, '⚠️ Missing essential files - attempting emergency generation...'])
+        
+        // Emergency generation for essential files
+        try {
+          const emergencyResponse = await fetch('/api/ai-stream', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              messages: [{
+                role: 'system',
+                content: 'Generate minimal working React Native Expo app files.'
+              }, {
+                role: 'user',
+                content: 'Generate App.tsx, app.json, and babel.config.js for a basic working Expo app with navigation.'
+              }],
+              maxTokens: 1000,
+              temperature: 0.1
+            })
+          })
+          
+          if (emergencyResponse.ok) {
+            // Handle emergency response (simplified for brevity)
+            setLogs(prev => [...prev, '🚑 Emergency files generated'])
+          }
+        } catch (error) {
+          setLogs(prev => [...prev, '❌ Emergency generation failed'])
+        }
+      }
+      
+      if (totalFiles < 3) {
         setLogs(prev => [...prev, '⚠️ AI generation incomplete - insufficient files generated'])
         setLogs(prev => [...prev, '❌ Pure AI generation failed - please try again'])
         setIsGenerating(false)

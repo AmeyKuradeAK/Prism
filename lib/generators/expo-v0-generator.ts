@@ -431,20 +431,25 @@ Place files in the correct professional folders as specified above.`
 }
 
 // 🎯 NEW: Client-Side Generation Plan (No AI calls on server)
+export interface GenerationChunk {
+  name: string
+  prompt: string
+  maxTokens: number
+  priority: number
+  essential: boolean
+  retryStrategies: string[]
+}
+
 export interface GenerationPlan {
   analysis: ComponentAnalysis
   smartPackageJson: any
-  chunks: Array<{
-    name: string
-    prompt: string
-    maxTokens: number
-    priority: number
-  }>
+  chunks: GenerationChunk[]
   systemPrompt: string
   metadata: {
     totalChunks: number
     estimatedTime: string
     rateLimitGap: number
+    essentialChunks: number
   }
 }
 
@@ -468,36 +473,98 @@ export async function generateReactNativePlan(
   const smartPackageJson = generateSmartPackageJson(analysis)
   onProgress?.({ type: 'log', message: `📦 Auto-assembled ${Object.keys(smartPackageJson.dependencies).length} dependencies` })
   
-  // Step 3: Create Optimized Chunks for Client-Side Execution with Professional Structure
-  const chunks = [
-    {
-      name: "Config Files & App Entry",
-      prompt: `Generate professional React Native config files for ${analysis.appType}: App.tsx (main entry), app.json (Expo config), babel.config.js (babel config). Use professional folder structure. Include proper TypeScript, navigation setup, and NativeWind configuration. Return working files that enable 'npx expo start' to work immediately.`,
-      maxTokens: 2000,
-      priority: 1
-    },
-    
-    {
-      name: "Main Screen & Navigation", 
-      prompt: `Generate professional main screen for ${analysis.appType} in screens/HomeScreen.tsx and navigation setup in navigation/AppNavigator.tsx. Include navigation to ${analysis.primaryScreens.slice(0, 2).join(' and ')}, state management, user interactions, and modern UI with NativeWind styling. NO placeholder text - build actual working features. Use professional folder structure.`,
-      maxTokens: 2000,
-      priority: 2
-    },
-    
-    {
-      name: "Reusable Components",
-      prompt: `Generate reusable UI components for ${analysis.appType} in components/ folder. Create functional components like Button.tsx, TaskItem.tsx, etc. with proper state, user interactions, TypeScript interfaces, and NativeWind styling. Include buttons, forms, and list items that actually work. Follow professional folder structure.`,
-      maxTokens: 2000,
-      priority: 3
-    },
-    
-    {
-      name: "Feature Screens & Utils",
-      prompt: `Generate feature screens for ${analysis.appType} in screens/ folder: ${analysis.primaryScreens.slice(0, 2).join('Screen.tsx and ')}Screen.tsx. Also create utils/ folder with helper functions. Include real functionality like adding/editing/deleting items, form handling, navigation, loading states, and error handling. Use useState and useEffect properly. Follow professional folder structure.`,
-      maxTokens: 2000,
-      priority: 4
+  // Step 3: Create Dynamic Chunks Based on App Complexity
+  const chunks = []
+  
+  // 1. Essential Config Files (Always Required)
+  chunks.push({
+    name: "Essential Config",
+    prompt: `Generate essential React Native config files: App.tsx (main entry), app.json (Expo config), babel.config.js, package.json. For ${analysis.appType} with navigation to: ${analysis.primaryScreens.join(', ')}. Must work with 'npx expo start'.`,
+    maxTokens: 1500,
+    priority: 1,
+    essential: true,
+    retryStrategies: [
+      'Reduce complexity and focus on basic working config',
+      'Generate minimal working files without advanced features',
+      'Create simple Expo app structure with basic navigation'
+    ]
+  })
+  
+  // 2. Main Home Screen (Always Required)
+  chunks.push({
+    name: "Home Screen",
+    prompt: `Generate screens/HomeScreen.tsx for ${analysis.appType}. Include navigation buttons to: ${analysis.primaryScreens.join(', ')}. Real functionality, state management, NativeWind styling. NO placeholders.`,
+    maxTokens: 1500,
+    priority: 2,
+    essential: true,
+    retryStrategies: [
+      'Create simpler home screen with basic navigation',
+      'Generate minimal home screen with essential features only',
+      'Focus on working navigation without complex state'
+    ]
+  })
+  
+  // 3. Generate chunks for each primary screen
+  analysis.primaryScreens.forEach((screen, index) => {
+    if (index < 6) { // Limit to 6 main screens to avoid too many chunks
+      chunks.push({
+        name: `${screen} Screen`,
+        prompt: `Generate screens/${screen}Screen.tsx for ${analysis.appType}. Include real functionality related to ${screen.toLowerCase()}, proper state management, forms, data handling, and NativeWind styling. Make it fully functional.`,
+        maxTokens: 1500,
+        priority: 3 + index,
+        essential: index < 2, // First 2 screens are essential
+        retryStrategies: [
+          `Create simpler ${screen} screen with basic functionality`,
+          `Generate minimal ${screen} screen with core features only`,
+          `Focus on working ${screen} interface without complex logic`
+        ]
+      })
     }
-  ]
+  })
+  
+  // 4. Essential Components
+  chunks.push({
+    name: "Core Components",
+    prompt: `Generate essential reusable components in components/ folder for ${analysis.appType}. Based on features: ${analysis.features.slice(0, 3).join(', ')}. Create components that are actually used by the screens. TypeScript and NativeWind.`,
+    maxTokens: 1500,
+    priority: 10,
+    essential: true,
+    retryStrategies: [
+      'Generate basic UI components (Button, Card, Input)',
+      'Create minimal reusable components without complex logic',
+      'Focus on simple, working components'
+    ]
+  })
+  
+  // 5. Navigation Setup
+  chunks.push({
+    name: "Navigation",
+    prompt: `Generate navigation/AppNavigator.tsx for ${analysis.appType}. Set up navigation between all screens: ${analysis.primaryScreens.join(', ')}. Use appropriate navigation pattern (${analysis.navigationPattern}). Working navigation with proper routing.`,
+    maxTokens: 1200,
+    priority: 11,
+    essential: true,
+    retryStrategies: [
+      'Create simple stack navigation between screens',
+      'Generate basic navigation without complex patterns',
+      'Focus on working navigation setup'
+    ]
+  })
+  
+  // 6. Utility Functions (if needed)
+  if (analysis.features.some(f => f.includes('API') || f.includes('Storage') || f.includes('Data'))) {
+    chunks.push({
+      name: "Utilities",
+      prompt: `Generate utils/ folder with helper functions for ${analysis.appType}. Include API calls, data storage, validation functions related to: ${analysis.features.slice(0, 3).join(', ')}. Working utility functions.`,
+      maxTokens: 1200,
+      priority: 12,
+      essential: false,
+      retryStrategies: [
+        'Generate basic utility functions for common operations',
+        'Create simple helper functions without complex logic',
+        'Focus on essential utility functions only'
+      ]
+    })
+  }
   
   const systemPrompt = createReactNativeSystemPrompt(analysis)
   
@@ -511,8 +578,9 @@ export async function generateReactNativePlan(
     systemPrompt,
     metadata: {
       totalChunks: chunks.length,
-      estimatedTime: `${chunks.length * 3}s (2-3s per chunk + rate limiting)`,
-      rateLimitGap: 2000
+      estimatedTime: `${chunks.length * 4}s (3-4s per chunk + rate limiting)`,
+      rateLimitGap: 5000,
+      essentialChunks: chunks.filter(c => c.essential).length
     }
   }
 }
