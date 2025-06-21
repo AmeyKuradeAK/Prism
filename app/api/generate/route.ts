@@ -30,8 +30,13 @@ export async function POST(request: NextRequest) {
     console.log(`🚀 V0-style React Native generation for: "${prompt.substring(0, 100)}..."`)
 
     // 🚀 USE COMPLETE V0.DEV PIPELINE
+    console.log('📦 Importing V0 pipeline...')
     const { runV0Pipeline } = await import('@/lib/generators/v0-pipeline')
+    
+    console.log('🔄 Starting V0 pipeline execution...')
     const validatedFiles = await runV0Pipeline(prompt)
+    
+    console.log(`📊 V0 pipeline returned ${Object.keys(validatedFiles).length} files`)
     
     // 📊 FINAL RESULT - Enhanced debugging
     console.log(`✅ V0-style generation complete: ${Object.keys(validatedFiles).length} files`)

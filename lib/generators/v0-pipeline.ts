@@ -9,7 +9,7 @@
  * 5. Build Validation & Error Recovery
  */
 
-import { generateExpoBaseTemplate } from './templates/expo-base-template'
+import { generateExpoBaseTemplate } from '@/lib/generators/templates/expo-base-template'
 
 // 📊 Prompt Classification (like v0.dev)
 interface AppAnalysis {
@@ -116,7 +116,6 @@ export async function runV0Pipeline(prompt: string): Promise<{ [key: string]: st
     
     // STEP 3: Base Template (like v0.dev Next.js base)
     console.log('📱 Step 3: Instantiating base template...')
-    const { generateExpoBaseTemplate } = await import('./templates/expo-base-template')
     const baseFiles = generateExpoBaseTemplate(plan.appName)
     console.log(`✅ Base template: ${Object.keys(baseFiles).length} files`)
     
@@ -162,7 +161,6 @@ export async function runV0Pipeline(prompt: string): Promise<{ [key: string]: st
     // Emergency fallback - return base template
     console.log('🚨 Emergency fallback: returning base template...')
     try {
-      const { generateExpoBaseTemplate } = await import('./templates/expo-base-template')
       const fallbackFiles = generateExpoBaseTemplate('FallbackApp')
       console.log(`🆘 Fallback successful: ${Object.keys(fallbackFiles).length} files`)
       return fallbackFiles
