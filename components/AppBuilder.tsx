@@ -429,22 +429,49 @@ export default function AppBuilder() {
   const handleDownload = () => {
     const downloadFiles = async () => {
       try {
-        const response = await fetch('/api/download', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            files: buildInfo.files,
-            projectName: currentPrompt.slice(0, 50) || 'Generated App'
-          }),
+        // V0.dev Style: Create ZIP in browser using JSZip
+        const JSZip = (await import('jszip')).default
+        const zip = new JSZip()
+
+        // Add all files to ZIP
+        Object.entries(buildInfo.files).forEach(([path, content]) => {
+          zip.file(path, content as string)
         })
 
-        if (!response.ok) {
-          throw new Error('Download failed')
-        }
+        // Add README with instructions (V0.dev style)
+        const readme = `# ${currentPrompt.slice(0, 50) || 'Generated Expo App'}
 
-        const blob = await response.blob()
+## Getting Started
+
+1. Install dependencies:
+   \`\`\`bash
+   npm install
+   \`\`\`
+
+2. Start the development server:
+   \`\`\`bash
+   npx expo start
+   \`\`\`
+
+3. Use Expo Go app on your phone to scan the QR code, or:
+   - Press 'a' for Android emulator
+   - Press 'i' for iOS simulator  
+   - Press 'w' for web
+
+## Features
+
+This app was generated using V0.dev-style AI generation.
+
+Generated files: ${Object.keys(buildInfo.files).length}
+Generated on: ${new Date().toLocaleString()}
+`
+        
+        zip.file('README.md', readme)
+
+        // Generate ZIP blob in browser (V0.dev approach)
+        const blob = await zip.generateAsync({ type: 'blob' })
+        
+        // Trigger download directly from browser
         const url = URL.createObjectURL(blob)
         const link = document.createElement('a')
         link.href = url
@@ -455,7 +482,7 @@ export default function AppBuilder() {
         URL.revokeObjectURL(url)
         
       } catch (error) {
-        console.error('Download failed:', error)
+        console.error('V0.dev-style download failed:', error)
         alert('Download failed. Please try again.')
       }
     }
@@ -514,7 +541,9 @@ export default function AppBuilder() {
     if (filename.endsWith('.tsx') || filename.endsWith('.ts')) return <Code className="w-4 h-4 text-blue-400" />
     if (filename.endsWith('.json')) return <File className="w-4 h-4 text-yellow-400" />
     if (filename.endsWith('.md')) return <File className="w-4 h-4 text-gray-400" />
-    if (filename.endsWith('.js')) return <Code className="w-4 h-4 text-yellow-600" />
+    if (filename.endsWith('.js') || filename.endsWith('.jsx')) return <Code className="w-4 h-4 text-yellow-600" />
+    if (filename.includes('app.json')) return <Smartphone className="w-4 h-4 text-green-400" />
+    if (filename.includes('package.json')) return <Package className="w-4 h-4 text-orange-400" />
     return <File className="w-4 h-4 text-gray-400" />
   }
 
@@ -525,13 +554,20 @@ export default function AppBuilder() {
       const parts = filepath.split('/')
       if (parts.length === 1) {
         // Root file
-        if (!organized['root']) organized['root'] = []
-        organized['root'].push(filepath)
+        if (!organized['📱 Root']) organized['📱 Root'] = []
+        organized['📱 Root'].push(filepath)
       } else {
         // File in directory
         const dir = parts[0]
-        if (!organized[dir]) organized[dir] = []
-        organized[dir].push(filepath)
+        const dirIcon = dir === 'app' ? '📱 Screens' : 
+                       dir === 'components' ? '🧩 Components' :
+                       dir === 'types' ? '📝 Types' :
+                       dir === 'hooks' ? '🪝 Hooks' :
+                       dir === 'constants' ? '⚙️ Constants' :
+                       dir === 'utils' ? '🛠️ Utils' : `📁 ${dir}`
+        
+        if (!organized[dirIcon]) organized[dirIcon] = []
+        organized[dirIcon].push(filepath)
       }
     })
     
@@ -539,6 +575,39 @@ export default function AppBuilder() {
   }
 
   const organizedFiles = organizeFiles(buildInfo.files)
+
+  // React Native specific features detection
+  const detectReactNativeFeatures = (files: { [key: string]: string }) => {
+    const features = new Set<string>()
+    const content = Object.values(files).join('\n')
+    
+    // Navigation
+    if (content.includes('expo-router')) features.add('📱 Expo Router Navigation')
+    if (content.includes('Tabs')) features.add('📑 Tab Navigation')
+    if (content.includes('Stack')) features.add('📚 Stack Navigation')
+    if (content.includes('Drawer')) features.add('📂 Drawer Navigation')
+    
+    // Native Features
+    if (content.includes('expo-camera')) features.add('📷 Camera')
+    if (content.includes('expo-location')) features.add('📍 Location Services')
+    if (content.includes('expo-notifications')) features.add('🔔 Push Notifications')
+    if (content.includes('AsyncStorage')) features.add('💾 Local Storage')
+    if (content.includes('expo-image-picker')) features.add('🖼️ Image Picker')
+    if (content.includes('expo-sensors')) features.add('📱 Device Sensors')
+    if (content.includes('expo-av')) features.add('🎵 Audio/Video')
+    if (content.includes('expo-haptics')) features.add('📳 Haptic Feedback')
+    
+    // UI Features
+    if (content.includes('nativewind') || content.includes('tailwind')) features.add('🎨 Tailwind Styling')
+    if (content.includes('SafeAreaView')) features.add('📱 Safe Area')
+    if (content.includes('StatusBar')) features.add('📊 Status Bar')
+    if (content.includes('FlatList')) features.add('📋 Optimized Lists')
+    if (content.includes('ScrollView')) features.add('📜 Scrollable Views')
+    
+    return Array.from(features)
+  }
+
+  const reactNativeFeatures = detectReactNativeFeatures(buildInfo.files)
 
   const loadProject = async (id: string) => {
     setBuildInfo(prev => ({
@@ -617,6 +686,23 @@ export default function AppBuilder() {
           {/* Action Buttons */}
           {Object.keys(buildInfo.files).length > 0 && (
             <div className="space-y-3 mt-6">
+              {/* React Native Features Panel */}
+              {reactNativeFeatures.length > 0 && (
+                <div className="bg-white/5 backdrop-blur-sm rounded-xl p-4 mb-4">
+                  <h3 className="text-white font-medium mb-3 flex items-center space-x-2">
+                    <Smartphone className="w-4 h-4 text-green-400" />
+                    <span>📱 React Native Features</span>
+                  </h3>
+                  <div className="grid grid-cols-1 gap-2">
+                    {reactNativeFeatures.map((feature, index) => (
+                      <div key={index} className="text-sm text-white/70 bg-white/5 rounded px-3 py-1">
+                        {feature}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <button
                 onClick={() => setShowSaveModal(true)}
                 disabled={buildInfo.status === 'generating'}
@@ -812,7 +898,7 @@ export default function AppBuilder() {
                 <div className="space-y-1">
                   {Object.entries(organizedFiles).map(([dir, files]) => (
                     <div key={dir}>
-                      {dir !== 'root' && (
+                      {dir !== '📱 Root' && (
                         <div className="flex items-center space-x-2 text-white/60 text-sm py-1">
                           <Folder className="w-4 h-4" />
                           <span>{dir}</span>
@@ -829,7 +915,7 @@ export default function AppBuilder() {
                           }`}
                         >
                           {getFileIcon(filepath)}
-                          <span className={`flex-1 text-left ${dir !== 'root' ? 'ml-4' : ''}`}>
+                          <span className={`flex-1 text-left ${dir !== '📱 Root' ? 'ml-4' : ''}`}>
                             {filepath.split('/').pop()}
                           </span>
                           

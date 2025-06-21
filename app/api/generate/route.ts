@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
         sendLog('🚀 Initializing V0.dev-style generation...')
         
         // Use V0.dev-style generation for better results
-        const files = await generateV0StyleApp(prompt, userId, (progress: { 
+        const v0Response = await generateV0StyleApp(prompt, userId, (progress: { 
           type: string; 
           message: string; 
           file?: { path: string; content: string; isComplete: boolean } 
@@ -120,15 +120,20 @@ export async function POST(request: NextRequest) {
           }
         })
         
+        // Extract files from V0.dev-style response
+        const files = v0Response.files
+        const metadata = v0Response.metadata
+        
         // Send final completion with all files
         const duration = Date.now() - startTime
-        const fileCount = Object.keys(files).length
+        const fileCount = metadata.totalFiles
         
         sendLog(`⏱️ Generation completed in ${Math.round(duration / 1000)}s`)
         sendLog(`📦 Created ${fileCount} files with production-ready structure`)
+        sendLog(`🎯 Generated ${metadata.appType} with features: ${metadata.features.join(', ')}`)
         
         if (hasApiKey) {
-          sendLog('🤖 Enhanced with AI-generated custom features')
+          sendLog('🤖 Enhanced with AI-generated custom features (V0.dev style)')
         } else {
           sendLog('📋 Using enhanced template (set MISTRAL_API_KEY for AI features)')
         }
