@@ -9,9 +9,7 @@
   package = "@netlify/plugin-nextjs"
 
 [functions]
-  # Increase timeout for AI generation
   timeout = 30
-  # Increase memory for large responses
   memory = 1024
 
 [[redirects]]
@@ -19,18 +17,16 @@
   to = "/.netlify/functions/:splat"
   status = 200
 
-# Environment-specific settings
 [context.production.environment]
   NODE_ENV = "production"
 
 [context.deploy-preview.environment]
   NODE_ENV = "development"
 
-# Headers for API routes
 [[headers]]
   for = "/api/*"
   [headers.values]
     X-Frame-Options = "DENY"
     X-XSS-Protection = "1; mode=block"
     X-Content-Type-Options = "nosniff"
-    Referrer-Policy = "strict-origin-when-cross-origin" 
+    Referrer-Policy = "strict-origin-when-cross-origin"
