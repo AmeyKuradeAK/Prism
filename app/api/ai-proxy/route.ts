@@ -14,8 +14,13 @@ export async function POST(request: NextRequest) {
 
     // Validate API key server-side
     if (!process.env.MISTRAL_API_KEY || process.env.MISTRAL_API_KEY.length < 10) {
+      console.error('❌ AI Proxy: Missing or invalid API key')
+      console.error(`API Key length: ${process.env.MISTRAL_API_KEY?.length || 0}`)
       return new Response(
-        JSON.stringify({ error: 'Server configuration error' }),
+        JSON.stringify({ 
+          error: 'Server configuration error',
+          details: 'Missing or invalid API key configuration'
+        }),
         { status: 500, headers: { 'Content-Type': 'application/json' } }
       )
     }
@@ -61,11 +66,14 @@ export async function POST(request: NextRequest) {
       if (!response.ok) {
         const errorText = await response.text()
         console.error(`❌ Mistral API error: ${response.status} - ${errorText}`)
+        console.error(`Request URL: ${response.url}`)
+        console.error(`API Key present: ${!!process.env.MISTRAL_API_KEY}`)
+        console.error(`API Key length: ${process.env.MISTRAL_API_KEY?.length || 0}`)
         
         return new Response(
           JSON.stringify({ 
             error: 'AI service error',
-            details: response.status === 401 ? 'Invalid API key' : 'Service temporarily unavailable'
+            details: response.status === 401 ? 'Invalid API key' : `Service error: ${response.status} - ${errorText.substring(0, 200)}`
           }),
           { status: response.status, headers: { 'Content-Type': 'application/json' } }
         )

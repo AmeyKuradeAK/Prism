@@ -249,7 +249,7 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
               await new Promise(resolve => setTimeout(resolve, retryDelay))
             }
             
-            // Use secure proxy for AI calls (30s timeout now!)
+            // Use secure proxy for AI calls (30s timeout, API key protected)
             const response = await fetch('/api/ai-proxy', {
               method: 'POST',
               headers: {
