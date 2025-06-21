@@ -9,6 +9,17 @@ interface ComponentAnalysis {
   designSystem: 'modern' | 'minimal' | 'material' | 'ios'
   features: string[]
   nativeFeatures: string[]
+  detectedModules: NativeModule[]
+}
+
+interface NativeModule {
+  name: string
+  package: string
+  version: string
+  imports: string[]
+  permissions?: string[]
+  setup?: string[]
+  description: string
 }
 
 interface GeneratedFile {
@@ -24,7 +35,10 @@ interface V0StyleResponse {
     appType: string
     features: string[]
     nativeFeatures: string[]
+    detectedModules: NativeModule[]
     generatedAt: string
+    dependencies: { [key: string]: string }
+    permissions: string[]
   }
 }
 
@@ -32,7 +46,119 @@ const mistral = new Mistral({
   apiKey: process.env.MISTRAL_API_KEY || ''
 })
 
-// React Native V0.dev Style: Advanced Prompt Analysis
+// 🎯 React Native V0: Native Module Detection & Auto-Injection
+const NATIVE_MODULE_MAPPINGS: { [key: string]: NativeModule } = {
+  camera: {
+    name: 'Camera',
+    package: 'expo-camera',
+    version: '~15.0.0',
+    imports: ['Camera', 'CameraType', 'FlashMode'],
+    permissions: ['CAMERA'],
+    setup: ['requestCameraPermissions()'],
+    description: '📷 Camera capture and preview'
+  },
+  notifications: {
+    name: 'Push Notifications',
+    package: 'expo-notifications',
+    version: '~0.28.0',
+    imports: ['Notifications', 'registerForPushNotificationsAsync'],
+    permissions: ['NOTIFICATIONS'],
+    setup: ['setupNotificationHandler()', 'registerForPushNotifications()'],
+    description: '🔔 Push notifications and local notifications'
+  },
+  location: {
+    name: 'Location Services',
+    package: 'expo-location',
+    version: '~17.0.0',
+    imports: ['Location', 'LocationAccuracy'],
+    permissions: ['ACCESS_FINE_LOCATION', 'ACCESS_COARSE_LOCATION'],
+    setup: ['requestLocationPermissions()'],
+    description: '📍 GPS location and geolocation services'
+  },
+  imagepicker: {
+    name: 'Image Picker',
+    package: 'expo-image-picker',
+    version: '~15.0.0',
+    imports: ['ImagePicker', 'MediaTypeOptions'],
+    permissions: ['CAMERA_ROLL'],
+    setup: ['requestMediaLibraryPermissions()'],
+    description: '🖼️ Photo and video selection from device'
+  },
+  audio: {
+    name: 'Audio/Video',
+    package: 'expo-av',
+    version: '~14.0.0',
+    imports: ['Audio', 'Video', 'AVPlaybackStatus'],
+    permissions: ['RECORD_AUDIO'],
+    setup: ['Audio.setAudioModeAsync()'],
+    description: '🎵 Audio recording and video playback'
+  },
+  filesystem: {
+    name: 'File System',
+    package: 'expo-file-system',
+    version: '~17.0.0',
+    imports: ['FileSystem'],
+    permissions: ['READ_EXTERNAL_STORAGE', 'WRITE_EXTERNAL_STORAGE'],
+    setup: [],
+    description: '📁 File and directory operations'
+  },
+  sensors: {
+    name: 'Device Sensors',
+    package: 'expo-sensors',
+    version: '~13.0.0',
+    imports: ['Accelerometer', 'Gyroscope', 'Magnetometer'],
+    permissions: [],
+    setup: [],
+    description: '📱 Accelerometer, gyroscope, magnetometer'
+  },
+  haptics: {
+    name: 'Haptic Feedback',
+    package: 'expo-haptics',
+    version: '~13.0.0',
+    imports: ['Haptics'],
+    permissions: ['VIBRATE'],
+    setup: [],
+    description: '📳 Vibration and haptic feedback'
+  },
+  biometrics: {
+    name: 'Biometric Auth',
+    package: 'expo-local-authentication',
+    version: '~14.0.0',
+    imports: ['LocalAuthentication'],
+    permissions: ['USE_BIOMETRIC', 'USE_FINGERPRINT'],
+    setup: ['checkBiometricSupport()'],
+    description: '🔐 Fingerprint and face authentication'
+  },
+  barcode: {
+    name: 'Barcode Scanner',
+    package: 'expo-barcode-scanner',
+    version: '~13.0.0',
+    imports: ['BarCodeScanner'],
+    permissions: ['CAMERA'],
+    setup: ['requestCameraPermissions()'],
+    description: '📱 QR code and barcode scanning'
+  },
+  contacts: {
+    name: 'Device Contacts',
+    package: 'expo-contacts',
+    version: '~13.0.0',
+    imports: ['Contacts'],
+    permissions: ['READ_CONTACTS'],
+    setup: ['requestContactsPermissions()'],
+    description: '👥 Access device contacts'
+  },
+  calendar: {
+    name: 'Calendar Events',
+    package: 'expo-calendar',
+    version: '~13.0.0',
+    imports: ['Calendar'],
+    permissions: ['READ_CALENDAR', 'WRITE_CALENDAR'],
+    setup: ['requestCalendarPermissions()'],
+    description: '📅 Calendar integration and events'
+  }
+}
+
+// 🧠 Enhanced React Native Prompt Analysis with Native Module Detection
 async function analyzePromptV0Style(prompt: string): Promise<ComponentAnalysis> {
   const lowerPrompt = prompt.toLowerCase()
   
@@ -42,6 +168,54 @@ async function analyzePromptV0Style(prompt: string): Promise<ComponentAnalysis> 
   const components = []
   const screens = []
   const dataModels = []
+  const detectedModules: NativeModule[] = []
+  
+  // 🎯 Native Module Detection (Your Key Feature!)
+  Object.entries(NATIVE_MODULE_MAPPINGS).forEach(([keyword, module]) => {
+    if (lowerPrompt.includes(keyword) || 
+        lowerPrompt.includes(module.name.toLowerCase()) ||
+        lowerPrompt.includes(module.package)) {
+      detectedModules.push(module)
+      nativeFeatures.push(module.description)
+    }
+  })
+  
+  // Additional keyword-based detection
+  const keywordMappings = {
+    'photo': ['camera', 'imagepicker'],
+    'picture': ['camera', 'imagepicker'],
+    'video': ['camera', 'audio'],
+    'record': ['audio'],
+    'sound': ['audio'],
+    'vibrate': ['haptics'],
+    'shake': ['sensors'],
+    'fingerprint': ['biometrics'],
+    'touch id': ['biometrics'],
+    'face id': ['biometrics'],
+    'qr': ['barcode'],
+    'scan': ['barcode'],
+    'gps': ['location'],
+    'map': ['location'],
+    'coordinate': ['location'],
+    'push': ['notifications'],
+    'alert': ['notifications'],
+    'message': ['notifications'],
+    'file': ['filesystem'],
+    'save': ['filesystem'],
+    'download': ['filesystem']
+  }
+  
+  Object.entries(keywordMappings).forEach(([keyword, modules]) => {
+    if (lowerPrompt.includes(keyword)) {
+      modules.forEach(moduleKey => {
+        const module = NATIVE_MODULE_MAPPINGS[moduleKey]
+        if (module && !detectedModules.some(m => m.package === module.package)) {
+          detectedModules.push(module)
+          nativeFeatures.push(module.description)
+        }
+      })
+    }
+  })
   
   // App type detection with React Native focus
   let appType = 'React Native App'
@@ -53,7 +227,6 @@ async function analyzePromptV0Style(prompt: string): Promise<ComponentAnalysis> 
     components.push('TodoItem', 'TaskForm', 'PriorityBadge', 'CategoryPicker')
     dataModels.push('Task', 'Category', 'User')
     features.push('Task Management', 'Priority Levels', 'Categories', 'Search')
-    nativeFeatures.push('Push Notifications', 'Local Storage', 'Haptic Feedback')
   }
   
   // Timer/Pomodoro Apps
@@ -67,7 +240,6 @@ async function analyzePromptV0Style(prompt: string): Promise<ComponentAnalysis> 
     components.push('CircularTimer', 'TimerControls', 'SessionStats', 'SoundPicker')
     dataModels.push('PomodoroSession', 'Settings')
     features.push('Focus Timer', 'Break Reminders', 'Statistics', 'Custom Sounds')
-    nativeFeatures.push('Background Timer', 'Push Notifications', 'Sound Playback', 'Vibration')
   }
   
   // Chat/Social Apps
@@ -77,7 +249,6 @@ async function analyzePromptV0Style(prompt: string): Promise<ComponentAnalysis> 
     components.push('MessageBubble', 'ChatInput', 'UserAvatar', 'VoiceMessage')
     dataModels.push('Message', 'User', 'Chat', 'Contact')
     features.push('Real-time Messaging', 'User Profiles', 'Media Sharing')
-    nativeFeatures.push('Camera', 'Image Picker', 'Push Notifications', 'Real-time Updates')
   }
   
   // E-commerce Apps
@@ -87,7 +258,6 @@ async function analyzePromptV0Style(prompt: string): Promise<ComponentAnalysis> 
     components.push('ProductCard', 'CartItem', 'SearchBar', 'PaymentForm')
     dataModels.push('Product', 'CartItem', 'Order', 'User')
     features.push('Product Catalog', 'Shopping Cart', 'Payment', 'Order History')
-    nativeFeatures.push('Barcode Scanner', 'Location Services', 'Push Notifications', 'Biometric Auth')
   }
   
   // Fitness/Health Apps
@@ -97,7 +267,6 @@ async function analyzePromptV0Style(prompt: string): Promise<ComponentAnalysis> 
     components.push('WorkoutCard', 'ProgressChart', 'TimerDisplay', 'ExerciseList')
     dataModels.push('Workout', 'Exercise', 'Progress', 'User')
     features.push('Workout Tracking', 'Progress Analytics', 'Exercise Library')
-    nativeFeatures.push('Health Kit', 'Step Counter', 'Heart Rate', 'GPS Tracking')
   }
   
   // Photo/Camera Apps
@@ -107,7 +276,6 @@ async function analyzePromptV0Style(prompt: string): Promise<ComponentAnalysis> 
     components.push('PhotoGrid', 'CameraView', 'FilterSelector', 'EditTools')
     dataModels.push('Photo', 'Album', 'Filter')
     features.push('Photo Editing', 'Filters', 'Albums', 'Sharing')
-    nativeFeatures.push('Camera', 'Photo Library', 'Image Processing', 'File System')
   }
   
   // Weather Apps
@@ -117,7 +285,15 @@ async function analyzePromptV0Style(prompt: string): Promise<ComponentAnalysis> 
     components.push('WeatherCard', 'ForecastItem', 'LocationSearch', 'WeatherIcon')
     dataModels.push('WeatherData', 'Location', 'Forecast')
     features.push('Current Weather', '7-Day Forecast', 'Multiple Locations')
-    nativeFeatures.push('Location Services', 'Background Refresh', 'Push Notifications')
+  }
+  
+  // Login/Auth Apps
+  if (lowerPrompt.includes('login') || lowerPrompt.includes('auth') || lowerPrompt.includes('signin')) {
+    appType = 'Authentication App'
+    screens.push('Login', 'Register', 'Profile', 'Settings')
+    components.push('LoginForm', 'SignupForm', 'ProfileCard', 'PasswordInput')
+    dataModels.push('User', 'Session')
+    features.push('User Authentication', 'Profile Management', 'Session Handling')
   }
   
   // Navigation pattern for React Native
@@ -150,92 +326,151 @@ async function analyzePromptV0Style(prompt: string): Promise<ComponentAnalysis> 
     navigationPattern,
     designSystem,
     features: features.length > 0 ? features : ['Core Functionality'],
-    nativeFeatures
+    nativeFeatures,
+    detectedModules
   }
 }
 
-// React Native V0.dev Style: Structured System Prompt
-function createReactNativeSystemPrompt(): string {
+// 📦 Smart Package.json Assembly (Your Key Feature!)
+function generateSmartPackageJson(analysis: ComponentAnalysis): any {
+  const baseDependencies: { [key: string]: string } = {
+    'expo': '~52.0.0',
+    'expo-router': '~4.0.0',
+    'react': '18.3.1',
+    'react-native': '0.76.3',
+    'react-native-safe-area-context': '^4.10.0',
+    'react-native-screens': '~4.0.0',
+    'expo-linking': '~7.0.0',
+    'expo-constants': '~17.0.0',
+    'expo-status-bar': '~2.0.0',
+    '@react-native-async-storage/async-storage': '1.23.1',
+    'nativewind': '^2.0.11',
+    'react-native-reanimated': '~3.10.0',
+    'react-native-gesture-handler': '~2.16.0'
+  }
+
+  const devDependencies: { [key: string]: string } = {
+    '@babel/core': '^7.20.0',
+    '@types/react': '~18.2.45',
+    '@types/react-native': '~0.73.0',
+    'typescript': '^5.1.3',
+    'tailwindcss': '^3.3.0'
+  }
+
+  // Add detected native modules
+  analysis.detectedModules.forEach(module => {
+    baseDependencies[module.package] = module.version
+  })
+
+  // Add navigation dependencies based on pattern
+  if (analysis.navigationPattern === 'tabs' || analysis.navigationPattern === 'mixed') {
+    baseDependencies['@react-navigation/bottom-tabs'] = '^6.5.0'
+  }
+  if (analysis.navigationPattern === 'drawer' || analysis.navigationPattern === 'mixed') {
+    baseDependencies['@react-navigation/drawer'] = '^6.6.0'
+  }
+
+  return {
+    name: analysis.appType.toLowerCase().replace(/[^a-z0-9]/g, '-'),
+    version: '1.0.0',
+    main: 'expo-router/entry',
+    scripts: {
+      start: 'expo start',
+      android: 'expo start --android',
+      ios: 'expo start --ios',
+      web: 'expo start --web',
+      build: 'eas build',
+      submit: 'eas submit',
+      preview: 'expo start --web'
+    },
+    dependencies: baseDependencies,
+    devDependencies,
+    private: true
+  }
+}
+
+// 🎯 React Native V0: Enhanced System Prompt with Native Module Injection
+function createReactNativeSystemPrompt(analysis: ComponentAnalysis): string {
+  const moduleInstructions = analysis.detectedModules.map(module => 
+    `- ${module.name} (${module.package}): ${module.description}
+     Imports: import { ${module.imports.join(', ')} } from '${module.package}'
+     ${module.permissions?.length ? `Permissions: ${module.permissions.join(', ')}` : ''}
+     ${module.setup?.length ? `Setup: ${module.setup.join(', ')}` : ''}`
+  ).join('\n')
+
   return `You are an expert React Native mobile app developer specializing in Expo and modern mobile development patterns.
 
 🎯 CRITICAL INSTRUCTION: You MUST return ONLY a valid JSON object with this EXACT structure:
 
 {
   "files": {
-    "package.json": "file content here",
-    "app.json": "file content here", 
-    "app/_layout.tsx": "file content here",
-    "app/index.tsx": "file content here"
+    "app.json": "expo configuration here",
+    "app/_layout.tsx": "root layout with navigation setup",
+    "app/index.tsx": "main home screen",
+    "components/ComponentName.tsx": "reusable components",
+    "types/index.ts": "typescript interfaces",
+    "constants/Colors.ts": "theme colors",
+    "utils/permissions.ts": "permission handling utilities"
   }
 }
 
-📱 REACT NATIVE REQUIREMENTS:
-- Use LATEST Expo SDK (52+) with Expo Router for navigation
-- Use TypeScript with strict typing
-- Use NativeWind (Tailwind CSS for React Native) for styling
-- Include proper native mobile patterns (SafeAreaView, StatusBar, etc.)
-- Add proper navigation structure (Stack, Tabs, Drawer as needed)
-- Include React Native specific components (ScrollView, FlatList, etc.)
-- Add proper gesture handling with react-native-gesture-handler
+📱 APP REQUIREMENTS:
+- App Type: ${analysis.appType}
+- Screens: ${analysis.primaryScreens.join(', ')}
+- Navigation: ${analysis.navigationPattern}
+- Design: ${analysis.designSystem}
+- Features: ${analysis.features.join(', ')}
+
+🔥 DETECTED NATIVE MODULES (MUST IMPLEMENT):
+${moduleInstructions}
+
+📦 USE THESE EXACT DEPENDENCIES:
+${Object.entries(generateSmartPackageJson(analysis).dependencies).map(([pkg, version]) => 
+  `- ${pkg}: ${version}`).join('\n')}
+
+🛠️ NATIVE MODULE IMPLEMENTATION RULES:
+1. For Camera: Create proper Camera component with permissions
+2. For Notifications: Set up notification handlers and registration
+3. For Location: Implement location tracking with permission requests
+4. For Image Picker: Add photo selection with proper permissions
+5. For Audio/Video: Set up media playback with controls
+6. For File System: Implement file operations and storage
+7. For Sensors: Add sensor data collection and monitoring
+8. For Haptics: Implement feedback for user interactions
+9. For Biometrics: Add secure authentication flows
+10. For Barcode: Create scanner interface with camera integration
+
+🎨 UI/UX REQUIREMENTS:
+- Use NativeWind (Tailwind CSS for React Native) for ALL styling
+- Implement proper SafeAreaView for iOS/Android compatibility
+- Add StatusBar configuration for each screen
+- Use proper React Native components (View, Text, ScrollView, FlatList, etc.)
+- Implement loading states, error states, and empty states
+- Add proper keyboard handling and form validation
+- Include accessibility labels and hints
+- Use proper touch feedback and animations
+
+🔧 TECHNICAL REQUIREMENTS:
+- Use Expo Router for navigation with proper file-based routing
+- Implement TypeScript with strict typing for all components
 - Use AsyncStorage for data persistence
-- Include proper error boundaries and loading states
-- Add accessibility support (accessibilityLabel, accessibilityRole)
-
-🔧 REQUIRED FILE STRUCTURE:
-1. package.json - Latest Expo dependencies with proper scripts
-2. app.json - Expo configuration with proper app settings
-3. app/_layout.tsx - Root layout with navigation setup
-4. app/index.tsx - Main home screen
-5. app/(tabs)/_layout.tsx - Tab navigation (if needed)
-6. app/(tabs)/[screen].tsx - Individual tab screens
-7. components/[Component].tsx - Reusable components
-8. types/index.ts - TypeScript interfaces
-9. constants/Colors.ts - Theme colors
-10. hooks/[hook].ts - Custom React hooks
-11. utils/[utility].ts - Helper functions
-
-📦 DEPENDENCIES TO INCLUDE:
-- expo: ~52.0.0
-- expo-router: ~4.0.0  
-- react-native: 0.76.3
-- typescript: ^5.3.0
-- nativewind: ^2.0.11
-- @react-native-async-storage/async-storage
-- react-native-safe-area-context
-- react-native-screens
-- react-native-gesture-handler
-- expo-status-bar
-- Add any other dependencies needed for the specific app
-
-🎨 UI/UX PATTERNS:
-- Use mobile-first responsive design
-- Implement proper touch interactions and gestures
-- Add loading states, error states, and empty states
-- Use proper mobile navigation patterns
-- Include proper spacing and typography for mobile
-- Add haptic feedback where appropriate
-- Implement proper keyboard handling
-
-🔥 NATIVE FEATURES TO CONSIDER:
-- Camera and Image Picker (expo-camera, expo-image-picker)
-- Location Services (expo-location)
-- Push Notifications (expo-notifications)
-- Device sensors (expo-sensors)
-- File System (expo-file-system)
-- Audio playback (expo-av)
-- Biometric authentication (expo-local-authentication)
-- Health data (expo-health)
+- Add proper error boundaries and try/catch blocks
+- Implement proper state management with React hooks
+- Add proper prop types and interfaces
+- Use modern React Native patterns (functional components, hooks)
+- Include proper gesture handling with react-native-gesture-handler
 
 ⚠️ CRITICAL RULES:
 1. Return ONLY valid JSON - no explanations, no prose, no markdown
 2. Every file must be complete and functional
-3. Use modern React Native patterns (hooks, functional components)
-4. Include proper TypeScript types for everything
-5. Make it production-ready code that runs immediately
-6. Use proper mobile UI components and patterns
-7. Include proper error handling and validation
+3. All native modules must be properly implemented with permissions
+4. Include proper error handling and loading states
+5. Use proper mobile UI patterns and components
+6. Make it production-ready code that runs immediately
+7. Include proper TypeScript types for everything
+8. Add proper permission handling for all native features
 
-Generate a complete, production-ready React Native mobile app that works immediately after 'npx expo start'!`
+Generate a complete, production-ready React Native mobile app that works immediately after 'npx expo start' with all requested native features properly implemented!`
 }
 
 // React Native V0.dev Style: Rate-Limited API Call
@@ -267,22 +502,13 @@ async function callMistralWithRateLimit(
 - Design: ${analysis.designSystem}
 - Features: ${analysis.features.join(', ')}
 - Native Features: ${analysis.nativeFeatures.join(', ')}
+- Required Modules: ${analysis.detectedModules.map(m => m.name).join(', ')}
 
-🎯 MOBILE-FIRST CONSIDERATIONS:
-- Optimize for touch interactions and mobile gestures
-- Use proper mobile navigation patterns (tabs, stack, drawer)
-- Include proper safe area handling for iOS/Android
-- Add loading states and error handling for mobile UX
-- Use AsyncStorage for offline data persistence
-- Include proper keyboard handling and form validation
-- Add haptic feedback and native mobile animations
-- Implement proper image handling and camera integration if needed
-
-Create a complete, production-ready React Native mobile app with all requested features using Expo Router, TypeScript, and NativeWind styling.`
+Create a complete, production-ready React Native mobile app with all requested features and native modules using Expo Router, TypeScript, and NativeWind styling.`
 
   try {
     onProgress?.({ type: 'log', message: `🤖 Calling Mistral AI for React Native generation` })
-    onProgress?.({ type: 'log', message: `📱 Generating ${analysis.appType} with ${analysis.nativeFeatures.length} native features` })
+    onProgress?.({ type: 'log', message: `📱 Generating ${analysis.appType} with ${analysis.detectedModules.length} native modules` })
     
     const response = await Promise.race([
       mistral.chat.complete({
@@ -290,7 +516,7 @@ Create a complete, production-ready React Native mobile app with all requested f
         messages: [
           {
             role: 'system',
-            content: createReactNativeSystemPrompt()
+            content: createReactNativeSystemPrompt(analysis)
           },
           { 
             role: 'user', 
@@ -298,10 +524,10 @@ Create a complete, production-ready React Native mobile app with all requested f
           }
         ],
         temperature: 0.1,
-        maxTokens: 12000 // Larger for React Native apps
+        maxTokens: 15000 // Even larger for native modules
       }),
       new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('API timeout after 45 seconds')), 45000)
+        setTimeout(() => reject(new Error('API timeout after 60 seconds')), 60000)
       )
     ]) as any
 
@@ -409,10 +635,11 @@ function emitReactNativeFileUpdates(
   onProgress?.({ type: 'log', message: `🎉 Generated ${fileNames.length} React Native files instantly!` })
   onProgress?.({ type: 'log', message: `📱 App Type: ${metadata.appType}` })
   onProgress?.({ type: 'log', message: `🔧 Features: ${metadata.features.join(', ')}` })
-  onProgress?.({ type: 'log', message: `📲 Native Features: ${metadata.nativeFeatures.join(', ')}` })
+  onProgress?.({ type: 'log', message: `📲 Native Modules: ${metadata.detectedModules.map((m: any) => m.name).join(', ')}` })
+  onProgress?.({ type: 'log', message: `🔐 Permissions: ${metadata.permissions.join(', ')}` })
 }
 
-// Main React Native V0.dev Style Generator
+// Main React Native V0 Generator with Enhanced Features
 export async function generateV0StyleApp(
   prompt: string,
   userId: string,
@@ -425,29 +652,41 @@ export async function generateV0StyleApp(
   }
   
   try {
-    onProgress?.({ type: 'log', message: '🚀 React Native V0.dev-style AI Generation Starting!' })
+    onProgress?.({ type: 'log', message: '🚀 React Native V0 AI Generation Starting!' })
     onProgress?.({ type: 'log', message: `📱 User Request: "${prompt.substring(0, 100)}..."` })
-    onProgress?.({ type: 'log', message: '🎯 Pure AI - No Templates, Mobile-First React Native!' })
+    onProgress?.({ type: 'log', message: '🎯 Native Module Auto-Detection & Injection!' })
     
-    // Step 1: Advanced React Native Analysis
+    // Step 1: Enhanced Analysis with Native Module Detection
     const analysis = await analyzePromptV0Style(prompt)
     onProgress?.({ type: 'log', message: `🧠 Analysis: ${analysis.appType}` })
     onProgress?.({ type: 'log', message: `📱 Screens: ${analysis.primaryScreens.join(', ')}` })
     onProgress?.({ type: 'log', message: `🔧 Features: ${analysis.features.join(', ')}` })
-    onProgress?.({ type: 'log', message: `📲 Native: ${analysis.nativeFeatures.join(', ')}` })
+    onProgress?.({ type: 'log', message: `📲 Native Modules: ${analysis.detectedModules.map(m => m.name).join(', ')}` })
     
-    // Step 2: Rate-Limited React Native AI Call
-    const rawResponse = await callMistralWithRateLimit(prompt, analysis, onProgress)
+    // Step 2: Smart Package.json Generation
+    const smartPackageJson = generateSmartPackageJson(analysis)
+    onProgress?.({ type: 'log', message: `📦 Auto-assembled ${Object.keys(smartPackageJson.dependencies).length} dependencies` })
     
-    // Step 3: Enhanced JSON Parsing
-    onProgress?.({ type: 'log', message: '⚡ Parsing React Native JSON response...' })
+    // Step 3: Enhanced AI Generation with Native Module Injection
+    const enhancedPrompt = `${prompt}
+
+🔥 REQUIRED NATIVE MODULES: ${analysis.detectedModules.map(m => m.name).join(', ')}
+📦 USE EXACT DEPENDENCIES: ${Object.keys(smartPackageJson.dependencies).join(', ')}`
+
+    const rawResponse = await callMistralWithRateLimit(enhancedPrompt, analysis, onProgress)
+    
+    // Step 4: Enhanced JSON Parsing
+    onProgress?.({ type: 'log', message: '⚡ Parsing React Native JSON with native modules...' })
     const files = parseReactNativeV0Response(rawResponse)
+    
+    // Step 5: Inject Smart Package.json
+    files['package.json'] = JSON.stringify(smartPackageJson, null, 2)
     
     if (Object.keys(files).length === 0) {
       throw new Error('No React Native files generated from AI response')
     }
     
-    // Step 4: V0.dev Style Response Structure
+    // Step 6: Enhanced V0 Response with Native Module Metadata
     const v0Response: V0StyleResponse = {
       files,
       metadata: {
@@ -455,22 +694,25 @@ export async function generateV0StyleApp(
         appType: analysis.appType,
         features: analysis.features,
         nativeFeatures: analysis.nativeFeatures,
-        generatedAt: new Date().toISOString()
+        detectedModules: analysis.detectedModules,
+        generatedAt: new Date().toISOString(),
+        dependencies: smartPackageJson.dependencies,
+        permissions: analysis.detectedModules.flatMap(m => m.permissions || [])
       }
     }
     
-    // Step 5: Instant File Updates (V0.dev style)
+    // Step 7: Enhanced File Updates with Native Module Info
     emitReactNativeFileUpdates(files, v0Response.metadata, onProgress)
     
-    onProgress?.({ type: 'log', message: `✨ Success! Generated ${v0Response.metadata.totalFiles} React Native files` })
-    onProgress?.({ type: 'log', message: '📱 Ready for mobile development and testing!' })
-    onProgress?.({ type: 'log', message: '🚀 Run "npx expo start" to test on device!' })
+    onProgress?.({ type: 'log', message: `✨ Generated ${v0Response.metadata.totalFiles} React Native files with native modules!` })
+    onProgress?.({ type: 'log', message: `📱 Native Modules: ${analysis.detectedModules.map(m => m.name).join(', ')}` })
+    onProgress?.({ type: 'log', message: '🚀 Ready for Expo preview, Snack, or EAS Build!' })
     
     return v0Response
     
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-    onProgress?.({ type: 'log', message: `❌ React Native generation failed: ${errorMessage}` })
+    onProgress?.({ type: 'log', message: `❌ React Native V0 generation failed: ${errorMessage}` })
     throw error
   }
 }
@@ -558,3 +800,7 @@ export async function generateCompleteApp(
   const response = await generateV0StyleApp(prompt, 'legacy', adaptedProgress)
   return response.files
 }
+
+// Export types and helper classes
+export type { NativeModule, V0StyleResponse, ComponentAnalysis }
+export { NATIVE_MODULE_MAPPINGS }

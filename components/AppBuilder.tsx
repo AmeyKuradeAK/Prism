@@ -73,6 +73,13 @@ export default function AppBuilder() {
   // Track which file is currently being written for UI feedback
   const [currentlyWritingFile, setCurrentlyWritingFile] = useState<string>('')
 
+  // React Native V0 specific state
+  const [isPreviewMode, setIsPreviewMode] = useState(false)
+  const [easBuildStatus, setEasBuildStatus] = useState<'idle' | 'building' | 'success' | 'failed'>('idle')
+  const [snackUrl, setSnackUrl] = useState<string>('')
+  const [nativeModules, setNativeModules] = useState<any[]>([])
+  const [appPermissions, setAppPermissions] = useState<string[]>([])
+
   // Load manual template if mode is manual
   useEffect(() => {
     if (mode === 'manual') {
@@ -89,6 +96,37 @@ export default function AppBuilder() {
       setSelectedFile(fileNames.find(f => f.includes('App.tsx')) || fileNames[0])
     }
   }, [buildInfo.files, selectedFile])
+
+  // Extract native modules and permissions from AI response
+  useEffect(() => {
+    if (buildInfo.status === 'completed' && Object.keys(buildInfo.files).length > 0) {
+      // Extract metadata if available (from V0StyleResponse)
+      const content = Object.values(buildInfo.files).join('\n')
+      
+      // Extract native modules
+      const modules = []
+      if (content.includes('expo-camera')) modules.push({ name: 'Camera', icon: '📷' })
+      if (content.includes('expo-notifications')) modules.push({ name: 'Push Notifications', icon: '🔔' })
+      if (content.includes('expo-location')) modules.push({ name: 'Location Services', icon: '📍' })
+      if (content.includes('expo-image-picker')) modules.push({ name: 'Image Picker', icon: '🖼️' })
+      if (content.includes('expo-av')) modules.push({ name: 'Audio/Video', icon: '🎵' })
+      if (content.includes('expo-haptics')) modules.push({ name: 'Haptic Feedback', icon: '📳' })
+      if (content.includes('expo-local-authentication')) modules.push({ name: 'Biometric Auth', icon: '🔐' })
+      if (content.includes('expo-barcode-scanner')) modules.push({ name: 'Barcode Scanner', icon: '📱' })
+      
+      setNativeModules(modules)
+      
+      // Extract permissions
+      const permissions = []
+      if (content.includes('CAMERA')) permissions.push('Camera')
+      if (content.includes('NOTIFICATIONS')) permissions.push('Notifications')
+      if (content.includes('LOCATION')) permissions.push('Location')
+      if (content.includes('RECORD_AUDIO')) permissions.push('Microphone')
+      if (content.includes('READ_CONTACTS')) permissions.push('Contacts')
+      
+      setAppPermissions(permissions)
+    }
+  }, [buildInfo.status, buildInfo.files])
 
   const handleLoadTemplate = async () => {
     setBuildInfo(prev => ({
@@ -653,6 +691,121 @@ Generated on: ${new Date().toLocaleString()}
     }
   }
 
+  // React Native V0: Expo Web Preview
+  const handleExpoPreview = async () => {
+    setIsPreviewMode(true)
+    
+    try {
+      const response = await fetch('/api/expo/preview', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          files: buildInfo.files,
+          projectName: currentPrompt.slice(0, 50) || 'React Native App'
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Preview generation failed')
+      }
+
+      const { previewUrl } = await response.json()
+      window.open(previewUrl, '_blank')
+      
+    } catch (error) {
+      console.error('Expo preview failed:', error)
+      alert('Expo preview failed. Please try again.')
+    } finally {
+      setIsPreviewMode(false)
+    }
+  }
+
+  // React Native V0: Snack SDK Integration
+  const handleSnackUpload = async () => {
+    try {
+      const response = await fetch('/api/snack/upload', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          files: buildInfo.files,
+          name: currentPrompt.slice(0, 50) || 'React Native App',
+          description: `Generated with React Native V0: ${currentPrompt}`
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Snack upload failed')
+      }
+
+      const { snackUrl: url } = await response.json()
+      setSnackUrl(url)
+      window.open(url, '_blank')
+      
+    } catch (error) {
+      console.error('Snack upload failed:', error)
+      alert('Snack upload failed. Please try again.')
+    }
+  }
+
+  // React Native V0: EAS Build API Integration
+  const handleEASBuild = async (platform: 'android' | 'ios' | 'all') => {
+    setEasBuildStatus('building')
+    
+    try {
+      const response = await fetch('/api/eas/build', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          files: buildInfo.files,
+          platform,
+          projectName: currentPrompt.slice(0, 50) || 'React Native App'
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('EAS Build failed')
+      }
+
+      const { buildId, buildUrl } = await response.json()
+      
+      // Poll build status
+      const pollBuild = setInterval(async () => {
+        try {
+          const statusResponse = await fetch(`/api/eas/build/${buildId}`)
+          const { status, artifacts } = await statusResponse.json()
+          
+          if (status === 'finished') {
+            setEasBuildStatus('success')
+            clearInterval(pollBuild)
+            
+            // Download APK/IPA
+            if (artifacts && artifacts.length > 0) {
+              window.open(artifacts[0].url, '_blank')
+            }
+          } else if (status === 'errored') {
+            setEasBuildStatus('failed')
+            clearInterval(pollBuild)
+          }
+        } catch (error) {
+          console.error('Build status check failed:', error)
+          setEasBuildStatus('failed')
+          clearInterval(pollBuild)
+        }
+      }, 10000) // Check every 10 seconds
+      
+    } catch (error) {
+      console.error('EAS Build failed:', error)
+      setEasBuildStatus('failed')
+      alert('EAS Build failed. Please try again.')
+    }
+  }
+
   return (
     <div className="h-screen bg-black flex overflow-hidden">
       {/* Collapsible Sidebar */}
@@ -686,20 +839,115 @@ Generated on: ${new Date().toLocaleString()}
           {/* Action Buttons */}
           {Object.keys(buildInfo.files).length > 0 && (
             <div className="space-y-3 mt-6">
-              {/* React Native Features Panel */}
-              {reactNativeFeatures.length > 0 && (
+              {/* React Native V0 Features Panel */}
+              {(reactNativeFeatures.length > 0 || nativeModules.length > 0) && (
                 <div className="bg-white/5 backdrop-blur-sm rounded-xl p-4 mb-4">
                   <h3 className="text-white font-medium mb-3 flex items-center space-x-2">
                     <Smartphone className="w-4 h-4 text-green-400" />
-                    <span>📱 React Native Features</span>
+                    <span>📱 React Native V0 Features</span>
                   </h3>
-                  <div className="grid grid-cols-1 gap-2">
-                    {reactNativeFeatures.map((feature, index) => (
-                      <div key={index} className="text-sm text-white/70 bg-white/5 rounded px-3 py-1">
-                        {feature}
+                  
+                  {/* Native Modules */}
+                  {nativeModules.length > 0 && (
+                    <div className="mb-3">
+                      <h4 className="text-white/70 text-sm mb-2">🔧 Native Modules:</h4>
+                      <div className="grid grid-cols-1 gap-1">
+                        {nativeModules.map((module, index) => (
+                          <div key={index} className="text-sm text-white/70 bg-white/5 rounded px-3 py-1 flex items-center space-x-2">
+                            <span>{module.icon}</span>
+                            <span>{module.name}</span>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  )}
+                  
+                  {/* Permissions */}
+                  {appPermissions.length > 0 && (
+                    <div className="mb-3">
+                      <h4 className="text-white/70 text-sm mb-2">🔐 Permissions:</h4>
+                      <div className="flex flex-wrap gap-1">
+                        {appPermissions.map((permission, index) => (
+                          <span key={index} className="text-xs text-white/60 bg-white/10 rounded px-2 py-1">
+                            {permission}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Auto-detected Features */}
+                  {reactNativeFeatures.length > 0 && (
+                    <div>
+                      <h4 className="text-white/70 text-sm mb-2">✨ Auto-detected:</h4>
+                      <div className="grid grid-cols-1 gap-1">
+                        {reactNativeFeatures.map((feature, index) => (
+                          <div key={index} className="text-sm text-white/70 bg-white/5 rounded px-3 py-1">
+                            {feature}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* React Native V0 Action Buttons */}
+              {Object.keys(buildInfo.files).length > 0 && (
+                <div className="space-y-2 mb-4">
+                  <h3 className="text-white font-medium flex items-center space-x-2">
+                    <Play className="w-4 h-4 text-blue-400" />
+                    <span>🚀 Preview & Build</span>
+                  </h3>
+                  
+                  {/* Expo Web Preview */}
+                  <button
+                    onClick={handleExpoPreview}
+                    disabled={isPreviewMode}
+                    className="w-full bg-gradient-to-r from-blue-500 to-cyan-600 hover:from-blue-600 hover:to-cyan-700 disabled:from-gray-500 disabled:to-gray-600 disabled:cursor-not-allowed text-white py-2 px-4 rounded-xl flex items-center justify-center space-x-2 transition-all"
+                  >
+                    {isPreviewMode ? <Loader className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
+                    <span>{isPreviewMode ? 'Generating Preview...' : '📱 Expo Web Preview'}</span>
+                  </button>
+
+                  {/* Snack Upload */}
+                  <button
+                    onClick={handleSnackUpload}
+                    disabled={buildInfo.status === 'generating'}
+                    className="w-full bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 disabled:from-gray-500 disabled:to-gray-600 disabled:cursor-not-allowed text-white py-2 px-4 rounded-xl flex items-center justify-center space-x-2 transition-all"
+                  >
+                    <Smartphone className="w-4 h-4" />
+                    <span>📦 Upload to Snack</span>
+                  </button>
+
+                  {/* EAS Build */}
+                  <button
+                    onClick={() => handleEASBuild('android')}
+                    disabled={easBuildStatus === 'building'}
+                    className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 disabled:from-gray-500 disabled:to-gray-600 disabled:cursor-not-allowed text-white py-2 px-4 rounded-xl flex items-center justify-center space-x-2 transition-all"
+                  >
+                    {easBuildStatus === 'building' ? <Loader className="w-4 h-4 animate-spin" /> : <Hammer className="w-4 h-4" />}
+                    <span>
+                      {easBuildStatus === 'building' ? 'Building APK...' : 
+                       easBuildStatus === 'success' ? '✅ APK Ready!' :
+                       easBuildStatus === 'failed' ? '❌ Build Failed' : '🔨 Build Android APK'}
+                    </span>
+                  </button>
+
+                  {/* Snack URL Display */}
+                  {snackUrl && (
+                    <div className="bg-white/5 rounded-lg p-3">
+                      <p className="text-white/70 text-sm mb-2">📦 Snack URL:</p>
+                      <a 
+                        href={snackUrl} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-blue-400 hover:text-blue-300 text-sm break-all"
+                      >
+                        {snackUrl}
+                      </a>
+                    </div>
+                  )}
                 </div>
               )}
 
