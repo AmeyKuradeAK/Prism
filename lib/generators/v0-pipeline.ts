@@ -103,47 +103,74 @@ export function analyzePrompt(prompt: string): AppAnalysis {
 export async function runV0Pipeline(prompt: string): Promise<{ [key: string]: string }> {
   console.log('🚀 Starting V0.dev-style pipeline...')
   
-  // STEP 1: Prompt Analysis (like v0.dev)
-  console.log('📊 Step 1: Analyzing prompt...')
-  const analysis = analyzePrompt(prompt)
-  console.log(`✅ Detected: ${analysis.type} app (${analysis.complexity}) with ${analysis.features.length} features`)
-  
-  // STEP 2: Plan Formation (like v0.dev)
-  console.log('🎯 Step 2: Creating generation plan...')
-  const plan = createGenerationPlan(analysis, prompt)
-  console.log(`✅ Plan: ${plan.steps.length} steps, ${plan.steps.reduce((sum, step) => sum + step.files.length, 0)} files`)
-  
-  // STEP 3: Base Template (like v0.dev Next.js base)
-  console.log('📱 Step 3: Instantiating base template...')
-  const baseFiles = generateExpoBaseTemplate(plan.appName)
-  console.log(`✅ Base template: ${Object.keys(baseFiles).length} files`)
-  
-  // STEP 4: LLM Generation (like v0.dev)
-  console.log('🧠 Step 4: LLM generating components...')
-  let enhancedFiles = baseFiles
-  
-  if (process.env.MISTRAL_API_KEY) {
+  try {
+    // STEP 1: Prompt Analysis (like v0.dev)
+    console.log('📊 Step 1: Analyzing prompt...')
+    const analysis = analyzePrompt(prompt)
+    console.log(`✅ Detected: ${analysis.type} app (${analysis.complexity}) with ${analysis.features.length} features`)
+    
+    // STEP 2: Plan Formation (like v0.dev)
+    console.log('🎯 Step 2: Creating generation plan...')
+    const plan = createGenerationPlan(analysis, prompt)
+    console.log(`✅ Plan: ${plan.steps.length} steps, ${plan.steps.reduce((sum, step) => sum + step.files.length, 0)} files`)
+    
+    // STEP 3: Base Template (like v0.dev Next.js base)
+    console.log('📱 Step 3: Instantiating base template...')
+    const { generateExpoBaseTemplate } = await import('./templates/expo-base-template')
+    const baseFiles = generateExpoBaseTemplate(plan.appName)
+    console.log(`✅ Base template: ${Object.keys(baseFiles).length} files`)
+    
+    // STEP 4: LLM Generation (like v0.dev) - Enhanced error handling
+    console.log('🧠 Step 4: LLM generating components...')
+    let enhancedFiles = baseFiles
+    
+    if (process.env.MISTRAL_API_KEY && process.env.MISTRAL_API_KEY.length > 10) {
+      try {
+        console.log('🔑 Mistral API key found, attempting LLM generation...')
+        enhancedFiles = await generateWithLLM(plan, baseFiles)
+        console.log(`✅ LLM generation successful: ${Object.keys(enhancedFiles).length} total files`)
+      } catch (error) {
+        console.log('⚠️ LLM failed, using base template (v0.dev fallback)')
+        console.error('LLM Error details:', {
+          message: error instanceof Error ? error.message : 'Unknown error',
+          stack: error instanceof Error ? error.stack : undefined
+        })
+        // Continue with base template
+        enhancedFiles = baseFiles
+      }
+    } else {
+      console.log('📦 No Mistral API key - using base template only')
+      enhancedFiles = baseFiles
+    }
+    
+    // STEP 5: AST Validation (like v0.dev)
+    console.log('🛠️ Step 5: AST validation and auto-fix...')
+    const validatedFiles = validateAndFix(enhancedFiles, analysis)
+    console.log(`✅ Validation complete: ${Object.keys(validatedFiles).length} files`)
+    
+    // STEP 6: Build Check (like v0.dev)
+    console.log('🔨 Step 6: Build validation...')
+    const buildReadyFiles = ensureBuildReady(validatedFiles, analysis)
+    console.log(`✅ Build ready: ${Object.keys(buildReadyFiles).length} files`)
+    
+    console.log('🎉 V0.dev pipeline complete!')
+    return buildReadyFiles
+    
+  } catch (error) {
+    console.error('❌ V0.dev pipeline failed:', error)
+    
+    // Emergency fallback - return base template
+    console.log('🚨 Emergency fallback: returning base template...')
     try {
-      enhancedFiles = await generateWithLLM(plan, baseFiles)
-      console.log(`✅ LLM generation: ${Object.keys(enhancedFiles).length} total files`)
-    } catch (error) {
-      console.log('⚠️ LLM failed, using base template (v0.dev fallback)')
-      console.error('LLM Error:', error)
+      const { generateExpoBaseTemplate } = await import('./templates/expo-base-template')
+      const fallbackFiles = generateExpoBaseTemplate('FallbackApp')
+      console.log(`🆘 Fallback successful: ${Object.keys(fallbackFiles).length} files`)
+      return fallbackFiles
+    } catch (fallbackError) {
+      console.error('❌ Even fallback failed:', fallbackError)
+      throw new Error(`V0.dev pipeline failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
-  
-  // STEP 5: AST Validation (like v0.dev)
-  console.log('🛠️ Step 5: AST validation and auto-fix...')
-  const validatedFiles = validateAndFix(enhancedFiles, analysis)
-  console.log(`✅ Validation complete: ${Object.keys(validatedFiles).length} files`)
-  
-  // STEP 6: Build Check (like v0.dev)
-  console.log('🔨 Step 6: Build validation...')
-  const buildReadyFiles = ensureBuildReady(validatedFiles, analysis)
-  console.log(`✅ Build ready: ${Object.keys(buildReadyFiles).length} files`)
-  
-  console.log('🎉 V0.dev pipeline complete!')
-  return buildReadyFiles
 }
 
 // 🎯 V0.dev-style Plan Formation
@@ -232,39 +259,65 @@ Make it production-ready with proper navigation, state management, and clean UI.
 
 // 🧠 LLM Generation with V0.dev prompts
 async function generateWithLLM(plan: GenerationPlan, baseFiles: { [key: string]: string }): Promise<{ [key: string]: string }> {
-  const { Mistral } = await import('@mistralai/mistralai')
-  const mistral = new Mistral({ apiKey: process.env.MISTRAL_API_KEY! })
+  try {
+    console.log('🔌 Importing Mistral AI...')
+    const { Mistral } = await import('@mistralai/mistralai')
+    
+    console.log('🤖 Creating Mistral client...')
+    const mistral = new Mistral({ apiKey: process.env.MISTRAL_API_KEY! })
 
-  const response = await mistral.chat.complete({
-    model: 'mistral-small-latest',
-    messages: [
-      { role: 'system', content: plan.prompts.system },
-      { role: 'user', content: plan.prompts.user }
-    ],
-    temperature: 0.2,
-    maxTokens: 4000
-  })
+    console.log('📤 Sending request to Mistral API...')
+    const response = await mistral.chat.complete({
+      model: 'mistral-small-latest',
+      messages: [
+        { role: 'system', content: plan.prompts.system },
+        { role: 'user', content: plan.prompts.user }
+      ],
+      temperature: 0.2,
+      maxTokens: 4000
+    })
 
-  const responseContent = response.choices[0]?.message?.content || ''
-  const contentString = typeof responseContent === 'string' 
-    ? responseContent 
-    : Array.isArray(responseContent) 
-      ? responseContent.map(chunk => 
-          chunk.type === 'text' ? chunk.text : ''
-        ).join('')
-      : String(responseContent)
+    console.log('📥 Received response from Mistral API')
+    const responseContent = response.choices[0]?.message?.content || ''
+    
+    if (!responseContent) {
+      throw new Error('Empty response from Mistral API')
+    }
+    
+    const contentString = typeof responseContent === 'string' 
+      ? responseContent 
+      : Array.isArray(responseContent) 
+        ? responseContent.map(chunk => 
+            chunk.type === 'text' ? chunk.text : ''
+          ).join('')
+        : String(responseContent)
 
-  // Parse LLM response
-  const { parseCodeFromResponse } = await import('@/lib/utils/code-parser')
-  const generatedFiles = parseCodeFromResponse(contentString)
-  
-  // Merge with base files
-  const allFiles = { ...baseFiles }
-  for (const file of generatedFiles) {
-    allFiles[file.path] = file.content
+    console.log(`🔍 Parsing LLM response (${contentString.length} chars)...`)
+    
+    // Parse LLM response
+    const { parseCodeFromResponse } = await import('@/lib/utils/code-parser')
+    const generatedFiles = parseCodeFromResponse(contentString)
+    
+    console.log(`📁 Parsed ${generatedFiles.length} files from LLM response`)
+    
+    // Merge with base files
+    const allFiles = { ...baseFiles }
+    for (const file of generatedFiles) {
+      if (file.path && file.content) {
+        allFiles[file.path] = file.content
+        console.log(`✅ Added ${file.path} (${file.content.length} chars)`)
+      }
+    }
+    
+    return allFiles
+    
+  } catch (error) {
+    console.error('❌ LLM generation failed:', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined
+    })
+    throw error
   }
-  
-  return allFiles
 }
 
 // 🛠️ AST Validation & Auto-fix (like v0.dev)
