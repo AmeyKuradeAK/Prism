@@ -424,7 +424,7 @@ async function callMistralWithRateLimit(
   const maxAttempts = 3
   
   if (attempt > 1) {
-    const waitTime = Math.max(2000, attempt * 1000)
+    const waitTime = Math.max(1000, attempt * 1000) // Shorter waits for Netlify
     onProgress?.({ type: 'log', message: `⏳ Respecting rate limit: waiting ${waitTime/1000}s before attempt ${attempt}` })
     await new Promise(resolve => setTimeout(resolve, waitTime))
   }
@@ -446,33 +446,46 @@ Create a complete React Native app with Expo Router, TypeScript, and NativeWind.
     onProgress?.({ type: 'log', message: `🤖 Calling Mistral AI (attempt ${attempt})` })
     onProgress?.({ type: 'log', message: `📊 Prompt length: ${reactNativePrompt.length} chars` })
     
-    // Add connection timeout and more aggressive timeout
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => {
-      controller.abort()
-      onProgress?.({ type: 'log', message: `⏰ Aborting API call after 30 seconds` })
-    }, 30000) // Reduced from 60s to 30s
+    // Validate API key first
+    if (!process.env.MISTRAL_API_KEY || process.env.MISTRAL_API_KEY.length < 10) {
+      throw new Error('Invalid or missing MISTRAL_API_KEY in Netlify environment')
+    }
     
+    onProgress?.({ type: 'log', message: `🔑 API Key validated (${process.env.MISTRAL_API_KEY.length} chars)` })
+    onProgress?.({ type: 'log', message: `🌐 Environment: ${process.env.NODE_ENV || 'unknown'}` })
     onProgress?.({ type: 'log', message: `🔄 Making API request to Mistral...` })
     
-    const response = await mistral.chat.complete({
-      model: 'mistral-small-latest',
-      messages: [
-        {
-          role: 'system',
-          content: createReactNativeSystemPrompt(analysis)
-        },
-        { 
-          role: 'user', 
-          content: reactNativePrompt
-        }
-      ],
-      temperature: 0.1,
-      maxTokens: 8000 // Reduced from 15000 to prevent hanging
-    })
+    // Add network diagnostics
+    const startTime = Date.now()
+    
+    // Netlify-optimized timeout (shorter for serverless)
+    const netlifyTimeout = process.env.NODE_ENV === 'production' ? 20000 : 30000
+    
+    const response = await Promise.race([
+      mistral.chat.complete({
+        model: 'mistral-small-latest',
+        messages: [
+          {
+            role: 'system',
+            content: createReactNativeSystemPrompt(analysis)
+          },
+          { 
+            role: 'user', 
+            content: reactNativePrompt
+          }
+        ],
+        temperature: 0.1,
+        maxTokens: 6000 // Reduced for Netlify performance
+      }),
+      new Promise((_, reject) => {
+        setTimeout(() => {
+          reject(new Error(`API request timeout after ${netlifyTimeout/1000} seconds (Netlify optimized)`))
+        }, netlifyTimeout)
+      })
+    ]) as any
 
-    clearTimeout(timeoutId)
-    onProgress?.({ type: 'log', message: `📨 API response received` })
+    const networkTime = Date.now() - startTime
+    onProgress?.({ type: 'log', message: `📨 API response received in ${networkTime}ms` })
 
     const rawContent = response.choices?.[0]?.message?.content
     const content = typeof rawContent === 'string' ? rawContent : ''
@@ -489,13 +502,33 @@ Create a complete React Native app with Expo Router, TypeScript, and NativeWind.
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     onProgress?.({ type: 'log', message: `❌ API call failed (attempt ${attempt}): ${errorMessage}` })
     
-    // Log more details about the error
+    // Enhanced error diagnostics for Netlify
     if (error instanceof Error) {
-      onProgress?.({ type: 'log', message: `🔍 Error details: ${error.stack?.substring(0, 200) || 'No stack trace'}` })
+      // Check for specific network error types
+      if (errorMessage.includes('network error') || errorMessage.includes('fetch')) {
+        onProgress?.({ type: 'log', message: `🌐 Netlify network connectivity issue detected` })
+        onProgress?.({ type: 'log', message: `🔍 Check Netlify function logs and Mistral API status` })
+      } else if (errorMessage.includes('timeout')) {
+        onProgress?.({ type: 'log', message: `⏰ Netlify function timeout - API may be overloaded` })
+        onProgress?.({ type: 'log', message: `💡 Consider upgrading Netlify plan for longer timeouts` })
+      } else if (errorMessage.includes('401') || errorMessage.includes('unauthorized')) {
+        onProgress?.({ type: 'log', message: `🔑 API key authentication failed in Netlify environment` })
+        onProgress?.({ type: 'log', message: `💡 Check Netlify environment variables` })
+      } else if (errorMessage.includes('429') || errorMessage.includes('rate limit')) {
+        onProgress?.({ type: 'log', message: `🚦 Rate limit exceeded - waiting before retry` })
+      } else if (errorMessage.includes('ENOTFOUND') || errorMessage.includes('DNS')) {
+        onProgress?.({ type: 'log', message: `🌐 DNS resolution failed in Netlify environment` })
+      }
+      
+      onProgress?.({ type: 'log', message: `🔍 Error type: ${error.name}` })
+      onProgress?.({ type: 'log', message: `🔍 Netlify context: ${process.env.CONTEXT || 'unknown'}` })
+      onProgress?.({ type: 'log', message: `🔍 Full error: ${error.stack?.substring(0, 300) || 'No stack trace'}` })
     }
     
     if (attempt < maxAttempts) {
-      onProgress?.({ type: 'log', message: `🔄 Retrying in ${attempt + 1} seconds...` })
+      const waitTime = attempt * 1500 // Shorter wait for Netlify
+      onProgress?.({ type: 'log', message: `🔄 Retrying in ${waitTime/1000} seconds...` })
+      await new Promise(resolve => setTimeout(resolve, waitTime))
       return callMistralWithRateLimit(prompt, analysis, onProgress, attempt + 1)
     }
     
