@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import JSZip from 'jszip'
 import { 
   Play, 
   FileText, 
@@ -149,6 +150,48 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
     }
   }, [logs])
 
+  // V0 response parser
+  const parseV0Response = (response: string): { [key: string]: string } => {
+    const files: { [key: string]: string } = {}
+    
+    try {
+      // First, try to extract JSON from the response
+      let jsonStart = response.indexOf('{')
+      let jsonEnd = response.lastIndexOf('}') + 1
+      
+      if (jsonStart === -1 || jsonEnd === 0) {
+        throw new Error('No JSON structure found in response')
+      }
+      
+      const jsonString = response.slice(jsonStart, jsonEnd)
+      const parsed = JSON.parse(jsonString)
+      
+      if (parsed.files && typeof parsed.files === 'object') {
+        // V0.dev style: files object
+        Object.entries(parsed.files).forEach(([path, content]) => {
+          if (typeof content === 'string' && content.length > 10) {
+            files[path] = content
+          }
+        })
+      }
+    } catch (jsonError) {
+      // Fallback: Try code block parsing
+      const codeBlockPattern = /```(?:\w+)?\s*(?:\/\/\s*)?([^\n]+)\n([\s\S]*?)```/g
+      let codeMatch
+      
+      while ((codeMatch = codeBlockPattern.exec(response)) !== null) {
+        const fileName = codeMatch[1]?.trim()
+        const content = codeMatch[2]?.trim()
+        
+        if (fileName && content) {
+          files[fileName] = content
+        }
+      }
+    }
+    
+    return files
+  }
+
   const generateApp = async () => {
     if (!prompt.trim()) return
     
@@ -159,70 +202,122 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
     setActiveFile(null)
     
     try {
-      const response = await fetch('/api/generate', {
+      // Step 1: Get generation plan (fast, server-side)
+      setLogs(prev => [...prev, '🧠 Getting generation plan from server...'])
+      
+      const planResponse = await fetch('/api/generate-plan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt })
       })
 
-      if (!response.ok) throw new Error('Generation failed')
+      if (!planResponse.ok) {
+        const error = await planResponse.json()
+        throw new Error(error.details || 'Failed to get generation plan')
+      }
 
-      const reader = response.body?.getReader()
-      if (!reader) throw new Error('Failed to get reader')
+      const planData = await planResponse.json()
+      const plan = planData.plan
+      
+      setLogs(prev => [...prev, `✅ Plan ready: ${plan.chunks.length} chunks, estimated ${plan.metadata.estimatedTime}`])
+      setLogs(prev => [...prev, '🚀 Starting client-side AI generation (no timeouts!)'])
 
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
+      // Step 2: Execute plan client-side (no timeouts!)
+      const allFiles: { [key: string]: string } = {}
+      
+      // Add pre-generated package.json
+      allFiles['package.json'] = JSON.stringify(plan.smartPackageJson, null, 2)
+      setLogs(prev => [...prev, '✅ Added smart package.json with auto-detected dependencies'])
 
-        const text = new TextDecoder().decode(value)
-        const lines = text.split('\n').filter(line => line.trim())
+      for (let i = 0; i < plan.chunks.length; i++) {
+        const chunk = plan.chunks[i]
+        
+        setLogs(prev => [...prev, `📦 Chunk ${i + 1}/${plan.chunks.length}: ${chunk.name}`])
+        setLogs(prev => [...prev, `🎯 Client-side AI call (no Netlify timeout!)...`])
 
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const data: GenerationProgress = JSON.parse(line.slice(6))
-              
-              if (data.type === 'log') {
-                setLogs(prev => [...prev, data.message || ''])
-              } else if (data.type === 'file_start' && data.file) {
-                setProgressFiles(prev => ({
-                  ...prev,
-                  [data.file!.path]: { ...data.file!, isComplete: false }
-                }))
-                setActiveFile(data.file.path)
-              } else if (data.type === 'file_progress' && data.file) {
-                setProgressFiles(prev => ({
-                  ...prev,
-                  [data.file!.path]: { ...data.file!, isComplete: false }
-                }))
-              } else if (data.type === 'file_complete' && data.file) {
-                setProgressFiles(prev => ({
-                  ...prev,
-                  [data.file!.path]: { ...data.file!, isComplete: true }
-                }))
-                setFiles(prev => ({
-                  ...prev,
-                  [data.file!.path]: data.file!.content
-                }))
-              } else if (data.type === 'files' && data.files) {
-                const finalFiles: { [key: string]: string } = {}
-                data.files.forEach(file => {
-                  finalFiles[file.path] = file.content
-                })
-                setFiles(finalFiles)
-              } else if (data.type === 'complete') {
-                setLogs(prev => [...prev, '🎉 Generation complete!'])
-                setIsGenerating(false)
-              } else if (data.type === 'error') {
-                setLogs(prev => [...prev, `❌ Error: ${data.message}`])
-                setIsGenerating(false)
-              }
-            } catch (e) {
-              console.error('Failed to parse SSE data:', e)
-            }
+        try {
+          // Use secure proxy for AI calls (no timeout limits in browser!)
+          const response = await fetch('/api/ai-proxy', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              messages: [
+                {
+                  role: 'system',
+                  content: plan.systemPrompt
+                },
+                {
+                  role: 'user',
+                  content: chunk.prompt
+                }
+              ],
+              maxTokens: chunk.maxTokens,
+              temperature: 0.1
+            })
+          })
+
+          if (!response.ok) {
+            const error = await response.json()
+            throw new Error(error.details || 'AI proxy error')
           }
+
+          const data = await response.json()
+          const content = data.content
+
+          if (!content || typeof content !== 'string' || content.length < 10) {
+            throw new Error(`Invalid AI response: ${content?.length || 0} characters`)
+          }
+
+          // Parse the chunk response
+          const chunkFiles = parseV0Response(content)
+          
+          // Merge files
+          Object.entries(chunkFiles).forEach(([path, fileContent]) => {
+            if (fileContent && fileContent.length > 10) {
+              allFiles[path] = fileContent
+              setLogs(prev => [...prev, `✅ Generated ${path} (${fileContent.length} chars)`])
+              
+              // Update progress files for UI
+              setProgressFiles(prev => ({
+                ...prev,
+                [path]: {
+                  path,
+                  content: fileContent,
+                  isComplete: true
+                }
+              }))
+              
+              // Set as active file
+              setActiveFile(path)
+            }
+          })
+          
+          setLogs(prev => [...prev, `✅ Chunk ${i + 1} complete: ${Object.keys(chunkFiles).length} files`])
+          
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+          setLogs(prev => [...prev, `❌ Chunk ${i + 1} failed: ${errorMessage}`])
+          setLogs(prev => [...prev, `🔄 Continuing with remaining chunks...`])
+        }
+        
+        // Rate limiting: Respect Mistral's 1 RPS limit
+        if (i < plan.chunks.length - 1) {
+          const waitTime = plan.metadata.rateLimitGap + Math.random() * 500
+          setLogs(prev => [...prev, `⏳ Rate limiting: waiting ${Math.round(waitTime/100)/10}s...`])
+          await new Promise(resolve => setTimeout(resolve, waitTime))
         }
       }
+      
+      setLogs(prev => [...prev, `🎉 Client-side generation complete! ${Object.keys(allFiles).length} files total`])
+      setLogs(prev => [...prev, '💾 Files stored in in-memory VFS (V0.dev style)'])
+      setLogs(prev => [...prev, '📦 Ready for ZIP download - no disk writes needed!'])
+      
+      // Set final files
+      setFiles(allFiles)
+      setIsGenerating(false)
+      
     } catch (error) {
       setLogs(prev => [...prev, `❌ Failed to generate: ${error}`])
       setIsGenerating(false)
@@ -326,8 +421,86 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
     return words.length > 30 ? words.substring(0, 30) + '...' : words
   }
 
-  const downloadProject = () => {
-    // Implementation for downloading project as ZIP
+  const downloadProject = async () => {
+    if (Object.keys(files).length === 0) {
+      setLogs(prev => [...prev, '❌ No files to download'])
+      return
+    }
+
+    try {
+      setLogs(prev => [...prev, '📦 Creating ZIP archive in memory...'])
+      
+      // Create JSZip instance (V0.dev style in-memory VFS)
+      const zip = new JSZip()
+      
+      // Add generated files to zip
+      Object.entries(files).forEach(([path, content]) => {
+        zip.file(path, content)
+        setLogs(prev => [...prev, `✅ Added ${path} to archive`])
+      })
+      
+      // Add README with generation info
+      const readmeContent = `# Generated React Native App
+
+🚀 **Generated by V0-Flutter Clone**
+📱 **Framework:** React Native with Expo
+⚡ **Generated on:** ${new Date().toISOString()}
+🧠 **Original Prompt:** ${prompt}
+
+## Quick Start
+
+1. Extract this ZIP file
+2. Run: \`npm install\`
+3. Run: \`npx expo start\`
+
+## Features
+
+- ✅ Expo SDK 53
+- ✅ React Native 0.76
+- ✅ TypeScript support
+- ✅ NativeWind styling
+- ✅ Expo Router navigation
+- ✅ Auto-detected native modules
+
+## Generated Files
+
+${Object.keys(files).map(path => `- ${path}`).join('\n')}
+
+---
+*Generated using AI-powered React Native app generation*
+`
+      
+      zip.file('README.md', readmeContent)
+      setLogs(prev => [...prev, '✅ Added README.md with generation info'])
+      
+      // Generate ZIP blob in memory (no disk writes!)
+      setLogs(prev => [...prev, '🔄 Generating ZIP archive...'])
+      const content = await zip.generateAsync({ 
+        type: 'blob',
+        compression: 'DEFLATE',
+        compressionOptions: { level: 6 }
+      })
+      
+      // Create download link and trigger download
+      const projectName = extractProjectName(prompt) || 'react-native-app'
+      const fileName = `${projectName.replace(/[^a-zA-Z0-9-]/g, '-')}-${Date.now()}.zip`
+      
+      const url = URL.createObjectURL(content)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = fileName
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      
+      setLogs(prev => [...prev, `🎉 Downloaded: ${fileName} (${Math.round(content.size / 1024)}KB)`])
+      setLogs(prev => [...prev, '✅ V0.dev-style in-memory VFS download complete!'])
+      
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      setLogs(prev => [...prev, `❌ Download failed: ${errorMessage}`])
+    }
   }
 
   const copyToClipboard = (text: string) => {
@@ -371,6 +544,11 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
                     <span>React Native 0.76</span>
                   </span>
                   <span>•</span>
+                  <span className="flex items-center space-x-1">
+                    <Cloud className="w-3 h-3 text-purple-400" />
+                    <span className="text-purple-400">In-Memory VFS</span>
+                  </span>
+                  <span>•</span>
                   <div className="flex items-center space-x-1">
                     {autoSaveStatus === 'saving' && <Loader2 className="w-3 h-3 animate-spin text-blue-400" />}
                     {autoSaveStatus === 'saved' && <CheckCircle className="w-3 h-3 text-green-400" />}
@@ -389,10 +567,15 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
             <button
               onClick={downloadProject}
               disabled={Object.keys(files).length === 0}
-              className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-gray-300 bg-gray-800 border border-gray-700 rounded-lg hover:bg-gray-700 disabled:opacity-50 transition-colors"
+              className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-green-600 to-emerald-600 rounded-lg hover:from-green-700 hover:to-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg"
             >
               <Download className="w-4 h-4" />
               <span>Download ZIP</span>
+              {Object.keys(files).length > 0 && (
+                <span className="text-xs bg-white/20 px-1.5 py-0.5 rounded-full">
+                  {Object.keys(files).length}
+                </span>
+              )}
             </button>
             
             <button className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">
@@ -520,9 +703,17 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
                 <Folder className="w-4 h-4 text-blue-400" />
                 <span>Project Files</span>
               </h3>
-              <span className="text-xs text-gray-500">
-                {Object.keys(files).length} files
-              </span>
+              <div className="flex items-center space-x-2">
+                <span className="text-xs text-gray-500">
+                  {Object.keys(files).length} files
+                </span>
+                {Object.keys(files).length > 0 && (
+                  <div className="flex items-center space-x-1">
+                    <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                    <span className="text-xs text-green-400">VFS</span>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
           <div className="p-2 overflow-auto">

@@ -160,17 +160,25 @@ export async function POST(request: NextRequest) {
         for (let i = 0; i < plan.chunks.length; i++) {
           const chunk = plan.chunks[i]
           
-          sendLog(`📦 Chunk ${i + 1}/${plan.chunks.length}: ${chunk.name}`)
+                    sendLog(`📦 Chunk ${i + 1}/${plan.chunks.length}: ${chunk.name}`)
           
+          let timeoutId: NodeJS.Timeout | undefined
           try {
-            // Use secure proxy for AI calls
-            const proxyResponse = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/ai-proxy`, {
+            // Direct Mistral API call with timeout (8s for Netlify safety)
+            const controller = new AbortController()
+            timeoutId = setTimeout(() => {
+              controller.abort()
+            }, 15000) // 15 seconds - might still hit Netlify limit but more time for Mistral
+            
+            const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${process.env.INTERNAL_API_TOKEN || 'internal'}`
+                'Authorization': `Bearer ${process.env.MISTRAL_API_KEY}`,
+                'User-Agent': 'V0-Flutter-Secure/1.0'
               },
               body: JSON.stringify({
+                model: 'mistral-small-latest',
                 messages: [
                   {
                     role: 'system',
@@ -181,17 +189,21 @@ export async function POST(request: NextRequest) {
                     content: chunk.prompt
                   }
                 ],
-                maxTokens: chunk.maxTokens,
-                temperature: 0.1
-              })
+                temperature: 0.1,
+                max_tokens: chunk.maxTokens
+              }),
+              signal: controller.signal
             })
             
-            if (!proxyResponse.ok) {
-              throw new Error(`Proxy error: ${proxyResponse.status}`)
+            clearTimeout(timeoutId)
+            
+            if (!response.ok) {
+              const errorText = await response.text()
+              throw new Error(`Mistral API error: ${response.status} - ${errorText}`)
             }
             
-            const proxyData = await proxyResponse.json()
-            const content = proxyData.content
+            const data = await response.json()
+            const content = data.choices?.[0]?.message?.content
             
             if (!content || typeof content !== 'string' || content.length < 10) {
               throw new Error(`Invalid AI response: ${content?.length || 0} characters`)
@@ -218,8 +230,21 @@ export async function POST(request: NextRequest) {
             
             sendLog(`✅ Chunk ${i + 1} complete: ${Object.keys(chunkFiles).length} files`)
             
-          } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+          } catch (error: any) {
+            if (timeoutId) clearTimeout(timeoutId)
+            
+            let errorMessage = 'Unknown error'
+            if (error?.name === 'AbortError') {
+              errorMessage = `Timeout after 8s (Netlify limit)`
+              sendLog(`⏰ Chunk ${i + 1} timed out - reducing token limit for next chunks`)
+              // Reduce token limit for remaining chunks if timeout occurs
+              for (let j = i + 1; j < plan.chunks.length; j++) {
+                plan.chunks[j].maxTokens = Math.max(800, plan.chunks[j].maxTokens * 0.7)
+              }
+            } else if (error instanceof Error) {
+              errorMessage = error.message
+            }
+            
             sendLog(`❌ Chunk ${i + 1} failed: ${errorMessage}`)
             sendLog(`🔄 Continuing with remaining chunks...`)
           }
