@@ -391,26 +391,43 @@ function generateSmartPackageJson(analysis: ComponentAnalysis): any {
 
 // 🎯 React Native V0: Simplified System Prompt (Shorter to Prevent Hanging)
 function createReactNativeSystemPrompt(analysis: ComponentAnalysis): string {
-  return `You are a React Native expert. Return ONLY valid JSON with this structure:
+  return `You are an expert React Native developer building a ${analysis.appType} app.
 
+RETURN ONLY VALID JSON:
 {
   "files": {
-    "app.json": "expo config",
-    "app/_layout.tsx": "root layout",
-    "app/index.tsx": "main screen",
-    "components/Component.tsx": "components"
+    "filename.tsx": "complete working code here"
   }
 }
 
-Requirements:
-- App: ${analysis.appType}
-- Screens: ${analysis.primaryScreens.slice(0, 3).join(', ')}
-- Features: ${analysis.features.slice(0, 3).join(', ')}
-- Native: ${analysis.detectedModules.map(m => m.package).slice(0, 2).join(', ')}
+PROFESSIONAL REACT NATIVE STRUCTURE - Generate files in these folders:
+- screens/ (all screen components: HomeScreen.tsx, TasksScreen.tsx, etc.)
+- components/ (reusable UI components: Button.tsx, TaskItem.tsx, etc.)
+- navigation/ (navigation setup: AppNavigator.tsx)
+- utils/ (helper functions: api.ts, storage.ts, etc.)
+- App.tsx (main entry point)
+- app.json (Expo configuration)
+- package.json (dependencies)
+- babel.config.js (babel configuration)
 
-Use Expo Router, TypeScript, NativeWind, and React Native best practices.
-Return complete, functional files that work with 'npx expo start'.
-NO explanations - ONLY JSON.`
+REQUIREMENTS:
+- Use Expo SDK 53, React Native 0.76, TypeScript
+- Use NativeWind for styling (className props)
+- Use Expo Router for navigation
+- Generate REAL, WORKING functionality - NO placeholders
+- Include proper state management with useState/useEffect
+- Add actual user interactions (buttons, forms, lists)
+- Use proper TypeScript interfaces
+- Follow professional folder structure above
+- Generate complete, functional components in correct folders
+
+App Features: ${analysis.features.join(', ')}
+Screens: ${analysis.primaryScreens.join(', ')}
+Native Modules: ${analysis.detectedModules.map(m => m.package).join(', ')}
+
+CRITICAL: Generate production-ready code that actually works, not placeholder text.
+NO "TODO" comments. NO "Screen" placeholders. REAL functionality only.
+Place files in the correct professional folders as specified above.`
 }
 
 // 🎯 NEW: Client-Side Generation Plan (No AI calls on server)
@@ -451,53 +468,33 @@ export async function generateReactNativePlan(
   const smartPackageJson = generateSmartPackageJson(analysis)
   onProgress?.({ type: 'log', message: `📦 Auto-assembled ${Object.keys(smartPackageJson.dependencies).length} dependencies` })
   
-  // Step 3: Create Optimized Chunks for Client-Side Execution
+  // Step 3: Create Optimized Chunks for Client-Side Execution with Professional Structure
   const chunks = [
     {
-      name: "Config Files",
-      prompt: `React Native ${analysis.appType}. Return JSON:
-{"files": {"app.json": "expo config", "app/_layout.tsx": "root layout"}}`,
-      maxTokens: 1200,
+      name: "Config Files & App Entry",
+      prompt: `Generate professional React Native config files for ${analysis.appType}: App.tsx (main entry), app.json (Expo config), babel.config.js (babel config). Use professional folder structure. Include proper TypeScript, navigation setup, and NativeWind configuration. Return working files that enable 'npx expo start' to work immediately.`,
+      maxTokens: 2000,
       priority: 1
     },
     
     {
-      name: "Main Screen", 
-      prompt: `React Native ${analysis.appType} main screen. Return JSON:
-{"files": {"app/index.tsx": "home screen with navigation to ${analysis.primaryScreens.slice(0, 2).join(', ')}"}}`,
-      maxTokens: 1200,
+      name: "Main Screen & Navigation", 
+      prompt: `Generate professional main screen for ${analysis.appType} in screens/HomeScreen.tsx and navigation setup in navigation/AppNavigator.tsx. Include navigation to ${analysis.primaryScreens.slice(0, 2).join(' and ')}, state management, user interactions, and modern UI with NativeWind styling. NO placeholder text - build actual working features. Use professional folder structure.`,
+      maxTokens: 2000,
       priority: 2
     },
     
     {
-      name: "Task Component",
-      prompt: `React Native todo component. Return JSON:
-{"files": {"components/TaskItem.tsx": "task item with priority colors"}}`,
-      maxTokens: 1200,
+      name: "Reusable Components",
+      prompt: `Generate reusable UI components for ${analysis.appType} in components/ folder. Create functional components like Button.tsx, TaskItem.tsx, etc. with proper state, user interactions, TypeScript interfaces, and NativeWind styling. Include buttons, forms, and list items that actually work. Follow professional folder structure.`,
+      maxTokens: 2000,
       priority: 3
     },
     
     {
-      name: "Timer Component",
-      prompt: `React Native pomodoro timer. Return JSON:
-{"files": {"components/Timer.tsx": "countdown timer with start/stop"}}`,
-      maxTokens: 1200,
-      priority: 3
-    },
-    
-    {
-      name: "Task Screen",
-      prompt: `React Native task list screen. Return JSON:
-{"files": {"app/tasks.tsx": "task list with add/delete"}}`,
-      maxTokens: 1200,
-      priority: 4
-    },
-    
-    {
-      name: "Timer Screen",
-      prompt: `React Native timer screen. Return JSON:
-{"files": {"app/timer.tsx": "pomodoro timer screen"}}`,
-      maxTokens: 1200,
+      name: "Feature Screens & Utils",
+      prompt: `Generate feature screens for ${analysis.appType} in screens/ folder: ${analysis.primaryScreens.slice(0, 2).join('Screen.tsx and ')}Screen.tsx. Also create utils/ folder with helper functions. Include real functionality like adding/editing/deleting items, form handling, navigation, loading states, and error handling. Use useState and useEffect properly. Follow professional folder structure.`,
+      maxTokens: 2000,
       priority: 4
     }
   ]

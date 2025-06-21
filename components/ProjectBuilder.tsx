@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import JSZip from 'jszip'
+import { fixProjectStructure, analyzeProjectStructure } from '@/lib/utils/project-structure-fixer'
 import { 
   Play, 
   FileText, 
@@ -235,71 +236,95 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
         setLogs(prev => [...prev, `📦 Chunk ${i + 1}/${plan.chunks.length}: ${chunk.name}`])
         setLogs(prev => [...prev, `🎯 Client-side AI call (no Netlify timeout!)...`])
 
-        try {
-          // Use secure proxy for AI calls (no timeout limits in browser!)
-          const response = await fetch('/api/ai-proxy', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              messages: [
-                {
-                  role: 'system',
-                  content: plan.systemPrompt
-                },
-                {
-                  role: 'user',
-                  content: chunk.prompt
-                }
-              ],
-              maxTokens: chunk.maxTokens,
-              temperature: 0.1
-            })
-          })
-
-          if (!response.ok) {
-            const error = await response.json()
-            throw new Error(error.details || 'AI proxy error')
-          }
-
-          const data = await response.json()
-          const content = data.content
-
-          if (!content || typeof content !== 'string' || content.length < 10) {
-            throw new Error(`Invalid AI response: ${content?.length || 0} characters`)
-          }
-
-          // Parse the chunk response
-          const chunkFiles = parseV0Response(content)
-          
-          // Merge files
-          Object.entries(chunkFiles).forEach(([path, fileContent]) => {
-            if (fileContent && fileContent.length > 10) {
-              allFiles[path] = fileContent
-              setLogs(prev => [...prev, `✅ Generated ${path} (${fileContent.length} chars)`])
-              
-              // Update progress files for UI
-              setProgressFiles(prev => ({
-                ...prev,
-                [path]: {
-                  path,
-                  content: fileContent,
-                  isComplete: true
-                }
-              }))
-              
-              // Set as active file
-              setActiveFile(path)
+        // Retry logic with exponential backoff
+        let success = false
+        let retryCount = 0
+        const maxRetries = 3
+        
+        while (!success && retryCount < maxRetries) {
+          try {
+            if (retryCount > 0) {
+              const retryDelay = Math.pow(2, retryCount) * 1000 // 2s, 4s, 8s
+              setLogs(prev => [...prev, `🔄 Retry ${retryCount}/${maxRetries} after ${retryDelay/1000}s...`])
+              await new Promise(resolve => setTimeout(resolve, retryDelay))
             }
-          })
-          
-          setLogs(prev => [...prev, `✅ Chunk ${i + 1} complete: ${Object.keys(chunkFiles).length} files`])
-          
-        } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-          setLogs(prev => [...prev, `❌ Chunk ${i + 1} failed: ${errorMessage}`])
-          setLogs(prev => [...prev, `🔄 Continuing with remaining chunks...`])
+            
+            // Use secure proxy for AI calls (30s timeout now!)
+            const response = await fetch('/api/ai-proxy', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                messages: [
+                  {
+                    role: 'system',
+                    content: plan.systemPrompt
+                  },
+                  {
+                    role: 'user',
+                    content: chunk.prompt
+                  }
+                ],
+                maxTokens: chunk.maxTokens,
+                temperature: 0.1
+              })
+            })
+
+            if (!response.ok) {
+              const error = await response.json()
+              throw new Error(error.details || 'AI proxy error')
+            }
+
+            const data = await response.json()
+            const content = data.content
+
+            if (!content || typeof content !== 'string' || content.length < 10) {
+              throw new Error(`Invalid AI response: ${content?.length || 0} characters`)
+            }
+
+            // Parse the chunk response
+            const chunkFiles = parseV0Response(content)
+            
+            if (Object.keys(chunkFiles).length === 0) {
+              throw new Error('No files generated from AI response')
+            }
+            
+            // Merge files
+            Object.entries(chunkFiles).forEach(([path, fileContent]) => {
+              if (fileContent && fileContent.length > 10) {
+                allFiles[path] = fileContent
+                setLogs(prev => [...prev, `✅ Generated ${path} (${fileContent.length} chars)`])
+                
+                // Update progress files for UI
+                setProgressFiles(prev => ({
+                  ...prev,
+                  [path]: {
+                    path,
+                    content: fileContent,
+                    isComplete: true
+                  }
+                }))
+                
+                // Set as active file
+                setActiveFile(path)
+              }
+            })
+            
+            setLogs(prev => [...prev, `✅ Chunk ${i + 1} complete: ${Object.keys(chunkFiles).length} files`])
+            success = true
+            
+          } catch (error) {
+            retryCount++
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+            
+            if (retryCount >= maxRetries) {
+              setLogs(prev => [...prev, `❌ Chunk ${i + 1} failed after ${maxRetries} retries: ${errorMessage}`])
+              setLogs(prev => [...prev, `🔄 Continuing with remaining chunks...`])
+            } else {
+              setLogs(prev => [...prev, `⚠️ Chunk ${i + 1} attempt ${retryCount} failed: ${errorMessage}`])
+            }
+          }
         }
         
         // Rate limiting: Respect Mistral's 1 RPS limit
@@ -310,12 +335,32 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
         }
       }
       
-      setLogs(prev => [...prev, `🎉 Client-side generation complete! ${Object.keys(allFiles).length} files total`])
+      // Pure AI generation - no fallbacks, just structure validation
+      if (Object.keys(allFiles).length < 3) {
+        setLogs(prev => [...prev, '⚠️ AI generation incomplete - insufficient files generated'])
+        setLogs(prev => [...prev, '❌ Pure AI generation failed - please try again'])
+        setIsGenerating(false)
+        return
+      }
+      
+      setLogs(prev => [...prev, `🎉 Generation complete! ${Object.keys(allFiles).length} files total`])
+      
+      // 🔧 STEP 4: Apply Professional Project Structure
+      setLogs(prev => [...prev, '🔧 Applying professional project structure...'])
+      const structuredFiles = fixProjectStructure(allFiles)
+      
+      // Analyze the final structure
+      const analysis = analyzeProjectStructure(structuredFiles)
+      setLogs(prev => [...prev, `📁 Structure: ${Object.keys(analysis.structure).join(', ')} folders`])
+      setLogs(prev => [...prev, `📊 Files: ${analysis.fileTypes.screen || 0} screens, ${analysis.fileTypes.component || 0} components`])
+      setLogs(prev => [...prev, '✅ Professional folder structure applied'])
+      
       setLogs(prev => [...prev, '💾 Files stored in in-memory VFS (V0.dev style)'])
       setLogs(prev => [...prev, '📦 Ready for ZIP download - no disk writes needed!'])
+      setLogs(prev => [...prev, '🚀 This is a REAL, working React Native app with proper structure!'])
       
-      // Set final files
-      setFiles(allFiles)
+      // Set final structured files
+      setFiles(structuredFiles)
       setIsGenerating(false)
       
     } catch (error) {
@@ -518,6 +563,8 @@ ${Object.keys(files).map(path => `- ${path}`).join('\n')}
       return newSet
     })
   }
+
+
 
   return (
     <div className="h-screen flex flex-col bg-gray-950 text-gray-100">

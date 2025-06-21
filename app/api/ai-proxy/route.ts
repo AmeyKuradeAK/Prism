@@ -32,11 +32,11 @@ export async function POST(request: NextRequest) {
     console.log(`🔐 Secure AI Proxy: Making request for user ${userId}`)
     console.log(`📊 Request: ${maxTokens} tokens, ${messages.length} messages`)
 
-    // Create AbortController for timeout
+    // Create AbortController for timeout - longer for client-side calls
     const controller = new AbortController()
     const timeoutId = setTimeout(() => {
       controller.abort()
-    }, 8000) // 8 seconds to be safe on Netlify
+    }, 30000) // 30 seconds - client-side can handle longer timeouts
 
     try {
       // Make request to Mistral API with server-side API key
