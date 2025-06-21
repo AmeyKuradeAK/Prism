@@ -413,254 +413,193 @@ Return complete, functional files that work with 'npx expo start'.
 NO explanations - ONLY JSON.`
 }
 
-// Direct Mistral API Call (Bypassing SDK for Netlify)
-async function callMistralDirectAPI(
+// 🎯 NEW: Client-Side Generation Plan (No AI calls on server)
+export interface GenerationPlan {
+  analysis: ComponentAnalysis
+  smartPackageJson: any
+  chunks: Array<{
+    name: string
+    prompt: string
+    maxTokens: number
+    priority: number
+  }>
+  systemPrompt: string
+  metadata: {
+    totalChunks: number
+    estimatedTime: string
+    rateLimitGap: number
+  }
+}
+
+// 🚀 Server-Side: Generate Plan Only (No AI calls)
+export async function generateReactNativePlan(
   prompt: string,
-  analysis: ComponentAnalysis,
-  onProgress?: (progress: { type: string; message: string; file?: GeneratedFile }) => void,
-  attempt: number = 1,
-  maxTokens: number = 3000
-): Promise<string> {
+  userId: string,
+  onProgress?: (progress: { type: string; message: string }) => void
+): Promise<GenerationPlan> {
   
-  const maxAttempts = 3
+  onProgress?.({ type: 'log', message: '🧠 Analyzing prompt and creating generation plan...' })
   
-  if (attempt > 1) {
-    const waitTime = Math.max(1000, attempt * 1000)
-    onProgress?.({ type: 'log', message: `⏳ Waiting ${waitTime/1000}s before attempt ${attempt}` })
-    await new Promise(resolve => setTimeout(resolve, waitTime))
+  // Step 1: Enhanced Analysis with Native Module Detection
+  const analysis = await analyzePromptV0Style(prompt)
+  onProgress?.({ type: 'log', message: `🧠 Analysis: ${analysis.appType}` })
+  onProgress?.({ type: 'log', message: `📱 Screens: ${analysis.primaryScreens.join(', ')}` })
+  onProgress?.({ type: 'log', message: `🔧 Features: ${analysis.features.join(', ')}` })
+  onProgress?.({ type: 'log', message: `📲 Native Modules: ${analysis.detectedModules.map(m => m.name).join(', ')}` })
+  
+  // Step 2: Smart Package.json Generation
+  const smartPackageJson = generateSmartPackageJson(analysis)
+  onProgress?.({ type: 'log', message: `📦 Auto-assembled ${Object.keys(smartPackageJson.dependencies).length} dependencies` })
+  
+  // Step 3: Create Optimized Chunks for Client-Side Execution
+  const chunks = [
+    {
+      name: "Config Files",
+      prompt: `React Native ${analysis.appType}. Return JSON:
+{"files": {"app.json": "expo config", "app/_layout.tsx": "root layout"}}`,
+      maxTokens: 1200,
+      priority: 1
+    },
+    
+    {
+      name: "Main Screen", 
+      prompt: `React Native ${analysis.appType} main screen. Return JSON:
+{"files": {"app/index.tsx": "home screen with navigation to ${analysis.primaryScreens.slice(0, 2).join(', ')}"}}`,
+      maxTokens: 1200,
+      priority: 2
+    },
+    
+    {
+      name: "Task Component",
+      prompt: `React Native todo component. Return JSON:
+{"files": {"components/TaskItem.tsx": "task item with priority colors"}}`,
+      maxTokens: 1200,
+      priority: 3
+    },
+    
+    {
+      name: "Timer Component",
+      prompt: `React Native pomodoro timer. Return JSON:
+{"files": {"components/Timer.tsx": "countdown timer with start/stop"}}`,
+      maxTokens: 1200,
+      priority: 3
+    },
+    
+    {
+      name: "Task Screen",
+      prompt: `React Native task list screen. Return JSON:
+{"files": {"app/tasks.tsx": "task list with add/delete"}}`,
+      maxTokens: 1200,
+      priority: 4
+    },
+    
+    {
+      name: "Timer Screen",
+      prompt: `React Native timer screen. Return JSON:
+{"files": {"app/timer.tsx": "pomodoro timer screen"}}`,
+      maxTokens: 1200,
+      priority: 4
+    }
+  ]
+  
+  const systemPrompt = createReactNativeSystemPrompt(analysis)
+  
+  onProgress?.({ type: 'log', message: `✅ Generated plan with ${chunks.length} chunks` })
+  onProgress?.({ type: 'log', message: `🎯 Ready for client-side AI execution (no Netlify timeouts!)` })
+  
+  return {
+    analysis,
+    smartPackageJson,
+    chunks,
+    systemPrompt,
+    metadata: {
+      totalChunks: chunks.length,
+      estimatedTime: `${chunks.length * 3}s (2-3s per chunk + rate limiting)`,
+      rateLimitGap: 2000
+    }
+  }
+}
+
+// 🎯 Client-Side: Execute Generation Plan (Browser-side AI calls)
+export async function executeGenerationPlan(
+  plan: GenerationPlan,
+  apiKey: string,
+  onProgress?: (progress: { type: string; message: string; file?: GeneratedFile }) => void
+): Promise<V0StyleResponse> {
+  
+  if (!apiKey || apiKey.length < 10) {
+    throw new Error('Valid Mistral API key required for client-side generation')
   }
   
-  onProgress?.({ type: 'log', message: `🚀 Direct Mistral API Call - Attempt ${attempt}/${maxAttempts}` })
+  onProgress?.({ type: 'log', message: '🚀 Starting client-side AI generation (no timeouts!)' })
+  onProgress?.({ type: 'log', message: `📦 Executing ${plan.chunks.length} chunks with ${plan.metadata.rateLimitGap/1000}s gaps` })
   
-  // Simplified React Native Prompt
-  const reactNativePrompt = `Create a React Native Expo app: "${prompt}"
-
-📱 Requirements:
-- App: ${analysis.appType}
-- Screens: ${analysis.primaryScreens.slice(0, 4).join(', ')} ${analysis.primaryScreens.length > 4 ? '...' : ''}
-- Features: ${analysis.features.slice(0, 3).join(', ')} ${analysis.features.length > 3 ? '...' : ''}
-- Native Modules: ${analysis.detectedModules.map(m => m.name).slice(0, 3).join(', ')}
-
-Create a complete React Native app with Expo Router, TypeScript, and NativeWind.`
-
-  try {
-    onProgress?.({ type: 'log', message: `🤖 Direct API call to Mistral (attempt ${attempt})` })
-    onProgress?.({ type: 'log', message: `📊 Prompt length: ${reactNativePrompt.length} chars` })
+  const allFiles: { [key: string]: string } = {}
+  
+  // Add pre-generated package.json
+  allFiles['package.json'] = JSON.stringify(plan.smartPackageJson, null, 2)
+  onProgress?.({ type: 'log', message: '✅ Added smart package.json with auto-detected dependencies' })
+  
+  for (let i = 0; i < plan.chunks.length; i++) {
+    const chunk = plan.chunks[i]
     
-    // Validate API key
-    if (!process.env.MISTRAL_API_KEY || process.env.MISTRAL_API_KEY.length < 10) {
-      throw new Error('Invalid or missing MISTRAL_API_KEY')
-    }
-    
-    onProgress?.({ type: 'log', message: `🔑 API Key validated (${process.env.MISTRAL_API_KEY.length} chars)` })
-    onProgress?.({ type: 'log', message: `🌐 Environment: ${process.env.NODE_ENV || 'unknown'}` })
-    onProgress?.({ type: 'log', message: `🔄 Making direct fetch to Mistral API...` })
-    
-    const startTime = Date.now()
-    // Netlify Free: 10s max, use 9s to be safe
-    const timeout = process.env.NODE_ENV === 'production' ? 9000 : 15000
-    
-    onProgress?.({ type: 'log', message: `Prompt length: ${reactNativePrompt.length} chars` })
-    onProgress?.({ type: 'log', message: `Request started at: ${new Date().toISOString()}` })
-    
-    // Direct fetch call to Mistral API with AbortController
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => {
-      onProgress?.({ type: 'log', message: `⏰ Aborting request after ${timeout/1000}s timeout` })
-      controller.abort()
-    }, timeout)
-    
-    let response: Response
+    onProgress?.({ type: 'log', message: `📦 Chunk ${i + 1}/${plan.chunks.length}: ${chunk.name}` })
+    onProgress?.({ type: 'log', message: `🎯 Client-side AI call (no Netlify timeout!)...` })
     
     try {
-      response = await fetch('https://api.mistral.ai/v1/chat/completions', {
+      // Client-side direct Mistral API call
+      const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.MISTRAL_API_KEY}`,
-          'User-Agent': 'Netlify-Function/1.0'
+          'Authorization': `Bearer ${apiKey}`,
+          'User-Agent': 'ReactNative-V0-Client/1.0'
         },
         body: JSON.stringify({
           model: 'mistral-small-latest',
           messages: [
             {
               role: 'system',
-              content: createReactNativeSystemPrompt(analysis)
+              content: plan.systemPrompt
             },
             {
               role: 'user',
-              content: reactNativePrompt.length > 800 ? reactNativePrompt.substring(0, 800) + '...' : reactNativePrompt
+              content: chunk.prompt
             }
           ],
           temperature: 0.1,
-          max_tokens: maxTokens
-        }),
-        signal: controller.signal
+          max_tokens: chunk.maxTokens
+        })
       })
       
-      clearTimeout(timeoutId)
-      
-    } catch (err: any) {
-      clearTimeout(timeoutId)
-      
-      if (err.name === 'AbortError') {
-        throw new Error(`⏰ Mistral fetch timed out on Netlify after ${timeout/1000}s`)
+      if (!response.ok) {
+        const errorText = await response.text()
+        throw new Error(`Mistral API error: ${response.status} - ${errorText}`)
       }
       
-      throw new Error(`🌐 Network error: ${err.message}`)
-    }
-    
-    const networkTime = Date.now() - startTime
-    onProgress?.({ type: 'log', message: `📨 API response received in ${networkTime}ms` })
-    
-    if (!response.ok) {
-      const errorText = await response.text()
-      throw new Error(`Mistral API error: ${response.status} - ${errorText}`)
-    }
-    
-    const data = await response.json()
-    const content = data.choices?.[0]?.message?.content
-    
-    if (!content || typeof content !== 'string' || content.length < 50) {
-      throw new Error(`Invalid API response: ${content?.length || 0} characters`)
-    }
-    
-    onProgress?.({ type: 'log', message: `✅ AI response: ${content.length} characters` })
-    return content
-    
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-    onProgress?.({ type: 'log', message: `❌ Direct API call failed (attempt ${attempt}): ${errorMessage}` })
-    
-    // Enhanced error diagnostics for Netlify
-    if (error instanceof Error) {
-      if (errorMessage.includes('AbortError') || errorMessage.includes('timed out')) {
-        const timeoutSecs = process.env.NODE_ENV === 'production' ? 9 : 15
-        onProgress?.({ type: 'log', message: `⏰ Netlify timeout - request took longer than ${timeoutSecs}s` })
-        onProgress?.({ type: 'log', message: `💡 Try reducing prompt length or using shorter requests` })
-      } else if (errorMessage.includes('401')) {
-        onProgress?.({ type: 'log', message: `🔑 API key authentication failed` })
-      } else if (errorMessage.includes('429')) {
-        onProgress?.({ type: 'log', message: `🚦 Rate limit exceeded` })
-      } else if (errorMessage.includes('Network error')) {
-        onProgress?.({ type: 'log', message: `🌐 Network connectivity issue on Netlify` })
-      } else if (errorMessage.includes('fetch')) {
-        onProgress?.({ type: 'log', message: `🌐 Fetch failed - possible Netlify networking issue` })
+      const data = await response.json()
+      const content = data.choices?.[0]?.message?.content
+      
+      if (!content || typeof content !== 'string' || content.length < 10) {
+        throw new Error(`Invalid AI response: ${content?.length || 0} characters`)
       }
-      
-      onProgress?.({ type: 'log', message: `🔍 Error details: ${error.message}` })
-      onProgress?.({ type: 'log', message: `🔍 Attempt ${attempt}/${maxAttempts}` })
-    }
-    
-    if (attempt < maxAttempts) {
-      // Exponential backoff: 1s, 2s, 4s
-      const waitTime = Math.min(1000 * Math.pow(2, attempt - 1), 4000)
-      onProgress?.({ type: 'log', message: `🔄 Retrying in ${waitTime/1000}s (exponential backoff)...` })
-      await new Promise(resolve => setTimeout(resolve, waitTime))
-      return callMistralDirectAPI(prompt, analysis, onProgress, attempt + 1)
-    }
-    
-    throw new Error(`AI generation failed after ${maxAttempts} attempts: ${errorMessage}`)
-  }
-}
-
-// Chunked AI Generation - Multiple focused requests with rate limiting
-async function generateAppInChunks(
-  basePrompt: string,
-  analysis: ComponentAnalysis,
-  onProgress?: (progress: { type: string; message: string; file?: GeneratedFile }) => void
-): Promise<string> {
-  
-  const chunks = [
-    {
-      name: "Project Structure & Config",
-      prompt: `Generate ONLY the project configuration files for: "${basePrompt}"
-      
-Return JSON with these files ONLY:
-- app.json (Expo config)
-- package.json (dependencies)
-- app/_layout.tsx (root layout)
-
-App: ${analysis.appType}
-Native Modules: ${analysis.detectedModules.map(m => m.name).join(', ')}
-
-Return ONLY valid JSON: {"files": {"app.json": "...", "package.json": "...", "app/_layout.tsx": "..."}}`,
-      maxTokens: 2000
-    },
-    
-    {
-      name: "Main Screen & Navigation", 
-      prompt: `Generate the main screen for: "${basePrompt}"
-      
-Return JSON with this file ONLY:
-- app/index.tsx (main home screen with navigation)
-
-App: ${analysis.appType}
-Screens: ${analysis.primaryScreens.slice(0, 3).join(', ')}
-Features: ${analysis.features.slice(0, 3).join(', ')}
-
-Return ONLY valid JSON: {"files": {"app/index.tsx": "..."}}`,
-      maxTokens: 2000
-    },
-    
-    {
-      name: "Core Components",
-      prompt: `Generate core components for: "${basePrompt}"
-      
-Return JSON with these files ONLY:
-- components/TaskItem.tsx (if todo app)
-- components/Timer.tsx (if timer app)  
-- components/Button.tsx (reusable button)
-
-App: ${analysis.appType}
-Features: ${analysis.features.join(', ')}
-
-Return ONLY valid JSON: {"files": {"components/Component.tsx": "..."}}`,
-      maxTokens: 2000
-    },
-    
-    {
-      name: "Additional Screens",
-      prompt: `Generate additional screens for: "${basePrompt}"
-      
-Return JSON with screen files:
-- app/tasks.tsx (task list screen)
-- app/timer.tsx (timer screen)
-- app/settings.tsx (settings screen)
-
-App: ${analysis.appType}
-Screens: ${analysis.primaryScreens.join(', ')}
-
-Return ONLY valid JSON: {"files": {"app/screen.tsx": "..."}}`,
-      maxTokens: 2000
-    }
-  ]
-  
-  const allFiles: { [key: string]: string } = {}
-  
-  for (let i = 0; i < chunks.length; i++) {
-    const chunk = chunks[i]
-    
-    onProgress?.({ type: 'log', message: `📦 Chunk ${i + 1}/${chunks.length}: ${chunk.name}` })
-    onProgress?.({ type: 'log', message: `🎯 Generating focused content (${chunk.maxTokens} tokens max)...` })
-    
-    try {
-      const chunkResponse = await callMistralDirectAPI(
-        chunk.prompt, 
-        analysis, 
-        onProgress, 
-        1, 
-        chunk.maxTokens
-      )
       
       // Parse the chunk response
-      const chunkFiles = parseReactNativeV0Response(chunkResponse)
+      const chunkFiles = parseReactNativeV0Response(content)
       
       // Merge files
-      Object.entries(chunkFiles).forEach(([path, content]) => {
-        if (content && content.length > 10) {
-          allFiles[path] = content
-          onProgress?.({ type: 'log', message: `✅ Generated ${path} (${content.length} chars)` })
+      Object.entries(chunkFiles).forEach(([path, fileContent]) => {
+        if (fileContent && fileContent.length > 10) {
+          allFiles[path] = fileContent
+          onProgress?.({ 
+            type: 'file_complete',
+            message: `✅ Generated ${path} (${fileContent.length} chars)`,
+            file: {
+              path,
+              content: fileContent,
+              isComplete: true
+            }
+          })
         }
       })
       
@@ -672,28 +611,32 @@ Return ONLY valid JSON: {"files": {"app/screen.tsx": "..."}}`,
       onProgress?.({ type: 'log', message: `🔄 Continuing with remaining chunks...` })
     }
     
-    // Rate limiting: 2-3 second gap between requests (Mistral 1 RPS limit)
-    if (i < chunks.length - 1) {
-      const waitTime = 2500 + Math.random() * 500 // 2.5-3s random delay
-      onProgress?.({ type: 'log', message: `⏳ Rate limiting: waiting ${Math.round(waitTime/100)/10}s before next chunk...` })
+    // Rate limiting: Respect Mistral's 1 RPS limit
+    if (i < plan.chunks.length - 1) {
+      const waitTime = plan.metadata.rateLimitGap + Math.random() * 500
+      onProgress?.({ type: 'log', message: `⏳ Rate limiting: waiting ${Math.round(waitTime/100)/10}s...` })
       await new Promise(resolve => setTimeout(resolve, waitTime))
     }
   }
   
-  onProgress?.({ type: 'log', message: `🎉 All chunks complete! Generated ${Object.keys(allFiles).length} files total` })
+  onProgress?.({ type: 'log', message: `🎉 Client-side generation complete! ${Object.keys(allFiles).length} files total` })
   
-  // Return as JSON string format expected by the parser
-  return JSON.stringify({ files: allFiles })
-}
-
-// Legacy function for backward compatibility
-async function callMistralWithRateLimit(
-  prompt: string,
-  analysis: ComponentAnalysis,
-  onProgress?: (progress: { type: string; message: string; file?: GeneratedFile }) => void,
-  attempt: number = 1
-): Promise<string> {
-  return callMistralDirectAPI(prompt, analysis, onProgress, attempt)
+  // Create V0 response
+  const v0Response: V0StyleResponse = {
+    files: allFiles,
+    metadata: {
+      totalFiles: Object.keys(allFiles).length,
+      appType: plan.analysis.appType,
+      features: plan.analysis.features,
+      nativeFeatures: plan.analysis.nativeFeatures,
+      detectedModules: plan.analysis.detectedModules,
+      generatedAt: new Date().toISOString(),
+      dependencies: plan.smartPackageJson.dependencies,
+      permissions: plan.analysis.detectedModules.flatMap(m => m.permissions || [])
+    }
+  }
+  
+  return v0Response
 }
 
 // React Native V0.dev Style: Enhanced JSON Parser
@@ -724,20 +667,20 @@ function parseReactNativeV0Response(response: string): { [key: string]: string }
     }
   } catch (jsonError) {
     // Fallback: Try file pattern parsing
-    const filePattern = /===FILE:\s*([^\r\n]+)===\r?\n([\s\S]*?)(?====END===|===FILE:|$)/g
-    let match
+  const filePattern = /===FILE:\s*([^\r\n]+)===\r?\n([\s\S]*?)(?====END===|===FILE:|$)/g
+  let match
+  
+  while ((match = filePattern.exec(response)) !== null) {
+    const filePath = match[1].trim()
+    const content = match[2].trim()
     
-    while ((match = filePattern.exec(response)) !== null) {
-      const filePath = match[1].trim()
-      const content = match[2].trim()
-      
       if (filePath && content && content.length > 10) {
-        files[filePath] = content
-      }
+      files[filePath] = content
     }
-    
+  }
+  
     // If still no files, try code block parsing
-    if (Object.keys(files).length === 0) {
+  if (Object.keys(files).length === 0) {
       const codeBlockPattern = /```(?:\w+)?\s*(?:\/\/\s*)?([^\n]+)\n([\s\S]*?)```/g
       let codeMatch
       
@@ -754,10 +697,6 @@ function parseReactNativeV0Response(response: string): { [key: string]: string }
   
   return files
 }
-
-
-
-
 
 // React Native V0.dev Style: Instant File Updates
 function emitReactNativeFileUpdates(
@@ -827,7 +766,8 @@ export async function generateV0StyleApp(
     onProgress?.({ type: 'log', message: '🤖 PURE AI GENERATION - Multi-request chunked approach!' })
     onProgress?.({ type: 'log', message: '🔄 Breaking generation into focused chunks with 2-3s gaps (Mistral 1 RPS limit)...' })
     
-    rawResponse = await generateAppInChunks(enhancedPrompt, analysis, onProgress)
+    // Temporary fallback - this will be replaced with client-side generation
+    throw new Error('Server-side AI generation disabled due to Netlify timeouts. Use client-side generation instead.')
     
     // Step 4: Enhanced JSON Parsing
     onProgress?.({ type: 'log', message: '⚡ Parsing React Native JSON with native modules...' })
