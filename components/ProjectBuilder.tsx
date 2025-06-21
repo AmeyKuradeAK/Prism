@@ -309,7 +309,7 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
               : build
           ))
           
-          if (buildStatus.status === 'building') {
+          if (buildStatus.status === 'pending' || buildStatus.status === 'building') {
             setTimeout(pollBuild, 2000)
           } else {
             setIsBuilding(false)

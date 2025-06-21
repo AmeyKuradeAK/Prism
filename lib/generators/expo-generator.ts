@@ -522,44 +522,40 @@ export async function generateExpoApp(
   onProgress?: (progress: { type: string; message: string; file?: { path: string; content: string; isComplete: boolean } }) => void
 ): Promise<{ [key: string]: string }> {
   try {
-    console.log('Starting app generation for prompt:', prompt)
+    onProgress?.({ type: 'log', message: '🚀 Starting in-memory generation (v0.dev style)...' })
     
-    // Step 1: Analyze the prompt
-    onProgress?.({ type: 'log', message: '🔍 Analyzing your requirements with AI...' })
-    const analysis = await analyzePrompt(prompt)
-    
-    // Generate a clean app name
+    // Generate a clean app name from prompt
     const appName = prompt.match(/(?:create|build|make).*?(?:app|application).*?(?:called|named)\s+["']?([^"'\s.,:;!?]+)/i)?.[1] 
-      || `expo-app-${Date.now()}`
+      || prompt.split(' ').slice(0, 2).join(' ').replace(/[^a-zA-Z0-9\s]/g, '').trim()
+      || 'ExpoApp'
     
-    onProgress?.({ type: 'log', message: `📋 Detected: ${analysis.appType} with ${analysis.coreFeatures.length} core features` })
-    onProgress?.({ type: 'log', message: `🎯 Complexity: ${analysis.complexity} (${analysis.estimatedScreens} screens estimated)` })
+    onProgress?.({ type: 'log', message: `📱 App name: ${appName}` })
+    onProgress?.({ type: 'log', message: '🏗️ Generating solid Expo base template...' })
     
-    // ENHANCED APPROACH: Use solid base + AI creativity for complex apps
-    if (analysis.complexity === 'complex' || analysis.estimatedScreens > 8) {
-      onProgress?.({ type: 'log', message: '🎨 Using enhanced AI creativity mode for complex app...' })
-      return await generateWithEnhancedAICreativity(prompt, appName, onProgress)
+    // Start with the solid expo-base-template (pure in-memory)
+    const baseFiles = generateExpoBaseTemplate(appName)
+    
+    onProgress?.({ type: 'log', message: `✅ Base template ready: ${Object.keys(baseFiles).length} files` })
+    
+    // Check if we need AI enhancements
+    const needsAI = prompt.length > 20 && !prompt.toLowerCase().includes('basic') && !prompt.toLowerCase().includes('simple')
+    
+    if (!needsAI) {
+      onProgress?.({ type: 'log', message: '📦 Using clean base template (no AI needed)' })
+      return baseFiles
     }
     
-    // Traditional approach for simpler apps
+    // Add AI enhancements (pure in-memory, no file system)
+    onProgress?.({ type: 'log', message: '🤖 Adding AI enhancements in-memory...' })
+    
     try {
-      // Step 2: Try to create real Expo project first
-      onProgress?.({ type: 'log', message: '🚀 Creating Expo project with create-expo-app@latest...' })
-      const baseFiles = await createRealExpoProject(appName, onProgress)
-      
-      // Step 3: Enhance with AI
-      onProgress?.({ type: 'log', message: '🤖 Customizing project based on your requirements...' })
-      const enhancedFiles = await enhanceExpoProjectWithAI(baseFiles, prompt, analysis, onProgress)
-      
-      onProgress?.({ type: 'log', message: `✅ Successfully generated ${Object.keys(enhancedFiles).length} files!` })
-      onProgress?.({ type: 'log', message: '🎉 Your Expo SDK 53 app is ready!' })
-      
+      const enhancedFiles = await enhanceWithAIInMemory(baseFiles, prompt, appName, onProgress)
+      onProgress?.({ type: 'log', message: `🎉 Complete! Generated ${Object.keys(enhancedFiles).length} files in-memory` })
       return enhancedFiles
-      
-    } catch (realExpoError) {
-      // Fallback to enhanced AI creativity if real expo creation fails
-      onProgress?.({ type: 'log', message: '🎨 Falling back to enhanced AI creativity mode...' })
-      return await generateWithEnhancedAICreativity(prompt, appName, onProgress)
+    } catch (aiError) {
+      onProgress?.({ type: 'log', message: '⚠️ AI enhancement failed, using base template' })
+      console.error('AI enhancement failed:', aiError)
+      return baseFiles
     }
     
   } catch (error) {
@@ -567,8 +563,98 @@ export async function generateExpoApp(
     onProgress?.({ type: 'log', message: `❌ Generation failed: ${error}` })
     
     // Final fallback to base template
-    const fallbackAppName = prompt.includes('app') ? prompt.split(' ')[0] : 'Generated Expo App'
-    return createManualTemplate(fallbackAppName)
+    const fallbackAppName = 'ExpoApp'
+    return generateExpoBaseTemplate(fallbackAppName)
+  }
+}
+
+// Pure in-memory AI enhancement (no file system operations)
+async function enhanceWithAIInMemory(
+  baseFiles: { [key: string]: string },
+  prompt: string,
+  appName: string,
+  onProgress?: (progress: { type: string; message: string; file?: { path: string; content: string; isComplete: boolean } }) => void
+): Promise<{ [key: string]: string }> {
+  
+  if (!process.env.MISTRAL_API_KEY) {
+    onProgress?.({ type: 'log', message: '⚠️ No AI API key, using base template only' })
+    return baseFiles
+  }
+
+  try {
+    const enhancementPrompt = `You are enhancing a solid Expo React Native app with modern structure. The base app already has:
+
+✅ EXISTING BASE (React Native 0.79.4 + Expo SDK 53):
+- Complete app/ routing with Expo Router
+- Essential components (ThemedText, ThemedView, etc.)
+- Hooks (useColorScheme, useThemeColor)
+- Constants (Colors with themes)
+- Modern package.json with dependencies
+- TypeScript configuration
+
+🎯 USER REQUEST: "${prompt}"
+
+Create ONLY additional files needed for this request. Use this exact format:
+
+===FILE: path/to/file.tsx===
+[complete file content]
+===END===
+
+Examples of what you can add:
+- New screens: app/profile.tsx, app/settings.tsx, app/(auth)/login.tsx
+- Components: components/UserCard.tsx, components/CustomButton.tsx
+- Hooks: hooks/useAuth.ts, hooks/useApi.ts
+- Utils: utils/api.ts, utils/storage.ts
+- Types: types/user.ts, types/api.ts
+
+Keep it simple and focused on the user's request.`
+
+    const { Mistral } = await import('@mistralai/mistralai')
+    const mistral = new Mistral({ apiKey: process.env.MISTRAL_API_KEY })
+
+    const response = await mistral.chat.complete({
+      model: 'mistral-small-latest',
+      messages: [
+        { role: 'system', content: 'You are an expert Expo React Native developer. Generate clean, working code that builds upon the existing solid foundation.' },
+        { role: 'user', content: enhancementPrompt }
+      ],
+      temperature: 0.2,
+      maxTokens: 4000
+    })
+
+    const responseContent = response.choices[0]?.message?.content || ''
+    const contentString = typeof responseContent === 'string' 
+      ? responseContent 
+      : Array.isArray(responseContent) 
+        ? responseContent.map(chunk => 
+            chunk.type === 'text' ? chunk.text : ''
+          ).join('')
+        : String(responseContent)
+    
+    onProgress?.({ type: 'log', message: '🧠 AI response received, parsing files...' })
+    
+    // Parse AI-generated files
+    const aiFiles = parseCodeFromResponse(contentString)
+    
+    // Merge with base files (all in-memory)
+    const allFiles = { ...baseFiles }
+    
+    for (const file of aiFiles) {
+      allFiles[file.path] = file.content
+      onProgress?.({
+        type: 'file_complete',
+        message: `✨ Added ${file.path}`,
+        file: { path: file.path, content: file.content, isComplete: true }
+      })
+    }
+    
+    onProgress?.({ type: 'log', message: `🎯 AI added ${aiFiles.length} additional files` })
+    
+    return allFiles
+    
+  } catch (error) {
+    onProgress?.({ type: 'log', message: `⚠️ AI enhancement failed: ${error}` })
+    return baseFiles
   }
 }
 

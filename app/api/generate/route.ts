@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
     console.error('❌ Generation failed:', error)
-
+    
     return new Response(
       JSON.stringify({ 
         error: 'Failed to generate app',
