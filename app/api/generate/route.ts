@@ -1,6 +1,48 @@
 import { NextRequest } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
-import { generateV0StyleApp } from '@/lib/generators/expo-v0-generator'
+import { generateReactNativePlan } from '@/lib/generators/expo-v0-generator'
+
+// Simple V0 response parser
+function parseV0Response(response: string): { [key: string]: string } {
+  const files: { [key: string]: string } = {}
+  
+  try {
+    // First, try to extract JSON from the response
+    let jsonStart = response.indexOf('{')
+    let jsonEnd = response.lastIndexOf('}') + 1
+    
+    if (jsonStart === -1 || jsonEnd === 0) {
+      throw new Error('No JSON structure found in response')
+    }
+    
+    const jsonString = response.slice(jsonStart, jsonEnd)
+    const parsed = JSON.parse(jsonString)
+    
+    if (parsed.files && typeof parsed.files === 'object') {
+      // V0.dev style: files object
+      Object.entries(parsed.files).forEach(([path, content]) => {
+        if (typeof content === 'string' && content.length > 10) {
+          files[path] = content
+        }
+      })
+    }
+  } catch (jsonError) {
+    // Fallback: Try code block parsing
+    const codeBlockPattern = /```(?:\w+)?\s*(?:\/\/\s*)?([^\n]+)\n([\s\S]*?)```/g
+    let codeMatch
+    
+    while ((codeMatch = codeBlockPattern.exec(response)) !== null) {
+      const fileName = codeMatch[1]?.trim()
+      const content = codeMatch[2]?.trim()
+      
+      if (fileName && content) {
+        files[fileName] = content
+      }
+    }
+  }
+  
+  return files
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -90,35 +132,120 @@ export async function POST(request: NextRequest) {
           }
         }
         
-        sendLog('🚀 Initializing V0.dev-style generation...')
+        sendLog('🚀 Initializing secure AI generation...')
+        sendLog('🔐 Using secure proxy approach (API key protected)')
         
-        // Use V0.dev-style generation for better results
-        const v0Response = await generateV0StyleApp(prompt, userId, (progress: { 
-          type: string; 
-          message: string; 
-          file?: { path: string; content: string; isComplete: boolean } 
-        }) => {
-          if (progress.type === 'log') {
-            sendLog(progress.message)
-          } else if (progress.type === 'file_start' && progress.file) {
-            sendLog(`📄 Starting ${progress.file.path}...`)
-            sendData({ 
-              type: 'file_start', 
-              file: progress.file 
-            })
-          } else if (progress.type === 'file_progress' && progress.file) {
-            sendData({ 
-              type: 'file_progress', 
-              file: progress.file 
-            })
-          } else if (progress.type === 'file_complete' && progress.file) {
-            sendLog(`✅ Completed ${progress.file.path}`)
-            sendData({ 
-              type: 'file_complete', 
-              file: progress.file 
-            })
-          }
+        // Step 1: Generate plan server-side (fast, no AI calls)
+        const plan = await generateReactNativePlan(prompt, userId, (progress) => {
+          sendLog(progress.message)
         })
+        
+        sendLog(`✅ Generation plan ready: ${plan.chunks.length} chunks`)
+        sendLog(`⏱️ Estimated time: ${plan.metadata.estimatedTime}`)
+        sendLog('🎯 Ready for secure client-side AI execution!')
+        
+        // Send the plan info to client
+        sendData({ 
+          type: 'log', 
+          message: 'Generation plan ready - executing AI calls via secure proxy...'
+        })
+        
+        // Execute plan using secure proxy
+        const allFiles: { [key: string]: string } = {}
+        
+        // Add pre-generated package.json
+        allFiles['package.json'] = JSON.stringify(plan.smartPackageJson, null, 2)
+        sendLog('✅ Added smart package.json with auto-detected dependencies')
+        
+        for (let i = 0; i < plan.chunks.length; i++) {
+          const chunk = plan.chunks[i]
+          
+          sendLog(`📦 Chunk ${i + 1}/${plan.chunks.length}: ${chunk.name}`)
+          
+          try {
+            // Use secure proxy for AI calls
+            const proxyResponse = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/ai-proxy`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${process.env.INTERNAL_API_TOKEN || 'internal'}`
+              },
+              body: JSON.stringify({
+                messages: [
+                  {
+                    role: 'system',
+                    content: plan.systemPrompt
+                  },
+                  {
+                    role: 'user',
+                    content: chunk.prompt
+                  }
+                ],
+                maxTokens: chunk.maxTokens,
+                temperature: 0.1
+              })
+            })
+            
+            if (!proxyResponse.ok) {
+              throw new Error(`Proxy error: ${proxyResponse.status}`)
+            }
+            
+            const proxyData = await proxyResponse.json()
+            const content = proxyData.content
+            
+            if (!content || typeof content !== 'string' || content.length < 10) {
+              throw new Error(`Invalid AI response: ${content?.length || 0} characters`)
+            }
+            
+            // Parse the chunk response (simple JSON extraction)
+            const chunkFiles = parseV0Response(content)
+            
+            // Merge files
+            Object.entries(chunkFiles).forEach(([path, fileContent]) => {
+              if (fileContent && fileContent.length > 10) {
+                allFiles[path] = fileContent
+                sendLog(`✅ Generated ${path} (${fileContent.length} chars)`)
+                sendData({ 
+                  type: 'file_complete', 
+                  file: {
+                    path,
+                    content: fileContent,
+                    isComplete: true
+                  }
+                })
+              }
+            })
+            
+            sendLog(`✅ Chunk ${i + 1} complete: ${Object.keys(chunkFiles).length} files`)
+            
+          } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+            sendLog(`❌ Chunk ${i + 1} failed: ${errorMessage}`)
+            sendLog(`🔄 Continuing with remaining chunks...`)
+          }
+          
+          // Rate limiting: Respect Mistral's 1 RPS limit
+          if (i < plan.chunks.length - 1) {
+            const waitTime = plan.metadata.rateLimitGap + Math.random() * 500
+            sendLog(`⏳ Rate limiting: waiting ${Math.round(waitTime/100)/10}s...`)
+            await new Promise(resolve => setTimeout(resolve, waitTime))
+          }
+        }
+        
+        // Create V0 response
+        const v0Response = {
+          files: allFiles,
+          metadata: {
+            totalFiles: Object.keys(allFiles).length,
+            appType: plan.analysis.appType,
+            features: plan.analysis.features,
+            nativeFeatures: plan.analysis.nativeFeatures,
+            detectedModules: plan.analysis.detectedModules,
+            generatedAt: new Date().toISOString(),
+            dependencies: plan.smartPackageJson.dependencies,
+            permissions: plan.analysis.detectedModules.flatMap(m => m.permissions || [])
+          }
+        }
         
         // Extract files from V0.dev-style response
         const files = v0Response.files
