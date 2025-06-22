@@ -872,5 +872,16 @@ Join our community of developers creating universal apps.
 - [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
 - [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.`
 
-  return files
+  // ✅ Convert to absolute paths for memfs compatibility
+  const absoluteFiles: { [key: string]: string } = {}
+  
+  Object.entries(files).forEach(([path, content]) => {
+    // Ensure path starts with / for absolute path
+    const absolutePath = path.startsWith('/') ? path : `/${path}`
+    absoluteFiles[absolutePath] = content
+  })
+  
+  console.log(`✅ Base template generated: ${Object.keys(absoluteFiles).length} files with absolute paths`)
+  
+  return absoluteFiles
 } 

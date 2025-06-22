@@ -160,7 +160,7 @@ export default function PromptInput({ onGenerate, onStop, isGenerating, disabled
               <span className="text-white/60 text-xs">
                 {useExtendedTimeout 
                   ? 'Extended mode: Up to 1.5 minutes for complex apps' 
-                  : 'Quick mode: Fast generation in 6 seconds'
+                                        : 'Quick mode: Fast generation in 90 seconds'
                 }
               </span>
             </div>

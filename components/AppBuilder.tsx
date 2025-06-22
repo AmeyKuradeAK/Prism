@@ -27,6 +27,7 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import PromptInput from './PromptInput'
+import ReactNativePreview from './ReactNativePreview'
 import { runV0Pipeline } from '@/lib/generators/v0-pipeline'
 
 interface BuildInfo {
@@ -1317,32 +1318,13 @@ Generated on: ${new Date().toLocaleString()}
               </div>
             )}
 
-            {buildInfo.status === 'completed' && activeView === 'preview' && (
-              <div className="flex-1 flex items-center justify-center p-8">
-                <div className="text-center max-w-md">
-                  <div className="w-20 h-20 bg-gradient-to-br from-purple-500/20 to-pink-500/20 rounded-3xl flex items-center justify-center mx-auto mb-6">
-                    <Smartphone className="w-10 h-10 text-purple-400" />
-                  </div>
-                  <h3 className="text-2xl font-bold text-white mb-4">App Preview</h3>
-                  <p className="text-white/60 mb-8">
-                    To preview your app, you can use Expo Go on your mobile device or the Expo web simulator.
-                  </p>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <button
-                      onClick={() => window.open('https://expo.dev/tools', '_blank')}
-                      className="bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white px-6 py-3 rounded-xl font-semibold transition-all"
-                    >
-                      Open in Expo
-                    </button>
-                    <button
-                      onClick={() => window.open('https://expo.dev/client', '_blank')}
-                      className="border border-white/20 hover:border-white/40 text-white px-6 py-3 rounded-xl font-semibold transition-all"
-                    >
-                      Download Expo Go
-                    </button>
-                  </div>
-                </div>
+            {activeView === 'preview' && (
+              <div className="flex-1">
+                <ReactNativePreview 
+                  files={buildInfo.files}
+                  isGenerating={buildInfo.status === 'generating'}
+                  projectName={currentPrompt.slice(0, 50) || 'React Native App'}
+                />
               </div>
             )}
 

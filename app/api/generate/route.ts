@@ -146,7 +146,7 @@ FAST response needed!`
   
   const startTime = Date.now()
   
-  // AGGRESSIVE 6-SECOND TIMEOUT
+  // EXTENDED 90-SECOND TIMEOUT FOR CLIENT-SIDE CALLS
   const response = await Promise.race([
     mistral.chat.complete({
       model: 'mistral-small-latest',
@@ -155,7 +155,7 @@ FAST response needed!`
       maxTokens: 2000   // Reduced for speed
     }),
     new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Mistral timeout after 6 seconds')), 6000)
+              setTimeout(() => reject(new Error('Mistral timeout after 90 seconds')), 90000)
     })
   ]) as any
 
@@ -183,11 +183,15 @@ FAST response needed!`
   if (Object.keys(files).length === 0) {
     console.log('⚠️ Mistral parsing failed, using enhanced base template...')
     const { generateExpoBaseTemplate } = await import('@/lib/generators/templates/expo-base-template')
+    const { normalizeFilesForMemfs } = await import('@/lib/utils/memfs-helper')
     const { analyzePrompt } = await import('@/lib/generators/v0-pipeline')
     
     const analysis = analyzePrompt(prompt)
     const appName = `${analysis.type.charAt(0).toUpperCase() + analysis.type.slice(1)}App`
-    return generateExpoBaseTemplate(appName)
+    const baseTemplate = generateExpoBaseTemplate(appName)
+    
+    // Ensure memfs compatibility
+    return normalizeFilesForMemfs(baseTemplate)
   }
   
   console.log(`✅ FREE Mistral generated ${Object.keys(files).length} files`)
