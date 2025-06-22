@@ -30,7 +30,7 @@ export interface StreamResponse {
 }
 
 export interface PromptInputProps {
-  onGenerate: (prompt: string) => void
+  onGenerate: (prompt: string, useExtendedTimeout?: boolean) => void
   onStop: () => void
   isGenerating: boolean
   disabled: boolean

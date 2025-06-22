@@ -14,6 +14,7 @@ Transform your ideas into real, downloadable mobile apps using advanced AI. Pris
 
 ### 🧠 **AI-Powered Generation**
 - **Smart Code Generation** - Mistral AI creates production-ready code
+- **Dual Generation Modes** - Quick Mode (6s) or Extended Mode (90s) for complex apps
 - **Native Features** - Camera, GPS, notifications, storage integration
 - **Intelligent Templates** - Fallback system ensures reliable output
 - **Context-Aware** - Understands complex app requirements

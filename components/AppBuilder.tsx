@@ -168,12 +168,14 @@ export default function AppBuilder() {
     }))
   }
 
-  const handleGenerate = async (prompt: string) => {
+  const handleGenerate = async (prompt: string, useExtendedTimeout = false) => {
     setCurrentPrompt(prompt)
     setBuildInfo({
       status: 'generating',
       progress: 0,
-      currentStep: 'Analyzing your requirements...',
+      currentStep: useExtendedTimeout 
+        ? 'Initializing extended timeout generation (up to 90s)...' 
+        : 'Initializing quick generation (6s timeout)...',
       files: {}
     })
 
@@ -181,7 +183,10 @@ export default function AppBuilder() {
     setAbortController(controller)
 
     try {
-      const response = await fetch('/api/generate', {
+      const apiEndpoint = useExtendedTimeout ? '/api/ai-stream' : '/api/generate'
+      console.log(`🚀 Starting generation with ${useExtendedTimeout ? 'extended timeout' : 'quick mode'}:`, prompt)
+      
+      const response = await fetch(apiEndpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -210,80 +215,101 @@ export default function AppBuilder() {
         const lines = buffer.split('\n')
         buffer = lines.pop() || ''
 
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(line.slice(6))
+              for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            const data = JSON.parse(line.slice(6))
+            
+            if (data.type === 'progress') {
+              setBuildInfo(prev => ({
+                ...prev,
+                currentStep: data.message,
+                progress: Math.min(prev.progress + 5, 95)
+              }))
+            } else if (data.type === 'complete') {
+              // Final result with all files
+              setBuildInfo({
+                status: 'completed',
+                progress: 100,
+                currentStep: `✅ Generated ${data.fileCount} files in ${Math.ceil(data.duration/1000)}s!`,
+                files: data.files
+              })
               
-              if (data.type === 'log') {
-                setBuildInfo(prev => ({
-                  ...prev,
-                  currentStep: data.message,
-                  progress: Math.min(prev.progress + 10, 90)
-                }))
-              } else if (data.type === 'file_start' && data.file) {
-                // Show file being created (like v0.dev)
-                setBuildInfo(prev => ({
-                  ...prev,
-                  currentStep: `Creating ${data.file.path}...`,
-                  progress: Math.min(prev.progress + 5, 85)
-                }))
-                setCurrentlyWritingFile(data.file.path)
-              } else if (data.type === 'file_progress' && data.file) {
-                // Update file content progressively (like typing animation)
-                setBuildInfo(prev => ({
-                  ...prev,
-                  files: {
-                    ...prev.files,
-                    [data.file.path]: data.file.content
-                  },
-                  currentStep: data.message || `Writing ${data.file.path}...`,
-                  progress: Math.min(prev.progress + 1, 89) // Small increments for smooth progress
-                }))
-                
-                // Auto-select file being written for live preview
-                if (!selectedFile || selectedFile !== data.file.path) {
-                  setSelectedFile(data.file.path)
-                  setActiveView('code')
-                }
-                setCurrentlyWritingFile(data.file.path)
-              } else if (data.type === 'file_complete' && data.file) {
-                // File completed - add to files and show progress
-                setBuildInfo(prev => ({
-                  ...prev,
-                  files: {
-                    ...prev.files,
-                    [data.file.path]: data.file.content
-                  },
-                  currentStep: `✅ Completed ${data.file.path}`,
-                  progress: Math.min(prev.progress + 8, 90)
-                }))
-                
-                // Auto-select first file for preview
-                if (!selectedFile && data.file.path) {
-                  setSelectedFile(data.file.path)
-                  setActiveView('code')
-                }
-                setCurrentlyWritingFile('') // Clear writing state
-              } else if (data.type === 'files') {
-                // Convert files array back to object format
-                const filesObject: { [key: string]: string } = {}
-                data.files.forEach((file: any) => {
-                  filesObject[file.path] = file.content
-                })
-                
-                setBuildInfo({
-                  status: 'completed',
-                  progress: 100,
-                  currentStep: 'Generation complete!',
-                  files: filesObject
-                })
-                
+              // Auto-select first file for preview
+              const firstFile = Object.keys(data.files)[0]
+              if (firstFile) {
+                setSelectedFile(firstFile)
                 setActiveView('code')
-                setCurrentlyWritingFile('') // Clear writing state when generation completes
-              } else if (data.type === 'error') {
-                throw new Error(data.message || 'Generation failed')
               }
+              setCurrentlyWritingFile('')
+              
+              console.log(`✅ Generation complete: ${data.fileCount} files in ${data.duration}ms`)
+            } else if (data.type === 'error') {
+              throw new Error(data.message || 'Generation failed')
+            }
+            
+            // Legacy support for old format (if needed)
+            else if (data.type === 'log') {
+              setBuildInfo(prev => ({
+                ...prev,
+                currentStep: data.message,
+                progress: Math.min(prev.progress + 10, 90)
+              }))
+            } else if (data.type === 'file_start' && data.file) {
+              setBuildInfo(prev => ({
+                ...prev,
+                currentStep: `Creating ${data.file.path}...`,
+                progress: Math.min(prev.progress + 5, 85)
+              }))
+              setCurrentlyWritingFile(data.file.path)
+            } else if (data.type === 'file_progress' && data.file) {
+              setBuildInfo(prev => ({
+                ...prev,
+                files: {
+                  ...prev.files,
+                  [data.file.path]: data.file.content
+                },
+                currentStep: data.message || `Writing ${data.file.path}...`,
+                progress: Math.min(prev.progress + 1, 89)
+              }))
+              
+              if (!selectedFile || selectedFile !== data.file.path) {
+                setSelectedFile(data.file.path)
+                setActiveView('code')
+              }
+              setCurrentlyWritingFile(data.file.path)
+            } else if (data.type === 'file_complete' && data.file) {
+              setBuildInfo(prev => ({
+                ...prev,
+                files: {
+                  ...prev.files,
+                  [data.file.path]: data.file.content
+                },
+                currentStep: `✅ Completed ${data.file.path}`,
+                progress: Math.min(prev.progress + 8, 90)
+              }))
+              
+              if (!selectedFile && data.file.path) {
+                setSelectedFile(data.file.path)
+                setActiveView('code')
+              }
+              setCurrentlyWritingFile('')
+            } else if (data.type === 'files') {
+              const filesObject: { [key: string]: string } = {}
+              data.files.forEach((file: any) => {
+                filesObject[file.path] = file.content
+              })
+              
+              setBuildInfo({
+                status: 'completed',
+                progress: 100,
+                currentStep: 'Generation complete!',
+                files: filesObject
+              })
+              
+              setActiveView('code')
+              setCurrentlyWritingFile('')
+            }
             } catch (parseError) {
               console.error('Failed to parse SSE data:', parseError)
             }

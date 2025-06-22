@@ -15,11 +15,12 @@ const EXAMPLE_PROMPTS = [
 export default function PromptInput({ onGenerate, onStop, isGenerating, disabled, mode = 'ai' }: PromptInputProps) {
   const [prompt, setPrompt] = useState('')
   const [showExamples, setShowExamples] = useState(false)
+  const [useExtendedTimeout, setUseExtendedTimeout] = useState(false)
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (prompt.trim() && !disabled && mode === 'ai') {
-      onGenerate(prompt.trim())
+      onGenerate(prompt.trim(), useExtendedTimeout)
     }
   }
 
@@ -151,19 +152,58 @@ export default function PromptInput({ onGenerate, onStop, isGenerating, disabled
           </div>
         </div>
         
-        <div className="mt-4 flex items-center justify-between text-sm text-white/60">
-          <span>{prompt.length}/2000 characters</span>
-          <div className="flex items-center space-x-2">
-            <span>Supports:</span>
-            <div className="flex space-x-1">
-              {['Camera', 'GPS', 'Push', 'Storage', 'Sensors'].map((feature, index) => (
-                <span 
-                  key={feature}
-                  className="px-2 py-1 bg-white/10 border border-white/20 rounded-lg text-xs"
-                >
-                  {feature}
-                </span>
-              ))}
+        <div className="mt-4 space-y-3">
+          {/* Extended Timeout Toggle */}
+          <div className="flex items-center justify-between p-3 bg-white/5 border border-white/10 rounded-xl">
+            <div className="flex flex-col">
+              <span className="text-white text-sm font-medium">Generation Mode</span>
+              <span className="text-white/60 text-xs">
+                {useExtendedTimeout 
+                  ? 'Extended mode: Up to 1.5 minutes for complex apps' 
+                  : 'Quick mode: Fast generation in 6 seconds'
+                }
+              </span>
+            </div>
+            <div className="flex items-center space-x-3">
+              <span className={`text-xs ${!useExtendedTimeout ? 'text-white' : 'text-white/60'}`}>
+                Quick
+              </span>
+              <button
+                type="button"
+                onClick={() => setUseExtendedTimeout(!useExtendedTimeout)}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  useExtendedTimeout 
+                    ? 'bg-gradient-to-r from-purple-500 to-pink-600' 
+                    : 'bg-white/20'
+                }`}
+                disabled={disabled || isGenerating}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    useExtendedTimeout ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+              <span className={`text-xs ${useExtendedTimeout ? 'text-white' : 'text-white/60'}`}>
+                Extended
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between text-sm text-white/60">
+            <span>{prompt.length}/2000 characters</span>
+            <div className="flex items-center space-x-2">
+              <span>Supports:</span>
+              <div className="flex space-x-1">
+                {['Camera', 'GPS', 'Push', 'Storage', 'Sensors'].map((feature) => (
+                  <span 
+                    key={feature}
+                    className="px-2 py-1 bg-white/10 border border-white/20 rounded-lg text-xs"
+                  >
+                    {feature}
+                  </span>
+                ))}
+              </div>
             </div>
           </div>
         </div>
