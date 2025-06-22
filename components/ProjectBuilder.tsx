@@ -168,6 +168,65 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
     }
   }, [chatMessages])
 
+  // Load base template
+  const handleLoadTemplate = async () => {
+    console.log('📂 Loading COMPLETE demo-1 base template...')
+    setIsGenerating(true)
+    
+    // Add loading message
+    const loadingMessage: ChatMessage = {
+      id: Date.now().toString(),
+      type: 'assistant',
+      content: '📂 Loading base React Native template...',
+      timestamp: new Date(),
+      isGenerating: true
+    }
+    setChatMessages(prev => [...prev, loadingMessage])
+
+    try {
+      // Import and generate template
+      const { generateCompleteDemo1Template } = await import('@/lib/generators/templates/complete-demo1-template')
+      const templateFiles = generateCompleteDemo1Template('BaseTemplate')
+      
+      console.log(`✅ Base template loaded: ${Object.keys(templateFiles).length} files`)
+      console.log('📋 All template files:', Object.keys(templateFiles).sort())
+      
+      // Set files
+      setFiles(templateFiles)
+      
+      // Auto-select first file
+      const firstFile = Object.keys(templateFiles)[0]
+      if (firstFile) {
+        setActiveFile(firstFile)
+      }
+      
+      // Update chat with success message
+      setChatMessages(prev => 
+        prev.map(msg => 
+          msg.isGenerating ? {
+            ...msg,
+            content: `✅ Base template loaded successfully! ${Object.keys(templateFiles).length} files created.`,
+            isGenerating: false
+          } : msg
+        )
+      )
+      
+    } catch (error) {
+      console.error('Failed to load template:', error)
+      setChatMessages(prev => 
+        prev.map(msg => 
+          msg.isGenerating ? {
+            ...msg,
+            content: `❌ Failed to load template: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            isGenerating: false
+          } : msg
+        )
+      )
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
   // Handle chat message submission
   const handleSendMessage = async (e: React.FormEvent, quickMode: boolean = false) => {
     e.preventDefault()
@@ -312,19 +371,82 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
   }
 
   const getFileTree = () => {
-    const tree: { [key: string]: string[] } = {}
+    console.log('🗂️ Organizing files into tree structure...')
+    console.log('📋 Raw file paths:', Object.keys(files).sort())
+    
+    const organized: { [key: string]: string[] } = {}
+    
     Object.keys(files).forEach(path => {
-      const parts = path.split('/')
+      console.log(`🔍 Processing file: ${path}`)
+      
+      // Remove leading slash if it exists
+      const cleanPath = path.startsWith('/') ? path.slice(1) : path
+      const parts = cleanPath.split('/')
+      
+      let folderName = ''
+      
+      // Root files (package.json, app.json, etc.)
       if (parts.length === 1) {
-        if (!tree['root']) tree['root'] = []
-        tree['root'].push(path)
-      } else {
-        const dir = parts[0]
-        if (!tree[dir]) tree[dir] = []
-        tree[dir].push(path)
+        folderName = '📱 Root'
       }
+      // App files
+      else if (parts[0] === 'app') {
+        if (parts.length === 2) {
+          folderName = '📱 app'
+        } else if (parts[1] === '(tabs)') {
+          folderName = '📱 app/(tabs)'
+        } else {
+          folderName = '📱 app'
+        }
+      }
+      // Components
+      else if (parts[0] === 'components') {
+        if (parts.length === 2) {
+          folderName = '🧩 components'
+        } else if (parts[1] === 'ui') {
+          folderName = '🧩 components/ui'
+        } else {
+          folderName = '🧩 components'
+        }
+      }
+      // Hooks
+      else if (parts[0] === 'hooks') {
+        folderName = '🪝 hooks'
+      }
+      // Constants
+      else if (parts[0] === 'constants') {
+        folderName = '⚙️ constants'
+      }
+      // Assets
+      else if (parts[0] === 'assets') {
+        folderName = '🖼️ assets'
+      }
+      // Scripts
+      else if (parts[0] === 'scripts') {
+        folderName = '📜 scripts'
+      }
+      // Other directories
+      else {
+        folderName = `📁 ${parts[0]}`
+      }
+      
+      if (!organized[folderName]) {
+        organized[folderName] = []
+      }
+      organized[folderName].push(path)
+      
+      console.log(`  → Added to folder: ${folderName}`)
     })
-    return tree
+    
+    // Sort files within each folder
+    Object.keys(organized).forEach(folder => {
+      organized[folder].sort()
+    })
+    
+    console.log('✅ Final organization:', organized)
+    console.log(`📊 Total folders: ${Object.keys(organized).length}`)
+    
+    return organized
   }
 
   const filteredFiles = () => {
@@ -494,6 +616,16 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
           >
             <Zap className="w-4 h-4" />
             <span>Test Gen</span>
+          </button>
+          
+          {/* Load Template Button */}
+          <button
+            onClick={handleLoadTemplate}
+            disabled={isGenerating}
+            className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+          >
+            <Folder className="w-4 h-4" />
+            <span>📂 Load Template</span>
           </button>
         </div>
       </div>
