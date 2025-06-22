@@ -166,7 +166,7 @@ export default function AppBuilder() {
       setBuildInfo({
         status: 'completed',
         progress: 100,
-        currentStep: `Template loaded - ${Object.keys(templateFiles).length} files`,
+        currentStep: `Template loaded - ${Object.keys(templateFiles).length} files - ${new Date().toLocaleTimeString()}`,
         files: templateFiles
       })
       
@@ -786,7 +786,12 @@ Generated on: ${new Date().toLocaleString()}
     return organized
   }
 
+  // FORCE REFRESH - Organize files into proper folder structure  
   const organizedFiles = organizeFiles(buildInfo.files)
+  
+  // Debug: Log the organized structure to console every time
+  console.log('🗂️ UI DISPLAY - organizedFiles at', new Date().toLocaleTimeString(), ':', organizedFiles)
+  console.log('🗂️ Raw buildInfo.files keys:', Object.keys(buildInfo.files))
 
   // React Native specific features detection
   const detectReactNativeFeatures = (files: { [key: string]: string }) => {
