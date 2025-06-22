@@ -698,20 +698,45 @@ Generated on: ${new Date().toLocaleString()}
     const organized: { [key: string]: string[] } = {}
     
     Object.keys(files).forEach(filepath => {
-      const parts = filepath.split('/')
+      // Remove leading slash for proper path parsing
+      const cleanPath = filepath.startsWith('/') ? filepath.slice(1) : filepath
+      const parts = cleanPath.split('/')
+      
       if (parts.length === 1) {
-        // Root file
+        // Root file (package.json, app.json, etc.)
         if (!organized['📱 Root']) organized['📱 Root'] = []
         organized['📱 Root'].push(filepath)
       } else {
-        // File in directory
+        // File in directory - get proper folder structure
         const dir = parts[0]
-        const dirIcon = dir === 'app' ? '📱 Screens' : 
-                       dir === 'components' ? '🧩 Components' :
-                       dir === 'types' ? '📝 Types' :
-                       dir === 'hooks' ? '🪝 Hooks' :
-                       dir === 'constants' ? '⚙️ Constants' :
-                       dir === 'utils' ? '🛠️ Utils' : `📁 ${dir}`
+        const subdirs = parts.slice(1, -1) // Get subdirectories
+        
+        let dirIcon: string
+        if (dir === 'app') {
+          if (subdirs.includes('(tabs)')) {
+            dirIcon = '📱 App/(tabs)'
+          } else {
+            dirIcon = '📱 App'
+          }
+        } else if (dir === 'components') {
+          if (subdirs.includes('ui')) {
+            dirIcon = '🧩 Components/ui'
+          } else {
+            dirIcon = '🧩 Components'
+          }
+        } else if (dir === 'hooks') {
+          dirIcon = '🪝 Hooks'
+        } else if (dir === 'constants') {
+          dirIcon = '⚙️ Constants'
+        } else if (dir === 'types') {
+          dirIcon = '📝 Types'
+        } else if (dir === 'utils') {
+          dirIcon = '🛠️ Utils'
+        } else if (dir === 'assets') {
+          dirIcon = '🖼️ Assets'
+        } else {
+          dirIcon = `📁 ${dir}`
+        }
         
         if (!organized[dirIcon]) organized[dirIcon] = []
         organized[dirIcon].push(filepath)

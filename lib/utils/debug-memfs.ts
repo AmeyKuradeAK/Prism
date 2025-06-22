@@ -73,10 +73,54 @@ export function debugFileStructure(files: { [key: string]: string }, label: stri
     console.log(`📁 All paths absolute: ${hasAbsolutePaths ? '✅' : '❌'}`)
     console.log(`📁 Has relative paths: ${hasRelativePaths ? '⚠️' : '✅'}`)
     
-    // List all files
-    console.log('📋 File list:')
-    Object.entries(files).forEach(([path, content]) => {
-      console.log(`  ${path} (${content.length} chars)`)
+    // Organize files by proper React Native structure
+    console.log('📂 Proper React Native folder structure:')
+    const organized: { [key: string]: string[] } = {}
+    
+    Object.keys(files).forEach(filepath => {
+      const cleanPath = filepath.startsWith('/') ? filepath.slice(1) : filepath
+      const parts = cleanPath.split('/')
+      
+      if (parts.length === 1) {
+        if (!organized['📱 Root Files']) organized['📱 Root Files'] = []
+        organized['📱 Root Files'].push(filepath)
+      } else {
+        const dir = parts[0]
+        const subdirs = parts.slice(1, -1)
+        
+        let folderName: string
+        if (dir === 'app') {
+          if (subdirs.includes('(tabs)')) {
+            folderName = '📱 app/(tabs)/'
+          } else {
+            folderName = '📱 app/'
+          }
+        } else if (dir === 'components') {
+          if (subdirs.includes('ui')) {
+            folderName = '🧩 components/ui/'
+          } else {
+            folderName = '🧩 components/'
+          }
+        } else if (dir === 'hooks') {
+          folderName = '🪝 hooks/'
+        } else if (dir === 'constants') {
+          folderName = '⚙️ constants/'
+        } else {
+          folderName = `📁 ${dir}/`
+        }
+        
+        if (!organized[folderName]) organized[folderName] = []
+        organized[folderName].push(filepath)
+      }
+    })
+    
+    // Display organized structure
+    Object.entries(organized).forEach(([folder, files]) => {
+      console.log(`  ${folder}`)
+      files.forEach(file => {
+        const fileName = file.split('/').pop()
+        console.log(`    ${fileName}`)
+      })
     })
     
     // Check for essential files
