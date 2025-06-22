@@ -41,13 +41,13 @@ export async function POST(request: NextRequest) {
 
     // Quick mode fallback
     if (testMode || quickMode) {
-      console.log('⚡ Quick mode - using base template only')
-      const { generateExpoBaseTemplate } = await import('@/lib/generators/templates/expo-base-template')
+      console.log('⚡ Quick mode - using COMPLETE demo-1 base template only')
+      const { generateDemo1BaseTemplate } = await import('@/lib/generators/templates/complete-demo1-template')
       const { analyzePrompt } = await import('@/lib/generators/v0-pipeline')
       
       const analysis = analyzePrompt(prompt)
       const appName = `${analysis.type.charAt(0).toUpperCase() + analysis.type.slice(1)}App`
-      const files = generateExpoBaseTemplate(appName)
+      const files = generateDemo1BaseTemplate(appName)
       
       return new Response(
         JSON.stringify({
@@ -179,15 +179,15 @@ FAST response needed!`
     }
   })
   
-  // If parsing failed, create enhanced base template
+  // If parsing failed, create enhanced demo-1 base template
   if (Object.keys(files).length === 0) {
-    console.log('⚠️ Mistral parsing failed, using enhanced base template...')
-    const { generateExpoBaseTemplate } = await import('@/lib/generators/templates/expo-base-template')
+    console.log('⚠️ Mistral parsing failed, using COMPLETE demo-1 base template...')
+    const { generateDemo1BaseTemplate } = await import('@/lib/generators/templates/complete-demo1-template')
     const { analyzePrompt } = await import('@/lib/generators/v0-pipeline')
     
     const analysis = analyzePrompt(prompt)
     const appName = `${analysis.type.charAt(0).toUpperCase() + analysis.type.slice(1)}App`
-    return generateExpoBaseTemplate(appName)
+    return generateDemo1BaseTemplate(appName)
   }
   
   console.log(`✅ FREE Mistral generated ${Object.keys(files).length} files`)

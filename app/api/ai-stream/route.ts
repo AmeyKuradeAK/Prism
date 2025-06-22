@@ -160,13 +160,13 @@ async function generateWithExtendedTimeout(
         }
       })
       
-      // If no files generated, create base template
+      // If no files generated, create demo-1 base template
       if (Object.keys(files).length === 0) {
-        onProgress('⚠️ No files parsed, generating base template...')
-        const { generateExpoBaseTemplate } = await import('@/lib/generators/templates/expo-base-template')
+        onProgress('⚠️ No files parsed, generating COMPLETE demo-1 base template...')
+        const { generateDemo1BaseTemplate } = await import('@/lib/generators/templates/complete-demo1-template')
         const analysis = analyzePromptServer(prompt)
         const appName = `${analysis.type.charAt(0).toUpperCase() + analysis.type.slice(1)}App`
-        return generateExpoBaseTemplate(appName)
+        return generateDemo1BaseTemplate(appName)
       }
       
       onProgress(`✅ Generated ${Object.keys(files).length} files successfully`)

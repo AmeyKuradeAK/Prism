@@ -7,7 +7,8 @@ import { vol } from 'memfs'
  */
 export function loadFilesIntoMemfs(files: { [key: string]: string }): boolean {
   try {
-    console.log('📂 Loading files into memfs:', Object.keys(files).length)
+    console.log(`📂 Loading ${Object.keys(files).length} files into memfs...`)
+    console.log('📋 Input file paths:', Object.keys(files))
     
     // Clear existing files
     vol.reset()
@@ -18,10 +19,13 @@ export function loadFilesIntoMemfs(files: { [key: string]: string }): boolean {
     Object.entries(files).forEach(([path, content]) => {
       const absolutePath = path.startsWith('/') ? path : `/${path}`
       absoluteFiles[absolutePath] = content
-      console.log(`📄 File: ${absolutePath} (${content.length} chars)`)
+      console.log(`  ✓ ${path} → ${absolutePath} (${content.length} chars)`)
     })
     
+    console.log('📂 Final absolute paths:', Object.keys(absoluteFiles))
+    
     // Load into memfs
+    console.log('🔄 Calling vol.fromJSON...')
     vol.fromJSON(absoluteFiles, '/')
     
     // Verify loading worked
@@ -29,6 +33,7 @@ export function loadFilesIntoMemfs(files: { [key: string]: string }): boolean {
     const loadedCount = Object.keys(loadedFiles).length
     
     console.log(`✅ memfs loaded: ${loadedCount} files`)
+    console.log('📂 Loaded file paths:', Object.keys(loadedFiles))
     
     // Basic validation - check if we have essential files
     const hasPackageJson = vol.existsSync('/package.json')
@@ -37,10 +42,20 @@ export function loadFilesIntoMemfs(files: { [key: string]: string }): boolean {
     console.log(`📋 package.json: ${hasPackageJson ? '✅' : '❌'}`)
     console.log(`📋 app.json: ${hasAppJson ? '✅' : '❌'}`)
     
+    if (loadedCount !== Object.keys(absoluteFiles).length) {
+      console.warn(`⚠️ Expected ${Object.keys(absoluteFiles).length} files but memfs has ${loadedCount}`)
+      console.warn('📄 Missing files:', Object.keys(absoluteFiles).filter(path => !loadedFiles[path]))
+    }
+    
     return loadedCount > 0
     
   } catch (error) {
     console.error('❌ Failed to load files into memfs:', error)
+    console.error('❌ Error details:', {
+      name: error instanceof Error ? error.name : 'Unknown',
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined
+    })
     return false
   }
 }

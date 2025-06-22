@@ -138,11 +138,11 @@ export default function AppBuilder() {
     }))
 
     try {
-      // Import the base template generator directly
-      const { generateExpoBaseTemplate } = await import('@/lib/generators/templates/expo-base-template')
+      // Import the base template generator directly - using COMPLETE demo-1 structure
+      const { generateDemo1BaseTemplate } = await import('@/lib/generators/templates/complete-demo1-template')
       
-      console.log('📂 Loading base template directly...')
-      const templateFiles = generateExpoBaseTemplate('ManualApp')
+      console.log('📂 Loading COMPLETE demo-1 base template directly...')
+      const templateFiles = generateDemo1BaseTemplate('ManualApp')
       
       console.log(`✅ Base template loaded: ${Object.keys(templateFiles).length} files`)
       
@@ -177,14 +177,25 @@ export default function AppBuilder() {
 
   const handleGenerate = async (prompt: string, useExtendedTimeout = false) => {
     setCurrentPrompt(prompt)
+    
+    // ✅ IMMEDIATE VISUAL FEEDBACK - Show generation started
     setBuildInfo({
       status: 'generating',
-      progress: 0,
-      currentStep: useExtendedTimeout 
-        ? 'Initializing extended timeout generation (up to 90s)...' 
-        : 'Initializing quick generation (6s timeout)...',
+      progress: 5,
+      currentStep: '🚀 Starting AI generation...',
       files: {}
     })
+    
+    // Small delay to ensure UI updates
+    await new Promise(resolve => setTimeout(resolve, 100))
+    
+    setBuildInfo(prev => ({
+      ...prev,
+      progress: 10,
+      currentStep: useExtendedTimeout 
+        ? '🤖 Initializing extended timeout generation (up to 90s)...' 
+        : '⚡ Initializing quick generation (90s timeout)...',
+    }))
 
     const controller = new AbortController()
     setAbortController(controller)
@@ -192,6 +203,13 @@ export default function AppBuilder() {
     try {
       const apiEndpoint = useExtendedTimeout ? '/api/ai-stream' : '/api/generate'
       console.log(`🚀 Starting generation with ${useExtendedTimeout ? 'extended timeout' : 'quick mode'}:`, prompt)
+      
+      // ✅ Show API call progress
+      setBuildInfo(prev => ({
+        ...prev,
+        progress: 15,
+        currentStep: '📡 Connecting to AI API...',
+      }))
       
       const response = await fetch(apiEndpoint, {
         method: 'POST',
@@ -201,6 +219,13 @@ export default function AppBuilder() {
         body: JSON.stringify({ prompt }),
         signal: controller.signal
       })
+      
+      // ✅ Show response progress
+      setBuildInfo(prev => ({
+        ...prev,
+        progress: 20,
+        currentStep: '📥 AI response received, processing...',
+      }))
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`)
@@ -235,22 +260,53 @@ export default function AppBuilder() {
               }))
             } else if (data.type === 'complete') {
               // Final result with all files
+              console.log(`🎉 AI Generation complete: ${data.fileCount} files in ${data.duration}ms`)
+              console.log('📄 Generated files:', Object.keys(data.files))
+              
+              // ✅ CRITICAL: Load AI-generated files into memfs for preview
+              try {
+                if (typeof window !== 'undefined') {
+                  console.log('📂 Loading AI-generated files into memfs...')
+                  
+                  // Debug: Check file structure before loading
+                  const { debugFileStructure, debugMemfsState } = await import('@/lib/utils/debug-memfs')
+                  debugFileStructure(data.files, 'AI Generated Files (before memfs)')
+                  debugMemfsState('Before Loading AI Files')
+                  
+                  const { loadFilesIntoMemfs } = await import('@/lib/utils/simple-memfs')
+                  const memfsSuccess = loadFilesIntoMemfs(data.files)
+                  
+                  if (memfsSuccess) {
+                    console.log('✅ AI-generated files successfully loaded into memfs')
+                    
+                    // Debug: Check memfs state after loading
+                    debugMemfsState('After Loading AI Files')
+                    
+                  } else {
+                    console.warn('⚠️ Failed to load AI-generated files into memfs')
+                    debugMemfsState('Failed memfs load attempt')
+                  }
+                }
+              } catch (memfsError) {
+                console.error('❌ memfs loading error:', memfsError)
+              }
+              
               setBuildInfo({
                 status: 'completed',
                 progress: 100,
-                currentStep: `✅ Generated ${data.fileCount} files in ${Math.ceil(data.duration/1000)}s!`,
+                currentStep: `✅ Generated ${data.fileCount} files in ${Math.ceil(data.duration/1000)}s! Files loaded into memfs.`,
                 files: data.files
               })
               
-              // Auto-select first file for preview
+              // Auto-select first file for preview and show file tree
               const firstFile = Object.keys(data.files)[0]
               if (firstFile) {
                 setSelectedFile(firstFile)
+                console.log(`📄 Auto-selected first file: ${firstFile}`)
+                console.log(`📁 Total files in UI: ${Object.keys(data.files).length}`)
                 setActiveView('code')
               }
               setCurrentlyWritingFile('')
-              
-              console.log(`✅ Generation complete: ${data.fileCount} files in ${data.duration}ms`)
             } else if (data.type === 'error') {
               throw new Error(data.message || 'Generation failed')
             }
@@ -307,10 +363,30 @@ export default function AppBuilder() {
                 filesObject[file.path] = file.content
               })
               
+              console.log(`🎉 Streaming generation complete: ${data.files.length} files`)
+              console.log('📄 Generated files:', Object.keys(filesObject))
+              
+              // ✅ CRITICAL: Load streaming AI-generated files into memfs for preview
+              try {
+                if (typeof window !== 'undefined') {
+                  console.log('📂 Loading streaming AI-generated files into memfs...')
+                  const { loadFilesIntoMemfs } = await import('@/lib/utils/simple-memfs')
+                  const memfsSuccess = loadFilesIntoMemfs(filesObject)
+                  
+                  if (memfsSuccess) {
+                    console.log('✅ Streaming AI-generated files successfully loaded into memfs')
+                  } else {
+                    console.warn('⚠️ Failed to load streaming AI-generated files into memfs')
+                  }
+                }
+              } catch (memfsError) {
+                console.error('❌ Streaming memfs loading error:', memfsError)
+              }
+              
               setBuildInfo({
                 status: 'completed',
                 progress: 100,
-                currentStep: 'Generation complete!',
+                currentStep: `✅ Generation complete! ${data.files.length} files loaded into memfs.`,
                 files: filesObject
               })
               
@@ -1016,6 +1092,21 @@ Generated on: ${new Date().toLocaleString()}
                   <span>Download</span>
                 </button>
               </div>
+              
+              {/* Debug Button */}
+              <button
+                onClick={async () => {
+                  if (typeof window !== 'undefined') {
+                    const { debugMemfsState, debugFileStructure } = await import('@/lib/utils/debug-memfs')
+                    debugMemfsState('Manual Debug Check')
+                    debugFileStructure(buildInfo.files, 'UI State Files')
+                  }
+                }}
+                className="w-full bg-purple-600 hover:bg-purple-700 text-white py-2 px-3 rounded-xl transition-colors text-sm mt-2"
+                title="Debug memfs state (check console)"
+              >
+                🔍 Debug memfs
+              </button>
             </div>
           )}
 
