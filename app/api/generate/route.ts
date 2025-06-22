@@ -183,15 +183,11 @@ FAST response needed!`
   if (Object.keys(files).length === 0) {
     console.log('⚠️ Mistral parsing failed, using enhanced base template...')
     const { generateExpoBaseTemplate } = await import('@/lib/generators/templates/expo-base-template')
-    const { normalizeFilesForMemfs } = await import('@/lib/utils/memfs-helper')
     const { analyzePrompt } = await import('@/lib/generators/v0-pipeline')
     
     const analysis = analyzePrompt(prompt)
     const appName = `${analysis.type.charAt(0).toUpperCase() + analysis.type.slice(1)}App`
-    const baseTemplate = generateExpoBaseTemplate(appName)
-    
-    // Ensure memfs compatibility
-    return normalizeFilesForMemfs(baseTemplate)
+    return generateExpoBaseTemplate(appName)
   }
   
   console.log(`✅ FREE Mistral generated ${Object.keys(files).length} files`)

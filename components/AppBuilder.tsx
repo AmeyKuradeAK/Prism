@@ -27,7 +27,7 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import PromptInput from './PromptInput'
-import ReactNativePreview from './ReactNativePreview'
+import SimpleReactNativePreview from './SimpleReactNativePreview'
 import { runV0Pipeline } from '@/lib/generators/v0-pipeline'
 
 interface BuildInfo {
@@ -138,12 +138,18 @@ export default function AppBuilder() {
     }))
 
     try {
-      const templateFiles = await runV0Pipeline('Basic Expo Template')
+      // Import the base template generator directly
+      const { generateExpoBaseTemplate } = await import('@/lib/generators/templates/expo-base-template')
+      
+      console.log('📂 Loading base template directly...')
+      const templateFiles = generateExpoBaseTemplate('ManualApp')
+      
+      console.log(`✅ Base template loaded: ${Object.keys(templateFiles).length} files`)
       
       setBuildInfo({
         status: 'completed',
         progress: 100,
-        currentStep: 'Template loaded',
+        currentStep: `Template loaded - ${Object.keys(templateFiles).length} files`,
         files: templateFiles
       })
     } catch (error) {
@@ -151,7 +157,7 @@ export default function AppBuilder() {
       setBuildInfo(prev => ({
         ...prev,
         status: 'error',
-        message: 'Failed to load template'
+        message: `Failed to load template: ${error instanceof Error ? error.message : 'Unknown error'}`
       }))
     }
   }
@@ -1320,7 +1326,7 @@ Generated on: ${new Date().toLocaleString()}
 
             {activeView === 'preview' && (
               <div className="flex-1">
-                <ReactNativePreview 
+                <SimpleReactNativePreview 
                   files={buildInfo.files}
                   isGenerating={buildInfo.status === 'generating'}
                   projectName={currentPrompt.slice(0, 50) || 'React Native App'}
