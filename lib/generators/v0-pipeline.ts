@@ -144,95 +144,56 @@ export function analyzePrompt(prompt: string): AppAnalysis {
 
 // 🚀 Main V0.dev Pipeline
 export async function runV0Pipeline(prompt: string): Promise<{ [key: string]: string }> {
-  console.log('🚀 Starting V0.dev-style pipeline...')
+  console.log('🚀 Starting AI File Generation + Virtual Merge Pipeline...')
   console.log(`🌐 Pipeline Environment: ${typeof process !== 'undefined' ? process.env?.NODE_ENV || 'unknown' : 'no-process'}`)
   
   try {
-    // STEP 1: Prompt Analysis (like v0.dev)
+    // STEP 1: Prompt Analysis
     console.log('📊 Step 1: Analyzing prompt...')
     const analysis = analyzePrompt(prompt)
     console.log(`✅ Detected: ${analysis.type} app (${analysis.complexity}) with ${analysis.features.length} features`)
-    console.log(`📋 Analysis details:`, {
-      type: analysis.type,
-      complexity: analysis.complexity,
-      features: analysis.features,
-      screens: analysis.screens,
-      components: analysis.components
-    })
     
-    // STEP 2: Plan Formation (like v0.dev)
+    // STEP 2: Plan Formation
     console.log('🎯 Step 2: Creating generation plan...')
     const plan = createGenerationPlan(analysis, prompt)
     console.log(`✅ Plan: ${plan.steps.length} steps, ${plan.steps.reduce((sum, step) => sum + step.files.length, 0)} files`)
     
-    // STEP 3: Base Template (like v0.dev Next.js base)
-    console.log('📱 Step 3: Instantiating base template...')
-    console.log(`📛 Calling generateExpoBaseTemplate with appName: "${plan.appName}"`)
-    
+    // STEP 3: Base Template (Foundation - always created)
+    console.log('📱 Step 3: Creating base template foundation...')
     const baseFiles = generateExpoBaseTemplate(plan.appName)
-    
-    console.log(`✅ Base template: ${Object.keys(baseFiles).length} files`)
-    console.log(`📁 Base template files: ${Object.keys(baseFiles).slice(0, 5).join(', ')}${Object.keys(baseFiles).length > 5 ? '...' : ''}`)
-    
-    // Verify base template has content
-    const baseFilesWithContent = Object.entries(baseFiles).filter(([_, content]) => content && content.length > 0)
-    console.log(`📊 Base files with content: ${baseFilesWithContent.length}/${Object.keys(baseFiles).length}`)
+    console.log(`✅ Base foundation: ${Object.keys(baseFiles).length} files`)
     
     if (Object.keys(baseFiles).length === 0) {
-      throw new Error('Base template generation failed - no files returned')
+      throw new Error('Base template generation failed - no foundation files created')
     }
     
-    // STEP 4: LLM Generation (like v0.dev) - Enhanced error handling with better fallback
-    console.log('🧠 Step 4: LLM generating components...')
-    let enhancedFiles = baseFiles
+    // STEP 4: AI File Generation (Primary Feature - not fallback!)
+    console.log('🧠 Step 4: AI generating new files to merge...')
     
-    if (process.env.MISTRAL_API_KEY && process.env.MISTRAL_API_KEY.length > 10) {
-      try {
-        console.log('🔑 Mistral API key found, attempting LLM generation...')
-        enhancedFiles = await generateWithLLM(plan, baseFiles)
-        console.log(`✅ LLM generation successful: ${Object.keys(enhancedFiles).length} total files`)
-      } catch (error) {
-        console.log('⚠️ LLM failed, using enhanced base template with manual component injection')
-        console.error('LLM Error details:', {
-          message: error instanceof Error ? error.message : 'Unknown error',
-          stack: error instanceof Error ? error.stack : undefined
-        })
-        
-        // ENHANCED FALLBACK: Inject smart components based on the analysis
-        enhancedFiles = await generateSmartFallbackFiles(baseFiles, analysis, prompt)
-        console.log(`🔧 Fallback generation complete: ${Object.keys(enhancedFiles).length} total files`)
-      }
-    } else {
-      console.log('📦 No Mistral API key - using enhanced base template with smart components')
-      enhancedFiles = await generateSmartFallbackFiles(baseFiles, analysis, prompt)
+    if (!process.env.MISTRAL_API_KEY || process.env.MISTRAL_API_KEY.length < 10) {
+      throw new Error('Mistral API key required for AI file generation')
     }
     
-    // STEP 5: AST Validation (like v0.dev)
-    console.log('🛠️ Step 5: AST validation and auto-fix...')
-    const validatedFiles = validateAndFix(enhancedFiles, analysis)
-    console.log(`✅ Validation complete: ${Object.keys(validatedFiles).length} files`)
+    console.log('🔑 Mistral API available - generating AI files...')
+    const aiGeneratedFiles = await generateAIFiles(plan)
+    console.log(`✅ AI generated: ${Object.keys(aiGeneratedFiles).length} new files`)
     
-    // STEP 6: Build Check (like v0.dev)
-    console.log('🔨 Step 6: Build validation...')
+    // STEP 5: Virtual Merge (Like Git Merge - merge AI files INTO base)
+    console.log('🔀 Step 5: Merging AI files into base template (virtual merge)...')
+    const mergedFiles = performVirtualMerge(baseFiles, aiGeneratedFiles, analysis)
+    console.log(`✅ Virtual merge complete: ${Object.keys(mergedFiles).length} total files`)
+    
+    // STEP 6: Validation & Build-Ready
+    console.log('🛠️ Step 6: Validating merged files...')
+    const validatedFiles = validateAndFix(mergedFiles, analysis)
     const buildReadyFiles = ensureBuildReady(validatedFiles, analysis)
-    console.log(`✅ Build ready: ${Object.keys(buildReadyFiles).length} files`)
     
-    console.log('🎉 V0.dev pipeline complete!')
+    console.log(`🎉 Pipeline complete: ${Object.keys(buildReadyFiles).length} files ready`)
     return buildReadyFiles
     
   } catch (error) {
-    console.error('❌ V0.dev pipeline failed:', error)
-    
-    // Emergency fallback - return base template
-    console.log('🚨 Emergency fallback: returning base template...')
-    try {
-      const fallbackFiles = generateExpoBaseTemplate('FallbackApp')
-      console.log(`🆘 Fallback successful: ${Object.keys(fallbackFiles).length} files`)
-      return fallbackFiles
-    } catch (fallbackError) {
-      console.error('❌ Even fallback failed:', fallbackError)
-      throw new Error(`V0.dev pipeline failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
-    }
+    console.error('❌ Pipeline failed:', error)
+    throw new Error(`Failed to generate with base template: ${error instanceof Error ? error.message : 'Unknown error'}`)
   }
 }
 
@@ -300,7 +261,8 @@ Production-ready, clean UI.`
 }
 
 // 🧠 LLM Generation with Rate Limiting & Retry Logic
-async function generateWithLLM(plan: GenerationPlan, baseFiles: { [key: string]: string }): Promise<{ [key: string]: string }> {
+// 🤖 AI File Generation (Pure AI generation - no merge here)
+async function generateAIFiles(plan: GenerationPlan): Promise<{ [key: string]: string }> {
   const maxRetries = 3
   let lastError: Error | null = null
   
@@ -359,63 +321,29 @@ async function generateWithLLM(plan: GenerationPlan, baseFiles: { [key: string]:
             ).join('')
           : String(responseContent)
 
-      console.log(`🔍 Parsing LLM response (${contentString.length} chars)...`)
+      console.log(`🔍 Parsing AI response (${contentString.length} chars)...`)
       
-      // Parse LLM response
+      // Parse AI response to extract files
       const { parseCodeFromResponse } = await import('@/lib/utils/code-parser')
       const generatedFiles = parseCodeFromResponse(contentString)
       
-      console.log(`📁 Parsed ${generatedFiles.length} files from LLM response`)
+      console.log(`📁 AI generated ${generatedFiles.length} files`)
       
-      // Enhanced file integration
-      const allFiles = { ...baseFiles }
-      const baseFileCount = Object.keys(baseFiles).length
-      
-      console.log(`🔄 Integrating ${generatedFiles.length} AI files with ${baseFileCount} base files...`)
-      
-      // Process each AI-generated file
+      // Convert to file object format
+      const aiFiles: { [key: string]: string } = {}
       for (const file of generatedFiles) {
-        if (!file.path || !file.content) continue
-        
-        const normalizedPath = file.path.trim()
-        
-        // Smart placement rules
-        if (normalizedPath.includes('Component') || normalizedPath.includes('component')) {
-          const componentPath = normalizedPath.startsWith('components/') 
-            ? normalizedPath 
-            : `components/${normalizedPath.split('/').pop()}`
-          allFiles[componentPath] = file.content
-        } else if (normalizedPath.includes('Screen') || normalizedPath.includes('screen')) {
-          const screenPath = normalizedPath.startsWith('app/') 
-            ? normalizedPath 
-            : `app/${normalizedPath.split('/').pop()}`
-          allFiles[screenPath] = file.content
-        } else if (allFiles[normalizedPath] && normalizedPath === 'package.json') {
-          // Merge package.json dependencies
-          try {
-            const basePackage = JSON.parse(allFiles[normalizedPath])
-            const aiPackage = JSON.parse(file.content)
-            if (aiPackage.dependencies) {
-              basePackage.dependencies = { ...basePackage.dependencies, ...aiPackage.dependencies }
-            }
-            allFiles[normalizedPath] = JSON.stringify(basePackage, null, 2)
-          } catch {
-            allFiles[normalizedPath] = file.content
-          }
-        } else {
-          allFiles[normalizedPath] = file.content
+        if (file.path && file.content) {
+          aiFiles[file.path.trim()] = file.content
         }
       }
       
-      const finalFileCount = Object.keys(allFiles).length
-      console.log(`🎉 Integration complete: ${finalFileCount} total files`)
-      
-      return allFiles
+      console.log(`✅ AI file generation complete: ${Object.keys(aiFiles).length} files`)
+      return aiFiles
       
     } catch (error) {
       lastError = error instanceof Error ? error : new Error('Unknown error')
       
-      console.error(`❌ LLM attempt ${attempt}/${maxRetries} failed:`, lastError.message)
+      console.error(`❌ AI generation attempt ${attempt}/${maxRetries} failed:`, lastError.message)
       
       // Check if error is retryable
       const isRateLimitError = lastError.message.includes('429') || lastError.message.includes('rate limit')
@@ -444,8 +372,105 @@ async function generateWithLLM(plan: GenerationPlan, baseFiles: { [key: string]:
     }
   }
   
-  throw lastError || new Error('All retry attempts failed')
+  throw lastError || new Error('All AI generation attempts failed')
 }
+
+// 🔀 Virtual Merge (Like Git Merge - merge AI files into base template)
+function performVirtualMerge(
+  baseFiles: { [key: string]: string }, 
+  aiFiles: { [key: string]: string },
+  analysis: AppAnalysis
+): { [key: string]: string } {
+  console.log(`🔀 Starting virtual merge: ${Object.keys(baseFiles).length} base + ${Object.keys(aiFiles).length} AI files`)
+  
+  // Start with base template as foundation
+  const mergedFiles = { ...baseFiles }
+  let addedCount = 0
+  let replacedCount = 0
+  let mergedCount = 0
+  
+  // Process each AI-generated file
+  for (const [aiPath, aiContent] of Object.entries(aiFiles)) {
+    if (!aiContent?.trim()) continue
+    
+    const normalizedPath = aiPath.trim()
+    
+    // Smart file placement and merging
+    if (normalizedPath.includes('Component') || normalizedPath.includes('component')) {
+      // Place components in components/ directory
+      const componentPath = normalizedPath.startsWith('components/') 
+        ? normalizedPath 
+        : `components/${normalizedPath.split('/').pop()}`
+      
+      if (mergedFiles[componentPath]) {
+        console.log(`🔄 Replacing component: ${componentPath}`)
+        replacedCount++
+      } else {
+        console.log(`➕ Adding new component: ${componentPath}`)
+        addedCount++
+      }
+      mergedFiles[componentPath] = aiContent
+      
+    } else if (normalizedPath.includes('Screen') || normalizedPath.includes('screen') || normalizedPath.startsWith('app/')) {
+      // Place screens in app/ directory
+      const screenPath = normalizedPath.startsWith('app/') 
+        ? normalizedPath 
+        : `app/${normalizedPath.split('/').pop()}`
+      
+      if (mergedFiles[screenPath]) {
+        console.log(`🔄 Replacing screen: ${screenPath}`)
+        replacedCount++
+      } else {
+        console.log(`➕ Adding new screen: ${screenPath}`)
+        addedCount++
+      }
+      mergedFiles[screenPath] = aiContent
+      
+    } else if (normalizedPath === 'package.json') {
+      // Special handling for package.json - merge dependencies
+      try {
+        const basePackage = JSON.parse(mergedFiles[normalizedPath] || '{}')
+        const aiPackage = JSON.parse(aiContent)
+        
+        // Merge dependencies
+        if (aiPackage.dependencies) {
+          basePackage.dependencies = { ...basePackage.dependencies, ...aiPackage.dependencies }
+        }
+        if (aiPackage.devDependencies) {
+          basePackage.devDependencies = { ...basePackage.devDependencies, ...aiPackage.devDependencies }
+        }
+        
+        mergedFiles[normalizedPath] = JSON.stringify(basePackage, null, 2)
+        console.log(`🔀 Merged package.json dependencies`)
+        mergedCount++
+      } catch {
+        // If JSON parsing fails, replace entirely
+        mergedFiles[normalizedPath] = aiContent
+        console.log(`🔄 Replaced package.json (merge failed)`)
+        replacedCount++
+      }
+      
+    } else {
+      // Generic file handling
+      if (mergedFiles[normalizedPath]) {
+        console.log(`🔄 Replacing file: ${normalizedPath}`)
+        replacedCount++
+      } else {
+        console.log(`➕ Adding new file: ${normalizedPath}`)
+        addedCount++
+      }
+      mergedFiles[normalizedPath] = aiContent
+    }
+  }
+  
+  console.log(`✅ Virtual merge complete: +${addedCount} added, ${replacedCount} replaced, ${mergedCount} merged`)
+  console.log(`📊 Total files after merge: ${Object.keys(mergedFiles).length}`)
+  
+  return mergedFiles
+}
+
+// Legacy function - replaced by generateAIFiles + performVirtualMerge
+// This function is kept for reference but not used in the new pipeline
 
 // 🛠️ AST Validation & Auto-fix (like v0.dev)
 function validateAndFix(files: { [key: string]: string }, analysis: AppAnalysis): { [key: string]: string } {

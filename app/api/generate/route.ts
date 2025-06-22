@@ -5,7 +5,7 @@ export async function POST(request: NextRequest) {
   const startTime = Date.now()
   
   try {
-    console.log('🚀 API Generate: Starting request processing...')
+    console.log('🚀 API Generate: Starting FREE AI generation with Mistral...')
     
     // Check authentication
     const { userId } = await auth()
@@ -34,145 +34,80 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.log(`🚀 V0-style React Native generation for: "${prompt.substring(0, 100)}..."`)
-    console.log(`🌐 Environment: ${process.env.NODE_ENV}`)
+    console.log(`🧠 FREE AI generation with Mistral for: "${prompt.substring(0, 100)}..."`)
     console.log(`🔑 Mistral API Key present: ${!!process.env.MISTRAL_API_KEY}`)
     console.log(`🧪 Test mode: ${testMode ? 'enabled' : 'disabled'}`)
     console.log(`⚡ Quick mode: ${quickMode ? 'enabled' : 'disabled'}`)
 
-    // NETLIFY 10-SECOND STRATEGY: 
-    // - Always use base template for production reliability
-    // - Only attempt AI generation in development or with explicit quick=false
-    const timeElapsed = Date.now() - startTime
-    const shouldUseBaseTemplate = testMode || quickMode || 
-      !process.env.MISTRAL_API_KEY || 
-      timeElapsed > 500 || // If already spent 500ms, use base template
-      process.env.NODE_ENV === 'production' // Always use base template in production
-    
-    if (shouldUseBaseTemplate) {
-      console.log('⚡ Using base template (optimized for Netlify 10s limit)')
-      try {
-        const { generateExpoBaseTemplate } = await import('@/lib/generators/templates/expo-base-template')
-        const { analyzePrompt } = await import('@/lib/generators/v0-pipeline')
-        
-        // Analyze prompt to customize the app name
-        const analysis = analyzePrompt(prompt)
-        const appName = `${analysis.type.charAt(0).toUpperCase() + analysis.type.slice(1)}App`
-        
-        const files = generateExpoBaseTemplate(appName)
-        
-        console.log(`⚡ Base template successful: ${Object.keys(files).length} files`)
-        
-        return new Response(
-          JSON.stringify({
-            success: true,
-            files: files,
-            message: `Generated ${Object.keys(files).length} files with React Native base template`,
-            fileCount: Object.keys(files).length,
-            totalSize: Object.values(files).reduce((size: number, content: string) => size + content.length, 0),
-            pipeline: quickMode ? 'quick-mode' : 'base-template',
-            mode: 'netlify-optimized',
-            analysis: analysis
-          }),
-          { 
-            status: 200,
-            headers: { 'Content-Type': 'application/json' }
-          }
-        )
-      } catch (baseError) {
-        console.error('❌ Base template failed:', baseError)
-        throw new Error(`Base template generation failed: ${baseError instanceof Error ? baseError.message : 'Unknown error'}`)
-      }
-    }
-
-    // AI Generation (only in development - risky for Netlify 10s limit)
-    console.log('🧠 Attempting AI generation (risky with Netlify 10s limit)...')
-    try {
-      const { runV0Pipeline } = await import('@/lib/generators/v0-pipeline')
+    // Quick mode fallback
+    if (testMode || quickMode) {
+      console.log('⚡ Quick mode - using base template only')
+      const { generateExpoBaseTemplate } = await import('@/lib/generators/templates/expo-base-template')
+      const { analyzePrompt } = await import('@/lib/generators/v0-pipeline')
       
-      // Very aggressive timeout for Netlify (5 seconds max)
-      const validatedFiles = await Promise.race([
-        runV0Pipeline(prompt),
-        new Promise((_, reject) => {
-          setTimeout(() => {
-            reject(new Error('Pipeline timeout after 5s (Netlify protection)'))
-          }, 5000)
-        })
-      ]) as { [key: string]: string }
-      
-      console.log(`📊 AI pipeline returned ${Object.keys(validatedFiles).length} files`)
-      
-      if (Object.keys(validatedFiles).length === 0) {
-        throw new Error('AI pipeline returned no files')
-      }
-      
-      console.log(`✅ AI generation complete: ${Object.keys(validatedFiles).length} files`)
+      const analysis = analyzePrompt(prompt)
+      const appName = `${analysis.type.charAt(0).toUpperCase() + analysis.type.slice(1)}App`
+      const files = generateExpoBaseTemplate(appName)
       
       return new Response(
         JSON.stringify({
           success: true,
-          files: validatedFiles,
-          message: `AI Generated ${Object.keys(validatedFiles).length} files`,
-          fileCount: Object.keys(validatedFiles).length,
-          totalSize: Object.values(validatedFiles).reduce((size: number, content: string) => size + content.length, 0),
-          pipeline: 'ai-generation',
-          mode: 'risky-netlify-timing'
+          files: files,
+          message: `Quick mode: Generated ${Object.keys(files).length} files`,
+          fileCount: Object.keys(files).length,
+          pipeline: 'quick-mode',
+          analysis: analysis
         }),
-        { 
-          status: 200,
-          headers: { 'Content-Type': 'application/json' }
-        }
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
       )
-      
-    } catch (pipelineError) {
-      console.error('❌ AI pipeline failed:', pipelineError)
-      
-      // Emergency fallback to base template
-      console.log('🆘 Emergency fallback to base template...')
-      try {
-        const { generateExpoBaseTemplate } = await import('@/lib/generators/templates/expo-base-template')
-        const fallbackFiles = generateExpoBaseTemplate('EmergencyApp')
-        
-        console.log(`🆘 Emergency fallback successful: ${Object.keys(fallbackFiles).length} files`)
-        
+    }
+
+    // OPTIMIZED MISTRAL GENERATION (FREE!)
+    if (!process.env.MISTRAL_API_KEY) {
+      throw new Error('Mistral API key not configured')
+    }
+
+    console.log('🚀 Starting OPTIMIZED FREE Mistral generation...')
+    try {
+      const aiFiles = await generateWithOptimizedMistral(prompt)
+      if (Object.keys(aiFiles).length > 0) {
+        console.log(`✅ Mistral FREE AI success: ${Object.keys(aiFiles).length} files`)
         return new Response(
           JSON.stringify({
             success: true,
-            files: fallbackFiles,
-            message: `Emergency fallback: Generated ${Object.keys(fallbackFiles).length} files`,
-            fileCount: Object.keys(fallbackFiles).length,
-            totalSize: Object.values(fallbackFiles).reduce((size: number, content: string) => size + content.length, 0),
-            pipeline: 'emergency-fallback',
-            warning: 'AI generation failed, used base template'
+            files: aiFiles,
+            message: `FREE AI Generated ${Object.keys(aiFiles).length} files with Mistral`,
+            fileCount: Object.keys(aiFiles).length,
+            pipeline: 'optimized-mistral-free',
+            provider: 'Mistral (Free)',
+            cost: 'FREE! 🎉'
           }),
-          { 
-            status: 200,
-            headers: { 'Content-Type': 'application/json' }
-          }
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
         )
-      } catch (fallbackError) {
-        console.error('❌ Even emergency fallback failed:', fallbackError)
-        throw new Error(`Both AI and fallback failed: ${pipelineError instanceof Error ? pipelineError.message : 'Unknown error'}`)
       }
+    } catch (mistralError) {
+      console.error('❌ Optimized Mistral failed:', mistralError)
+      throw mistralError
     }
+
+    throw new Error('Mistral generation failed')
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
     const timeSpent = Date.now() - startTime
     
-    console.error('❌ Generation failed:', {
+    console.error('❌ FREE AI Generation failed:', {
       error: errorMessage,
-      timeSpent: `${timeSpent}ms`,
-      netlifyLimit: '10 seconds hard limit'
+      timeSpent: `${timeSpent}ms`
     })
     
     return new Response(
       JSON.stringify({ 
-        error: 'Failed to generate app',
+        error: 'FREE AI generation failed',
         details: errorMessage,
         timeSpent: `${timeSpent}ms`,
-        netlifyLimit: 'Hit 10-second Netlify function limit',
-        suggestion: 'Use Quick Mode for reliable generation',
+        suggestion: 'Mistral API might be slow. Try Quick Mode for instant results.',
+        provider: 'Mistral (Free)',
         timestamp: new Date().toISOString()
       }),
       { 
@@ -181,7 +116,83 @@ export async function POST(request: NextRequest) {
       }
     )
   }
-} 
+}
+
+// SUPER OPTIMIZED MISTRAL (FREE BUT FAST!)
+async function generateWithOptimizedMistral(prompt: string): Promise<{ [key: string]: string }> {
+  console.log('🤖 Starting OPTIMIZED FREE Mistral generation...')
+  
+  const { Mistral } = await import('@mistralai/mistralai')
+  const mistral = new Mistral({ apiKey: process.env.MISTRAL_API_KEY! })
+  
+  // ULTRA-SHORT PROMPT FOR SPEED ⚡
+  const optimizedPrompt = `Create React Native Expo app: ${prompt.substring(0, 60)}
+
+REQUIREMENTS:
+- Expo SDK 53, TypeScript
+- Working code only
+- Format: ===FILE: path===\ncode\n===END===
+
+Generate 3-5 essential files:
+1. app/_layout.tsx (root)
+2. app/(tabs)/_layout.tsx (tabs)  
+3. app/(tabs)/index.tsx (home screen)
+4. components/ThemedText.tsx
+5. package.json (deps)
+
+FAST response needed!`
+
+  console.log(`📋 Optimized prompt: ${optimizedPrompt.length} chars (reduced for speed)`)
+  
+  const startTime = Date.now()
+  
+  // AGGRESSIVE 6-SECOND TIMEOUT
+  const response = await Promise.race([
+    mistral.chat.complete({
+      model: 'mistral-small-latest',
+      messages: [{ role: 'user', content: optimizedPrompt }],
+      temperature: 0.1, // Lower for consistency
+      maxTokens: 2000   // Reduced for speed
+    }),
+    new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Mistral timeout after 6 seconds')), 6000)
+    })
+  ]) as any
+
+  const duration = Date.now() - startTime
+  console.log(`📥 FREE Mistral responded in ${duration}ms`)
+  
+  const content = response.choices[0]?.message?.content || ''
+  if (!content) throw new Error('Empty Mistral response')
+  
+  console.log(`📝 Mistral response length: ${content.length} chars`)
+  
+  // Parse response into files
+  const { parseCodeFromResponse } = await import('@/lib/utils/code-parser')
+  const generatedFiles = parseCodeFromResponse(content)
+  
+  // Convert to files object
+  const files: { [key: string]: string } = {}
+  generatedFiles.forEach(file => {
+    if (file.path && file.content) {
+      files[file.path] = file.content
+    }
+  })
+  
+  // If parsing failed, create enhanced base template
+  if (Object.keys(files).length === 0) {
+    console.log('⚠️ Mistral parsing failed, using enhanced base template...')
+    const { generateExpoBaseTemplate } = await import('@/lib/generators/templates/expo-base-template')
+    const { analyzePrompt } = await import('@/lib/generators/v0-pipeline')
+    
+    const analysis = analyzePrompt(prompt)
+    const appName = `${analysis.type.charAt(0).toUpperCase() + analysis.type.slice(1)}App`
+    return generateExpoBaseTemplate(appName)
+  }
+  
+  console.log(`✅ FREE Mistral generated ${Object.keys(files).length} files`)
+  return files
+}
 
 // Old functions removed - now using complete v0-pipeline.ts with proper:
 // - Prompt parsing & classification
