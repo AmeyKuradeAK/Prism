@@ -3,6 +3,8 @@ import { GeneratedFile } from '@/types'
 export function parseCodeFromResponse(response: string): GeneratedFile[] {
   const files: GeneratedFile[] = []
   
+  console.log(`🔍 Parsing AI response (${response.length} chars)...`)
+  
   // Enhanced and more flexible patterns to match file markers
   const fileMarkerPatterns = [
     // Standard ===FILE: format - most flexible
@@ -12,9 +14,11 @@ export function parseCodeFromResponse(response: string): GeneratedFile[] {
     // Code blocks with file paths
     /```(?:typescript|tsx|javascript|js|json|md|yaml|yml|css|scss|html)?\s*(?:\/\/|#)?\s*([^\n\r]+\.[\w]+)\s*\n([\s\S]*?)```/gi,
     // File path comments followed by code
-    /(?:\/\/|#)\s*(?:FILE|Path):\s*([^\n\r]+)\s*\n([\s\S]*?)(?=(?:\/\/|#)\s*(?:FILE|Path):|$)/gi,
+    /(?:\/\/|#)\s*(?:FILE|Path|file|path):\s*([^\n\r]+)\s*\n([\s\S]*?)(?=(?:\/\/|#)\s*(?:FILE|Path|file|path):|$)/gi,
     // React/JS file patterns
-    /\/\*\s*([^\n\r]+\.(?:tsx?|jsx?|json|md))\s*\*\/\s*\n([\s\S]*?)(?=\/\*.*?\.(?:tsx?|jsx?|json|md)|$)/gi
+    /\/\*\s*([^\n\r]+\.(?:tsx?|jsx?|json|md))\s*\*\/\s*\n([\s\S]*?)(?=\/\*.*?\.(?:tsx?|jsx?|json|md)|$)/gi,
+    // Improved pattern for components
+    /(?:^|\n)(?:\/\/|#)\s*([A-Za-z][A-Za-z0-9]*(?:Component|Screen|Page)\.tsx?)\s*\n([\s\S]*?)(?=\n(?:\/\/|#)\s*[A-Za-z]|$)/gmi
   ]
   
   // Try each pattern
@@ -39,6 +43,7 @@ export function parseCodeFromResponse(response: string): GeneratedFile[] {
       content = cleanupContent(content)
       
       if (filename && content && content.length > 10) {
+        console.log(`📁 Found file via pattern: ${filename} (${content.length} chars)`)
         files.push({
           path: filename,
           content: content,
@@ -48,8 +53,49 @@ export function parseCodeFromResponse(response: string): GeneratedFile[] {
     }
   }
   
-  // If no files found with markers, try to extract code blocks
+  // ENHANCED: Look for React components even without explicit file markers
   if (files.length === 0) {
+    console.log('🔍 No explicit file markers found, searching for React components...')
+    
+    // Look for React component definitions
+    const componentPattern = /(?:export default )?(?:function|const)\s+([A-Z][A-Za-z0-9]*(?:Component|Screen|Page)?)\s*[({=]/g
+    let componentMatch
+    const foundComponents: string[] = []
+    
+    while ((componentMatch = componentPattern.exec(response)) !== null) {
+      const componentName = componentMatch[1]
+      if (!foundComponents.includes(componentName)) {
+        foundComponents.push(componentName)
+        console.log(`🧩 Found component: ${componentName}`)
+      }
+    }
+    
+    // If we found components, try to extract their code
+    for (const componentName of foundComponents) {
+      const componentExtractPattern = new RegExp(
+        `((?:import[^;]*;\\s*)*(?:export default )?(?:function|const)\\s+${componentName}[\\s\\S]*?(?=(?:export default )?(?:function|const)\\s+[A-Z]|$))`,
+        'g'
+      )
+      
+      const extractMatch = componentExtractPattern.exec(response)
+      if (extractMatch) {
+        const content = cleanupContent(extractMatch[1])
+        if (content.length > 50) {
+          const filename = `components/${componentName}.tsx`
+          console.log(`🧩 Extracted component: ${filename} (${content.length} chars)`)
+          files.push({
+            path: filename,
+            content,
+            type: 'tsx'
+          })
+        }
+      }
+    }
+  }
+  
+  // If still no files found with markers, try to extract code blocks
+  if (files.length === 0) {
+    console.log('🔍 No components found, trying code blocks...')
     const codeBlockPattern = /```(?:typescript|tsx|javascript|js|json|md)?\n([\s\S]*?)\n```/g
     let blockMatch
     let fileIndex = 1
@@ -62,6 +108,7 @@ export function parseCodeFromResponse(response: string): GeneratedFile[] {
       // Try to guess filename from content
       let filename = guessFilename(content, fileIndex)
       
+      console.log(`📄 Found code block: ${filename} (${content.length} chars)`)
       files.push({
         path: filename,
         content,
@@ -72,21 +119,48 @@ export function parseCodeFromResponse(response: string): GeneratedFile[] {
     }
   }
   
-  // Final fallback - split by potential file indicators
+  // ENHANCED: Final fallback - look for obvious file content patterns
   if (files.length === 0) {
-    const sections = response.split(/(?:App\.tsx|package\.json|app\.json|README\.md|babel\.config\.js)/i)
+    console.log('🔍 Final fallback: searching for file content patterns...')
     
-    if (sections.length > 1) {
-      for (let i = 1; i < sections.length; i++) {
-        const content = sections[i].trim()
-        if (content.length > 50) { // Only consider substantial content
-          const filename = guessFilenameFromContent(content, i)
-          files.push({
-            path: filename,
-            content: cleanupContent(content),
-            type: determineFileType(filename)
-          })
-        }
+    // Look for package.json content
+    const packageJsonMatch = response.match(/\{[\s\S]*?"scripts"[\s\S]*?"dependencies"[\s\S]*?\}/g)
+    if (packageJsonMatch) {
+      files.push({
+        path: 'package.json',
+        content: cleanupContent(packageJsonMatch[0]),
+        type: 'json'
+      })
+      console.log('📦 Found package.json content')
+    }
+    
+    // Look for app.json content  
+    const appJsonMatch = response.match(/\{[\s\S]*?"expo"[\s\S]*?"name"[\s\S]*?\}/g)
+    if (appJsonMatch) {
+      files.push({
+        path: 'app.json', 
+        content: cleanupContent(appJsonMatch[0]),
+        type: 'json'
+      })
+      console.log('📱 Found app.json content')
+    }
+    
+    // Look for React component code without explicit markers
+    const reactCodePattern = /(?:import[^;]*from[^;]*;[\s\n]*)*(?:export default )?function\s+[A-Z][A-Za-z0-9]*[\s\S]*?(?=(?:export default )?function\s+[A-Z]|$)/g
+    let reactMatch
+    let reactIndex = 1
+    
+    while ((reactMatch = reactCodePattern.exec(response)) !== null) {
+      const content = cleanupContent(reactMatch[0])
+      if (content.length > 100) {
+        const filename = `components/GeneratedComponent${reactIndex}.tsx`
+        files.push({
+          path: filename,
+          content,
+          type: 'tsx'
+        })
+        console.log(`⚛️ Found React code: ${filename} (${content.length} chars)`)
+        reactIndex++
       }
     }
   }
@@ -95,6 +169,9 @@ export function parseCodeFromResponse(response: string): GeneratedFile[] {
   const uniqueFiles = files.filter((file, index, self) => 
     index === self.findIndex(f => f.path === file.path)
   )
+  
+  console.log(`✅ Parsing complete: found ${uniqueFiles.length} unique files`)
+  console.log(`📋 File paths: ${uniqueFiles.map(f => f.path).join(', ')}`)
   
   return uniqueFiles
 }

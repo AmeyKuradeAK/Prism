@@ -139,7 +139,7 @@ export async function runV0Pipeline(prompt: string): Promise<{ [key: string]: st
       throw new Error('Base template generation failed - no files returned')
     }
     
-    // STEP 4: LLM Generation (like v0.dev) - Enhanced error handling
+    // STEP 4: LLM Generation (like v0.dev) - Enhanced error handling with better fallback
     console.log('🧠 Step 4: LLM generating components...')
     let enhancedFiles = baseFiles
     
@@ -149,17 +149,19 @@ export async function runV0Pipeline(prompt: string): Promise<{ [key: string]: st
         enhancedFiles = await generateWithLLM(plan, baseFiles)
         console.log(`✅ LLM generation successful: ${Object.keys(enhancedFiles).length} total files`)
       } catch (error) {
-        console.log('⚠️ LLM failed, using base template (v0.dev fallback)')
+        console.log('⚠️ LLM failed, using enhanced base template with manual component injection')
         console.error('LLM Error details:', {
           message: error instanceof Error ? error.message : 'Unknown error',
           stack: error instanceof Error ? error.stack : undefined
         })
-        // Continue with base template
-        enhancedFiles = baseFiles
+        
+        // ENHANCED FALLBACK: Inject smart components based on the analysis
+        enhancedFiles = await generateSmartFallbackFiles(baseFiles, analysis, prompt)
+        console.log(`🔧 Fallback generation complete: ${Object.keys(enhancedFiles).length} total files`)
       }
     } else {
-      console.log('📦 No Mistral API key - using base template only')
-      enhancedFiles = baseFiles
+      console.log('📦 No Mistral API key - using enhanced base template with smart components')
+      enhancedFiles = await generateSmartFallbackFiles(baseFiles, analysis, prompt)
     }
     
     // STEP 5: AST Validation (like v0.dev)
@@ -317,15 +319,115 @@ async function generateWithLLM(plan: GenerationPlan, baseFiles: { [key: string]:
     const generatedFiles = parseCodeFromResponse(contentString)
     
     console.log(`📁 Parsed ${generatedFiles.length} files from LLM response`)
+    console.log(`📋 Generated file paths: ${generatedFiles.map(f => f.path).join(', ')}`)
     
-    // Merge with base files
+    // START: ENHANCED FILE INTEGRATION LOGIC
+    console.log('🔄 Starting enhanced file integration...')
+    
+    // Create a copy of base files to work with
     const allFiles = { ...baseFiles }
+    const baseFileCount = Object.keys(baseFiles).length
+    
+    console.log(`📊 Base template has ${baseFileCount} files`)
+    console.log(`📊 AI generated ${generatedFiles.length} additional files`)
+    
+    // Process each AI-generated file with smart integration
     for (const file of generatedFiles) {
-      if (file.path && file.content) {
-        allFiles[file.path] = file.content
-        console.log(`✅ Added ${file.path} (${file.content.length} chars)`)
+      if (!file.path || !file.content) {
+        console.log(`⚠️ Skipping invalid file: ${file.path || 'unknown'}`)
+        continue
+      }
+      
+      const normalizedPath = file.path.trim()
+      console.log(`🔧 Processing AI file: ${normalizedPath} (${file.content.length} chars)`)
+      
+      // SMART INTEGRATION RULES:
+      
+      // 1. If it's a new component, place it in the components/ directory
+      if (normalizedPath.includes('Component') || normalizedPath.includes('component')) {
+        const componentPath = normalizedPath.startsWith('components/') 
+          ? normalizedPath 
+          : `components/${normalizedPath.split('/').pop()}`
+        
+        allFiles[componentPath] = file.content
+        console.log(`✅ Added component: ${componentPath}`)
+        continue
+      }
+      
+      // 2. If it's a screen/page, place it in the app/ directory
+      if (normalizedPath.includes('Screen') || normalizedPath.includes('screen') || 
+          normalizedPath.includes('Page') || normalizedPath.includes('page')) {
+        const screenPath = normalizedPath.startsWith('app/') 
+          ? normalizedPath 
+          : `app/${normalizedPath.split('/').pop()}`
+        
+        allFiles[screenPath] = file.content
+        console.log(`✅ Added screen: ${screenPath}`)
+        continue
+      }
+      
+      // 3. If it's modifying an existing base file, merge intelligently
+      if (allFiles[normalizedPath]) {
+        console.log(`🔄 Merging with existing file: ${normalizedPath}`)
+        
+        // For package.json, merge dependencies
+        if (normalizedPath === 'package.json') {
+          try {
+            const basePackage = JSON.parse(allFiles[normalizedPath])
+            const aiPackage = JSON.parse(file.content)
+            
+            // Merge dependencies
+            if (aiPackage.dependencies) {
+              basePackage.dependencies = { ...basePackage.dependencies, ...aiPackage.dependencies }
+            }
+            if (aiPackage.devDependencies) {
+              basePackage.devDependencies = { ...basePackage.devDependencies, ...aiPackage.devDependencies }
+            }
+            if (aiPackage.scripts) {
+              basePackage.scripts = { ...basePackage.scripts, ...aiPackage.scripts }
+            }
+            
+            allFiles[normalizedPath] = JSON.stringify(basePackage, null, 2)
+            console.log(`✅ Merged package.json dependencies`)
+          } catch (error) {
+            console.log(`⚠️ Failed to merge package.json, using AI version`)
+            allFiles[normalizedPath] = file.content
+          }
+        } 
+        // For TypeScript/React files, replace if AI version is more substantial
+        else if (normalizedPath.endsWith('.tsx') || normalizedPath.endsWith('.ts')) {
+          if (file.content.length > allFiles[normalizedPath].length * 1.2) {
+            allFiles[normalizedPath] = file.content
+            console.log(`✅ Replaced ${normalizedPath} with enhanced AI version`)
+          } else {
+            console.log(`📋 Kept base version of ${normalizedPath} (more substantial)`)
+          }
+        }
+        // For other files, prefer AI version if it's significantly different
+        else {
+          allFiles[normalizedPath] = file.content
+          console.log(`✅ Updated ${normalizedPath} with AI version`)
+        }
+      } 
+      // 4. New file - add directly
+      else {
+        allFiles[normalizedPath] = file.content
+        console.log(`✅ Added new file: ${normalizedPath}`)
       }
     }
+    
+    const finalFileCount = Object.keys(allFiles).length
+    const addedFiles = finalFileCount - baseFileCount
+    
+    console.log(`🎉 Integration complete!`)
+    console.log(`📊 Final result: ${finalFileCount} total files (${baseFileCount} base + ${addedFiles} AI-generated/modified)`)
+    console.log(`📁 Final file list: ${Object.keys(allFiles).slice(0, 10).join(', ')}${finalFileCount > 10 ? '...' : ''}`)
+    
+    // Validate the integrated result
+    const componentsAdded = Object.keys(allFiles).filter(path => path.startsWith('components/')).length
+    const screensAdded = Object.keys(allFiles).filter(path => path.startsWith('app/')).length
+    
+    console.log(`📱 Integration stats: ${componentsAdded} components, ${screensAdded} screens/pages`)
     
     return allFiles
     
@@ -437,4 +539,383 @@ function ensureDefaultExport(content: string, filePath: string): string {
   const componentName = filePath.split('/').pop()?.replace('.tsx', '') || 'Screen'
   
   return content + `\n\nexport default ${componentName}`
+}
+
+// 🔧 SMART FALLBACK: Generate components based on analysis when LLM fails
+async function generateSmartFallbackFiles(baseFiles: { [key: string]: string }, analysis: AppAnalysis, originalPrompt: string): Promise<{ [key: string]: string }> {
+  console.log('🔧 Generating smart fallback components...')
+  
+  const enhancedFiles = { ...baseFiles }
+  
+  // Generate components based on the app type and analysis
+  for (const componentName of analysis.components) {
+    if (componentName === 'Header' || componentName === 'Button' || componentName === 'Card') {
+      continue // Skip basic components that are already in base template
+    }
+    
+    const componentPath = `components/${componentName}.tsx`
+    const componentCode = generateFallbackComponent(componentName, analysis, originalPrompt)
+    
+    if (componentCode) {
+      enhancedFiles[componentPath] = componentCode
+      console.log(`✅ Generated fallback component: ${componentPath}`)
+    }
+  }
+  
+  // Generate additional screens based on analysis
+  for (const screenName of analysis.screens) {
+    if (screenName === 'home') continue // Already exists in base template
+    
+    const screenPath = `app/(tabs)/${screenName}.tsx`
+    const screenCode = generateFallbackScreen(screenName, analysis, originalPrompt)
+    
+    if (screenCode) {
+      enhancedFiles[screenPath] = screenCode
+      console.log(`✅ Generated fallback screen: ${screenPath}`)
+    }
+  }
+  
+  // Update the tab layout to include new screens
+  if (analysis.screens.length > 2) {
+    enhancedFiles['app/(tabs)/_layout.tsx'] = generateEnhancedTabLayout(analysis.screens)
+    console.log(`✅ Updated tab layout with ${analysis.screens.length} screens`)
+  }
+  
+  console.log(`✅ Smart fallback complete: ${Object.keys(enhancedFiles).length - Object.keys(baseFiles).length} additional files generated`)
+  
+  return enhancedFiles
+}
+
+// Generate fallback components based on app type
+function generateFallbackComponent(componentName: string, analysis: AppAnalysis, prompt: string): string {
+  const baseImports = `import { StyleSheet, View, Text, TouchableOpacity } from 'react-native'
+import { ThemedText } from '@/components/ThemedText'
+import { ThemedView } from '@/components/ThemedView'`
+
+  switch (componentName) {
+    case 'TaskItem':
+      return `${baseImports}
+
+interface TaskItemProps {
+  task: {
+    id: string
+    title: string
+    completed: boolean
+  }
+  onToggle: (id: string) => void
+  onDelete: (id: string) => void
+}
+
+export function TaskItem({ task, onToggle, onDelete }: TaskItemProps) {
+  return (
+    <ThemedView style={styles.container}>
+      <TouchableOpacity 
+        style={[styles.checkbox, task.completed && styles.completed]}
+        onPress={() => onToggle(task.id)}
+      >
+        <ThemedText style={styles.checkmark}>
+          {task.completed ? '✓' : ''}
+        </ThemedText>
+      </TouchableOpacity>
+      
+      <ThemedText 
+        style={[styles.title, task.completed && styles.completedText]}
+      >
+        {task.title}
+      </ThemedText>
+      
+      <TouchableOpacity 
+        style={styles.deleteButton}
+        onPress={() => onDelete(task.id)}
+      >
+        <ThemedText style={styles.deleteText}>×</ThemedText>
+      </TouchableOpacity>
+    </ThemedView>
+  )
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderWidth: 2,
+    borderColor: '#007AFF',
+    borderRadius: 4,
+    marginRight: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  completed: {
+    backgroundColor: '#007AFF',
+  },
+  checkmark: {
+    color: 'white',
+    fontWeight: 'bold',
+  },
+  title: {
+    flex: 1,
+    fontSize: 16,
+  },
+  completedText: {
+    textDecorationLine: 'line-through',
+    opacity: 0.6,
+  },
+  deleteButton: {
+    padding: 8,
+  },
+  deleteText: {
+    fontSize: 20,
+    color: '#FF3B30',
+  },
+})`
+
+    case 'ProductCard':
+      return `${baseImports}
+
+interface ProductCardProps {
+  product: {
+    id: string
+    name: string
+    price: number
+    image?: string
+  }
+  onAddToCart: (id: string) => void
+}
+
+export function ProductCard({ product, onAddToCart }: ProductCardProps) {
+  return (
+    <ThemedView style={styles.card}>
+      <ThemedView style={styles.imageContainer}>
+        <ThemedText style={styles.imagePlaceholder}>
+          📷
+        </ThemedText>
+      </ThemedView>
+      
+      <ThemedView style={styles.content}>
+        <ThemedText style={styles.productName}>
+          {product.name}
+        </ThemedText>
+        <ThemedText style={styles.price}>
+          $\{product.price.toFixed(2)}
+        </ThemedText>
+        
+        <TouchableOpacity 
+          style={styles.addButton}
+          onPress={() => onAddToCart(product.id)}
+        >
+          <ThemedText style={styles.addButtonText}>
+            Add to Cart
+          </ThemedText>
+        </TouchableOpacity>
+      </ThemedView>
+    </ThemedView>
+  )
+}
+
+const styles = StyleSheet.create({
+  card: {
+    backgroundColor: 'white',
+    borderRadius: 8,
+    padding: 16,
+    margin: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  imageContainer: {
+    height: 120,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  imagePlaceholder: {
+    fontSize: 40,
+  },
+  content: {
+    gap: 8,
+  },
+  productName: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  price: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#007AFF',
+  },
+  addButton: {
+    backgroundColor: '#007AFF',
+    padding: 12,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  addButtonText: {
+    color: 'white',
+    fontWeight: '600',
+  },
+})`
+
+    default:
+      // Generic component
+      return `${baseImports}
+
+export function ${componentName}() {
+  return (
+    <ThemedView style={styles.container}>
+      <ThemedText style={styles.title}>
+        ${componentName}
+      </ThemedText>
+      <ThemedText>
+        This ${componentName.toLowerCase()} component is ready for your customization.
+      </ThemedText>
+    </ThemedView>
+  )
+}
+
+const styles = StyleSheet.create({
+  container: {
+    padding: 16,
+    alignItems: 'center',
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+})`
+  }
+}
+
+// Generate fallback screens
+function generateFallbackScreen(screenName: string, analysis: AppAnalysis, prompt: string): string {
+  const capitalizedName = screenName.charAt(0).toUpperCase() + screenName.slice(1)
+  
+  return `import { StyleSheet, ScrollView } from 'react-native'
+import ParallaxScrollView from '@/components/ParallaxScrollView'
+import { ThemedText } from '@/components/ThemedText'
+import { ThemedView } from '@/components/ThemedView'
+
+export default function ${capitalizedName}Screen() {
+  return (
+    <ParallaxScrollView
+      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
+      headerImage={<ThemedView style={styles.headerImage} />}
+    >
+      <ThemedView style={styles.titleContainer}>
+        <ThemedText type="title">${capitalizedName}</ThemedText>
+      </ThemedView>
+      
+      <ThemedView style={styles.contentContainer}>
+        <ThemedText>
+          Welcome to the ${screenName} screen of your ${analysis.type} app!
+        </ThemedText>
+        <ThemedText style={styles.subtitle}>
+          This screen is ready for your ${analysis.type} features.
+        </ThemedText>
+      </ThemedView>
+    </ParallaxScrollView>
+  )
+}
+
+const styles = StyleSheet.create({
+  headerImage: {
+    backgroundColor: '#A1CEDC',
+    height: 178,
+    width: '100%',
+  },
+  titleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 16,
+  },
+  contentContainer: {
+    gap: 16,
+    padding: 16,
+  },
+  subtitle: {
+    fontSize: 14,
+    opacity: 0.7,
+  },
+})`
+}
+
+// Generate enhanced tab layout with all screens
+function generateEnhancedTabLayout(screens: string[]): string {
+  const screenTabs = screens.map(screen => {
+    const capitalizedScreen = screen.charAt(0).toUpperCase() + screen.slice(1)
+    const iconName = getIconForScreen(screen)
+    
+    return `      <Tabs.Screen
+        name="${screen === 'home' ? 'index' : screen}"
+        options={{
+          title: '${capitalizedScreen}',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="${iconName}" color={color} />,
+        }}
+      />`
+  }).join('\n')
+  
+  return `import { Tabs } from 'expo-router';
+import React from 'react';
+import { Platform } from 'react-native';
+
+import { HapticTab } from '@/components/HapticTab';
+import { IconSymbol } from '@/components/ui/IconSymbol';
+import TabBarBackground from '@/components/ui/TabBarBackground';
+import { Colors } from '@/constants/Colors';
+import { useColorScheme } from '@/hooks/useColorScheme';
+
+export default function TabLayout() {
+  const colorScheme = useColorScheme();
+
+  return (
+    <Tabs
+      screenOptions={{
+        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
+        headerShown: false,
+        tabBarButton: HapticTab,
+        tabBarBackground: TabBarBackground,
+        tabBarStyle: Platform.select({
+          ios: {
+            position: 'absolute',
+          },
+          default: {},
+        }),
+      }}>
+${screenTabs}
+    </Tabs>
+  );
+}`
+}
+
+// Helper to get appropriate icon for screen
+function getIconForScreen(screen: string): string {
+  const iconMap: { [key: string]: string } = {
+    'home': 'house.fill',
+    'explore': 'paperplane.fill', 
+    'profile': 'person.fill',
+    'settings': 'gear',
+    'search': 'magnifyingglass',
+    'favorites': 'heart.fill',
+    'cart': 'cart.fill',
+    'messages': 'message.fill',
+    'notifications': 'bell.fill',
+    'add-task': 'plus.circle.fill',
+    'task-details': 'list.bullet',
+    'products': 'bag.fill',
+    'checkout': 'creditcard.fill',
+  }
+  
+  return iconMap[screen] || 'circle.fill'
 } 
