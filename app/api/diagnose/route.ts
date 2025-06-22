@@ -6,8 +6,8 @@ export async function GET(request: NextRequest) {
     console.log('🔍 Starting production diagnostics...')
     
     const diagnostics: any = {
-      timestamp: new Date().toISOString(),
-      environment: process.env.NODE_ENV,
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV,
       results: {}
     }
 
@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
         fileCount: Object.keys(testFiles).length,
         sampleFiles: Object.keys(testFiles).slice(0, 3)
       }
-    } catch (error) {
+  } catch (error) {
       diagnostics.results.baseTemplate = {
         status: 'error',
         error: error instanceof Error ? error.message : 'Unknown import error',

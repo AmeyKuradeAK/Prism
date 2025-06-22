@@ -169,7 +169,7 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
   }, [chatMessages])
 
   // Handle chat message submission
-  const handleSendMessage = async (e: React.FormEvent) => {
+  const handleSendMessage = async (e: React.FormEvent, quickMode: boolean = false) => {
     e.preventDefault()
     if (!currentMessage.trim() || isGenerating) return
 
@@ -188,14 +188,14 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
     const loadingMessage: ChatMessage = {
       id: (Date.now() + 1).toString(),
       type: 'assistant',
-      content: 'Generating your app...',
+      content: quickMode ? '⚡ Quick generating (base template only)...' : 'Generating your app...',
       timestamp: new Date(),
       isGenerating: true
     }
     setChatMessages(prev => [...prev, loadingMessage])
 
     try {
-      await generateApp(userMessage.content)
+      await generateApp(userMessage.content, false, quickMode)
     } catch (error) {
       // Update loading message with error
       setChatMessages(prev => prev.map(msg => 
@@ -208,7 +208,7 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
     }
   }
 
-  const generateApp = async (prompt: string, testMode: boolean = false) => {
+  const generateApp = async (prompt: string, testMode: boolean = false, quickMode: boolean = false) => {
     try {
       console.log('🚀 Starting generation with prompt:', prompt)
       console.log('🧪 Test mode:', testMode)
@@ -219,7 +219,8 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
         body: JSON.stringify({ 
           prompt: prompt,
           useBaseTemplate: true,
-          testMode: testMode
+          testMode: testMode,
+          quickMode: quickMode
         })
       })
 
@@ -469,6 +470,20 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
                 {Object.keys(files).length}
               </span>
             )}
+          </button>
+          
+          {/* Quick Mode Button */}
+          <button
+            onClick={(e) => {
+              if (currentMessage.trim()) {
+                handleSendMessage(e as any, true) // Quick mode
+              }
+            }}
+            disabled={isGenerating || !currentMessage.trim()}
+            className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-lg hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+          >
+            <Zap className="w-4 h-4" />
+            <span>Quick Gen</span>
           </button>
           
           {/* Debug Test Button */}

@@ -2,6 +2,8 @@ import { NextRequest } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 
 export async function POST(request: NextRequest) {
+  const startTime = Date.now()
+  
   try {
     console.log('🚀 API Generate: Starting request processing...')
     
@@ -19,7 +21,7 @@ export async function POST(request: NextRequest) {
     }
     console.log(`✅ Authentication successful: ${userId}`)
 
-    const { prompt, useBaseTemplate, testMode } = await request.json()
+    const { prompt, useBaseTemplate, testMode, quickMode } = await request.json()
 
     if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
       console.log('❌ Invalid prompt provided')
@@ -36,90 +38,86 @@ export async function POST(request: NextRequest) {
     console.log(`🌐 Environment: ${process.env.NODE_ENV}`)
     console.log(`🔑 Mistral API Key present: ${!!process.env.MISTRAL_API_KEY}`)
     console.log(`🧪 Test mode: ${testMode ? 'enabled' : 'disabled'}`)
+    console.log(`⚡ Quick mode: ${quickMode ? 'enabled' : 'disabled'}`)
 
-    // If test mode, skip pipeline and use base template directly
-    if (testMode) {
-      console.log('🧪 Test mode enabled - using base template only')
+    // NETLIFY 10-SECOND STRATEGY: 
+    // - Always use base template for production reliability
+    // - Only attempt AI generation in development or with explicit quick=false
+    const timeElapsed = Date.now() - startTime
+    const shouldUseBaseTemplate = testMode || quickMode || 
+      !process.env.MISTRAL_API_KEY || 
+      timeElapsed > 500 || // If already spent 500ms, use base template
+      process.env.NODE_ENV === 'production' // Always use base template in production
+    
+    if (shouldUseBaseTemplate) {
+      console.log('⚡ Using base template (optimized for Netlify 10s limit)')
       try {
         const { generateExpoBaseTemplate } = await import('@/lib/generators/templates/expo-base-template')
-        const testFiles = generateExpoBaseTemplate('TestApp')
+        const { analyzePrompt } = await import('@/lib/generators/v0-pipeline')
         
-        console.log(`🧪 Test mode successful: ${Object.keys(testFiles).length} files`)
+        // Analyze prompt to customize the app name
+        const analysis = analyzePrompt(prompt)
+        const appName = `${analysis.type.charAt(0).toUpperCase() + analysis.type.slice(1)}App`
+        
+        const files = generateExpoBaseTemplate(appName)
+        
+        console.log(`⚡ Base template successful: ${Object.keys(files).length} files`)
         
         return new Response(
           JSON.stringify({
             success: true,
-            files: testFiles,
-            message: `Test mode: Generated ${Object.keys(testFiles).length} base template files`,
-            fileCount: Object.keys(testFiles).length,
-            totalSize: Object.values(testFiles).reduce((size, content) => size + content.length, 0),
-            pipeline: 'test-mode: base-template-only',
-            testMode: true
+            files: files,
+            message: `Generated ${Object.keys(files).length} files with React Native base template`,
+            fileCount: Object.keys(files).length,
+            totalSize: Object.values(files).reduce((size: number, content: string) => size + content.length, 0),
+            pipeline: quickMode ? 'quick-mode' : 'base-template',
+            mode: 'netlify-optimized',
+            analysis: analysis
           }),
           { 
             status: 200,
             headers: { 'Content-Type': 'application/json' }
           }
         )
-      } catch (testError) {
-        console.error('❌ Test mode failed:', testError)
-        return new Response(
-          JSON.stringify({ 
-            error: 'Test mode failed',
-            details: testError instanceof Error ? testError.message : 'Unknown test error',
-            stack: testError instanceof Error ? testError.stack?.substring(0, 1000) : undefined
-          }),
-          { 
-            status: 500,
-            headers: { 'Content-Type': 'application/json' }
-          }
-        )
+      } catch (baseError) {
+        console.error('❌ Base template failed:', baseError)
+        throw new Error(`Base template generation failed: ${baseError instanceof Error ? baseError.message : 'Unknown error'}`)
       }
     }
 
+    // AI Generation (only in development - risky for Netlify 10s limit)
+    console.log('🧠 Attempting AI generation (risky with Netlify 10s limit)...')
     try {
-      // 🚀 USE COMPLETE V0.DEV PIPELINE
-      console.log('📦 Importing V0 pipeline...')
       const { runV0Pipeline } = await import('@/lib/generators/v0-pipeline')
       
-      console.log('🔄 Starting V0 pipeline execution...')
-      const validatedFiles = await runV0Pipeline(prompt)
+      // Very aggressive timeout for Netlify (5 seconds max)
+      const validatedFiles = await Promise.race([
+        runV0Pipeline(prompt),
+        new Promise((_, reject) => {
+          setTimeout(() => {
+            reject(new Error('Pipeline timeout after 5s (Netlify protection)'))
+          }, 5000)
+        })
+      ]) as { [key: string]: string }
       
-      console.log(`📊 V0 pipeline returned ${Object.keys(validatedFiles).length} files`)
-      
-      // Verify files have content
-      const filesWithContent = Object.entries(validatedFiles).filter(([_, content]) => content && content.length > 0)
-      console.log(`📊 Files with content: ${filesWithContent.length}/${Object.keys(validatedFiles).length}`)
+      console.log(`📊 AI pipeline returned ${Object.keys(validatedFiles).length} files`)
       
       if (Object.keys(validatedFiles).length === 0) {
-        throw new Error('V0 pipeline returned no files')
+        throw new Error('AI pipeline returned no files')
       }
       
-      // 📊 FINAL RESULT - Enhanced debugging
-      console.log(`✅ V0-style generation complete: ${Object.keys(validatedFiles).length} files`)
-      console.log(`📁 File list: ${Object.keys(validatedFiles).slice(0, 10).join(', ')}${Object.keys(validatedFiles).length > 10 ? '...' : ''}`)
+      console.log(`✅ AI generation complete: ${Object.keys(validatedFiles).length} files`)
       
-      const responseData = {
-        success: true,
-        files: validatedFiles,
-        message: `Generated ${Object.keys(validatedFiles).length} files with v0.dev-style pipeline`,
-        fileCount: Object.keys(validatedFiles).length,
-        totalSize: Object.values(validatedFiles).reduce((size, content) => size + content.length, 0),
-        pipeline: 'v0-style: base-template + llm-injection + ast-validation',
-        debug: {
-          hasFiles: Object.keys(validatedFiles).length > 0,
-          firstFile: Object.keys(validatedFiles)[0],
-          firstFileSize: validatedFiles[Object.keys(validatedFiles)[0]]?.length || 0,
-          environment: process.env.NODE_ENV,
-          timestamp: new Date().toISOString()
-        }
-      }
-      
-      console.log(`📤 Returning response with ${Object.keys(responseData.files).length} files`)
-      console.log(`📊 Response size: ${JSON.stringify(responseData).length} chars`)
-
       return new Response(
-        JSON.stringify(responseData),
+        JSON.stringify({
+          success: true,
+          files: validatedFiles,
+          message: `AI Generated ${Object.keys(validatedFiles).length} files`,
+          fileCount: Object.keys(validatedFiles).length,
+          totalSize: Object.values(validatedFiles).reduce((size: number, content: string) => size + content.length, 0),
+          pipeline: 'ai-generation',
+          mode: 'risky-netlify-timing'
+        }),
         { 
           status: 200,
           headers: { 'Content-Type': 'application/json' }
@@ -127,13 +125,10 @@ export async function POST(request: NextRequest) {
       )
       
     } catch (pipelineError) {
-      console.error('❌ V0 pipeline failed:', {
-        message: pipelineError instanceof Error ? pipelineError.message : 'Unknown pipeline error',
-        stack: pipelineError instanceof Error ? pipelineError.stack : undefined
-      })
+      console.error('❌ AI pipeline failed:', pipelineError)
       
-      // Try emergency fallback - direct base template
-      console.log('🆘 Attempting emergency fallback...')
+      // Emergency fallback to base template
+      console.log('🆘 Emergency fallback to base template...')
       try {
         const { generateExpoBaseTemplate } = await import('@/lib/generators/templates/expo-base-template')
         const fallbackFiles = generateExpoBaseTemplate('EmergencyApp')
@@ -144,11 +139,11 @@ export async function POST(request: NextRequest) {
           JSON.stringify({
             success: true,
             files: fallbackFiles,
-            message: `Emergency fallback: Generated ${Object.keys(fallbackFiles).length} base template files`,
+            message: `Emergency fallback: Generated ${Object.keys(fallbackFiles).length} files`,
             fileCount: Object.keys(fallbackFiles).length,
-            totalSize: Object.values(fallbackFiles).reduce((size, content) => size + content.length, 0),
-            pipeline: 'emergency-fallback: base-template-only',
-            warning: 'Used emergency fallback due to pipeline failure'
+            totalSize: Object.values(fallbackFiles).reduce((size: number, content: string) => size + content.length, 0),
+            pipeline: 'emergency-fallback',
+            warning: 'AI generation failed, used base template'
           }),
           { 
             status: 200,
@@ -157,25 +152,27 @@ export async function POST(request: NextRequest) {
         )
       } catch (fallbackError) {
         console.error('❌ Even emergency fallback failed:', fallbackError)
-        throw new Error(`Both pipeline and fallback failed: ${pipelineError instanceof Error ? pipelineError.message : 'Unknown error'}`)
+        throw new Error(`Both AI and fallback failed: ${pipelineError instanceof Error ? pipelineError.message : 'Unknown error'}`)
       }
     }
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
-    console.error('❌ V0-style generation failed:', {
+    const timeSpent = Date.now() - startTime
+    
+    console.error('❌ Generation failed:', {
       error: errorMessage,
-      stack: error instanceof Error ? error.stack : undefined,
-      environment: process.env.NODE_ENV
+      timeSpent: `${timeSpent}ms`,
+      netlifyLimit: '10 seconds hard limit'
     })
     
     return new Response(
       JSON.stringify({ 
         error: 'Failed to generate app',
         details: errorMessage,
-        pipeline: 'v0-style generation pipeline error',
-        stack: error instanceof Error ? error.stack?.substring(0, 1000) : undefined,
-        environment: process.env.NODE_ENV,
+        timeSpent: `${timeSpent}ms`,
+        netlifyLimit: 'Hit 10-second Netlify function limit',
+        suggestion: 'Use Quick Mode for reliable generation',
         timestamp: new Date().toISOString()
       }),
       { 
