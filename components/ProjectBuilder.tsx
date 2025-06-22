@@ -269,55 +269,130 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
 
   const generateApp = async (prompt: string, testMode: boolean = false, quickMode: boolean = false) => {
     try {
-      console.log('🚀 Starting generation with prompt:', prompt)
+      console.log('🚀 Starting hybrid client-side AI + base template generation...')
+      console.log('📝 Prompt:', prompt)
       console.log('🧪 Test mode:', testMode)
       
-      const response = await fetch('/api/generate', {
+      // Step 1: Always load base template first (into virtual memfs)
+      console.log('📦 Step 1: Loading base template into memfs...')
+      const { generateCompleteDemo1Template } = await import('@/lib/generators/templates/complete-demo1-template')
+      const { loadFilesIntoMemfs } = await import('@/lib/utils/simple-memfs')
+      
+      const baseFiles = generateCompleteDemo1Template('BaseApp')
+      await loadFilesIntoMemfs(baseFiles)
+      console.log(`✅ Base template loaded: ${Object.keys(baseFiles).length} files in memfs`)
+      
+      // Set base files immediately so user sees progress
+      setFiles(baseFiles)
+      setActiveFile(Object.keys(baseFiles)[0])
+      
+      // Quick mode: Just return base template
+      if (quickMode) {
+        console.log('⚡ Quick mode: Using base template only')
+        setChatMessages(prev => prev.map(msg => 
+          msg.isGenerating 
+            ? { 
+                ...msg, 
+                content: `⚡ Quick mode: Base template loaded with ${Object.keys(baseFiles).length} files!`,
+                isGenerating: false 
+              }
+            : msg
+        ))
+        return
+      }
+      
+      // Step 2: Generate AI enhancements directly from client
+      console.log('🤖 Step 2: Getting secure encrypted API key...')
+      
+      let apiKey: string
+      try {
+        const { getCachedDecryptedApiKey } = await import('@/lib/utils/crypto-client')
+        apiKey = await getCachedDecryptedApiKey()
+        console.log('🔐 API key decrypted successfully')
+      } catch (keyError) {
+        console.log('⚠️ Failed to get API key, using base template only:', keyError)
+        setChatMessages(prev => prev.map(msg => 
+          msg.isGenerating 
+            ? { 
+                ...msg, 
+                content: `📦 Base template loaded with ${Object.keys(baseFiles).length} files! (API key unavailable)`,
+                isGenerating: false 
+              }
+            : msg
+        ))
+        return
+      }
+      
+      console.log('🤖 Step 3: Calling Mistral AI with encrypted key...')
+      const aiResponse = await fetch('https://api.mistral.ai/v1/chat/completions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          prompt: prompt,
-          useBaseTemplate: true,
-          testMode: testMode,
-          quickMode: quickMode
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: 'mistral-large-latest',
+          messages: [
+            {
+              role: 'system',
+              content: `Generate React Native/Expo code files to enhance the existing base template based on the user's request. Only return NEW or MODIFIED files that add functionality. Format as JSON array with {path, content} objects. Use modern React Native patterns.`
+            },
+            {
+              role: 'user',
+              content: prompt
+            }
+          ],
+          temperature: 0.7,
+          max_tokens: 4000
         })
       })
-
-      console.log('📡 API Response status:', response.status, response.statusText)
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error('❌ API Error Response:', errorText)
-        
-        let errorData
-        try {
-          errorData = JSON.parse(errorText)
-        } catch (parseError) {
-          console.error('❌ Failed to parse error response:', parseError)
-          throw new Error(`API Error: ${response.status} ${response.statusText} - ${errorText}`)
-        }
-        
-        throw new Error(errorData.details || errorData.error || 'Failed to generate with base template')
+      
+      if (!aiResponse.ok) {
+        console.log('⚠️ AI generation failed, using base template only')
+        setChatMessages(prev => prev.map(msg => 
+          msg.isGenerating 
+            ? { 
+                ...msg, 
+                content: `📦 Base template loaded with ${Object.keys(baseFiles).length} files! (AI generation failed)`,
+                isGenerating: false 
+              }
+            : msg
+        ))
+        return
       }
-
-      const responseData = await response.json()
-      console.log('✅ API Response data:', {
-        success: responseData.success,
-        fileCount: Object.keys(responseData.files || {}).length,
-        message: responseData.message
+      
+      const aiData = await aiResponse.json()
+      console.log('🤖 AI Response received:', aiData.choices?.[0]?.message?.content?.substring(0, 200))
+      
+      // Step 3: Parse AI-generated files
+      const { parseCodeFromResponse } = await import('@/lib/utils/code-parser')
+      const aiGeneratedFiles = parseCodeFromResponse(aiData.choices?.[0]?.message?.content || '')
+      
+             console.log(`🔄 Step 4: Parsed ${aiGeneratedFiles.length} AI-generated files`)
+       
+       // Step 5: Merge AI files into base template (in memfs)
+      const mergedFiles = { ...baseFiles }
+      let aiFileCount = 0
+      
+      aiGeneratedFiles.forEach(file => {
+        if (file.path && file.content) {
+          console.log(`🔄 Merging AI file: ${file.path}`)
+          mergedFiles[file.path] = file.content
+          aiFileCount++
+        }
       })
       
-      const { files: generatedFiles } = responseData
+             console.log(`✅ Step 5: Merged ${aiFileCount} AI files into base template`)
+      console.log(`📊 Final result: ${Object.keys(mergedFiles).length} total files`)
       
-      if (!generatedFiles || typeof generatedFiles !== 'object') {
-        throw new Error(`Invalid files response: ${typeof generatedFiles}`)
-      }
-
-      // Set all files in state
-      setFiles(generatedFiles)
+      // Update memfs with merged files
+      await loadFilesIntoMemfs(mergedFiles)
+      
+      // Set all merged files in state
+      setFiles(mergedFiles)
       
       // Update progress files for UI
-      Object.entries(generatedFiles).forEach(([path, fileContent]) => {
+      Object.entries(mergedFiles).forEach(([path, fileContent]) => {
         if (typeof fileContent === 'string' && fileContent.length > 0) {
           setProgressFiles(prev => ({
             ...prev,
@@ -330,34 +405,40 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
         }
       })
       
-      // Set the first file as active
-      const firstFile = Object.keys(generatedFiles)[0]
-      if (firstFile) {
-        setActiveFile(firstFile)
-      }
-
-      // Update the loading message with success
+      // Update success message
       setChatMessages(prev => prev.map(msg => 
         msg.isGenerating 
           ? { 
               ...msg, 
-              content: `✅ Successfully generated your React Native app with ${Object.keys(generatedFiles).length} files! You can now view the code, make changes, or build your app.`,
+              content: `✅ Generated enhanced React Native app! Base template (${Object.keys(baseFiles).length} files) + AI enhancements (${aiFileCount} files) = ${Object.keys(mergedFiles).length} total files in memfs.`,
               isGenerating: false 
             }
           : msg
       ))
 
-      // Trigger auto-save if we have files
-      if (Object.keys(generatedFiles).length > 0) {
-        triggerAutoSave()
-      }
+      // Trigger auto-save
+      triggerAutoSave()
 
     } catch (error) {
-      console.error('❌ Generation error details:', {
+      console.error('❌ Hybrid generation error:', {
         error: error instanceof Error ? error.message : 'Unknown error',
         stack: error instanceof Error ? error.stack : undefined
       })
-      throw error
+      
+      // Fallback to base template on any error
+      const { generateCompleteDemo1Template } = await import('@/lib/generators/templates/complete-demo1-template')
+      const fallbackFiles = generateCompleteDemo1Template('FallbackApp')
+      setFiles(fallbackFiles)
+      
+      setChatMessages(prev => prev.map(msg => 
+        msg.isGenerating 
+          ? { 
+              ...msg, 
+              content: `⚠️ AI generation failed, using base template (${Object.keys(fallbackFiles).length} files). Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+              isGenerating: false 
+            }
+          : msg
+      ))
     }
   }
 
@@ -387,7 +468,7 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
       
       // Root files (package.json, app.json, etc.)
       if (parts.length === 1) {
-        folderName = '📱 Root'
+        folderName = '📄 Project Files'
       }
       // App files
       else if (parts[0] === 'app') {
