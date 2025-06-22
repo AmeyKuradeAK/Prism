@@ -6,10 +6,15 @@
  */
 export async function decryptApiKey(encryptedKey: string, iv: string): Promise<string> {
   try {
+    console.log('🔍 Decryption inputs - encryptedKey length:', encryptedKey.length, 'iv length:', iv.length)
+    
     // Get encryption key from environment (this should be the same as server-side)
     const encryptionKey = process.env.NEXT_PUBLIC_ENCRYPTION_KEY
+    console.log('🔍 Encryption key available:', !!encryptionKey)
+    console.log('🔍 Encryption key length:', encryptionKey?.length || 0)
+    
     if (!encryptionKey) {
-      throw new Error('Encryption key not configured')
+      throw new Error('NEXT_PUBLIC_ENCRYPTION_KEY not configured in environment')
     }
 
     // Convert hex strings to Uint8Array
@@ -69,13 +74,23 @@ export async function getDecryptedApiKey(): Promise<string> {
       }
     })
 
+    console.log('🔍 Server response status:', response.status, response.statusText)
+
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}))
-      throw new Error(errorData.error || 'Failed to get encrypted API key')
+      const errorText = await response.text()
+      console.error('❌ Server error response:', errorText)
+      let errorData
+      try {
+        errorData = JSON.parse(errorText)
+      } catch {
+        errorData = { error: errorText }
+      }
+      throw new Error(errorData.error || `Server error: ${response.status}`)
     }
 
     const data = await response.json()
     console.log('✅ Encrypted key received from server')
+    console.log('🔍 Response data keys:', Object.keys(data))
     
     // Decrypt the key
     console.log('🔓 Decrypting API key...')

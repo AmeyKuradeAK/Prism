@@ -303,19 +303,52 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
       
       // Step 2: Generate AI enhancements directly from client
       console.log('🤖 Step 2: Getting secure encrypted API key...')
+      console.log('🔍 Debug - testMode:', testMode, 'quickMode:', quickMode)
       
-      let apiKey: string
-      try {
-        const { getCachedDecryptedApiKey } = await import('@/lib/utils/crypto-client')
-        apiKey = await getCachedDecryptedApiKey()
-        console.log('🔐 API key decrypted successfully')
-      } catch (keyError) {
-        console.log('⚠️ Failed to get API key, using base template only:', keyError)
+      // TEMPORARY: Check if .env.local exists and has required vars
+      const hasEncryptionKey = !!process.env.NEXT_PUBLIC_ENCRYPTION_KEY
+      console.log('🔍 Environment check:')
+      console.log('  - NEXT_PUBLIC_ENCRYPTION_KEY:', hasEncryptionKey ? '✅ Present' : '❌ Missing')
+      
+      if (!hasEncryptionKey) {
+        console.error('❌ Missing environment variables! Please create .env.local file')
         setChatMessages(prev => prev.map(msg => 
           msg.isGenerating 
             ? { 
                 ...msg, 
-                content: `📦 Base template loaded with ${Object.keys(baseFiles).length} files! (API key unavailable)`,
+                content: `📦 Base template loaded with ${Object.keys(baseFiles).length} files! 
+                
+❌ **Missing .env.local file!** 
+
+Please create a \`.env.local\` file with:
+\`\`\`
+MISTRAL_API_KEY=your_mistral_key_here
+ENCRYPTION_KEY=ed513c694f3d9c486e16e5fcbc8a738e9600584421e4a745b3cc8ae46bcf4e8e
+NEXT_PUBLIC_ENCRYPTION_KEY=ed513c694f3d9c486e16e5fcbc8a738e9600584421e4a745b3cc8ae46bcf4e8e
+\`\`\`
+
+Then restart the dev server.`,
+                isGenerating: false 
+              }
+            : msg
+        ))
+        return
+      }
+      
+      let apiKey: string
+      try {
+        const { getCachedDecryptedApiKey } = await import('@/lib/utils/crypto-client')
+        console.log('🔍 Debug - About to call getCachedDecryptedApiKey...')
+        apiKey = await getCachedDecryptedApiKey()
+        console.log('🔐 API key decrypted successfully, length:', apiKey.length)
+      } catch (keyError) {
+        console.error('❌ Failed to get API key, detailed error:', keyError)
+        console.error('❌ Error stack:', keyError instanceof Error ? keyError.stack : 'No stack')
+        setChatMessages(prev => prev.map(msg => 
+          msg.isGenerating 
+            ? { 
+                ...msg, 
+                content: `📦 Base template loaded with ${Object.keys(baseFiles).length} files! (API key error: ${keyError instanceof Error ? keyError.message : 'Unknown'})`,
                 isGenerating: false 
               }
             : msg
