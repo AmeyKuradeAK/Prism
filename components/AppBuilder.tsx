@@ -1321,6 +1321,36 @@ Generated on: ${new Date().toLocaleString()}
                 </div>
               )}
 
+              {/* Mode Toggle */}
+              <div className="flex bg-white/5 rounded-xl p-1">
+                <button
+                  onClick={() => {
+                    window.history.pushState({}, '', '/builder?mode=ai');
+                    window.location.reload();
+                  }}
+                  className={`px-3 py-2 rounded-lg text-sm transition-all ${
+                    mode === 'ai'
+                      ? 'bg-white/10 text-white'
+                      : 'text-white/60 hover:text-white'
+                  }`}
+                >
+                  🤖 AI Mode
+                </button>
+                <button
+                  onClick={() => {
+                    window.history.pushState({}, '', '/builder?mode=manual');
+                    window.location.reload();
+                  }}
+                  className={`px-3 py-2 rounded-lg text-sm transition-all ${
+                    mode === 'manual'
+                      ? 'bg-white/10 text-white'
+                      : 'text-white/60 hover:text-white'
+                  }`}
+                >
+                  📂 Manual Mode
+                </button>
+              </div>
+
               {/* Always show Load Template button */}
               <button
                 onClick={handleLoadTemplate}
