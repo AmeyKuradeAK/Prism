@@ -208,23 +208,45 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
     }
   }
 
-  const generateApp = async (prompt: string) => {
+  const generateApp = async (prompt: string, testMode: boolean = false) => {
     try {
+      console.log('🚀 Starting generation with prompt:', prompt)
+      console.log('🧪 Test mode:', testMode)
+      
       const response = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           prompt: prompt,
-          useBaseTemplate: true
+          useBaseTemplate: true,
+          testMode: testMode
         })
       })
 
+      console.log('📡 API Response status:', response.status, response.statusText)
+
       if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.details || 'Failed to generate with base template')
+        const errorText = await response.text()
+        console.error('❌ API Error Response:', errorText)
+        
+        let errorData
+        try {
+          errorData = JSON.parse(errorText)
+        } catch (parseError) {
+          console.error('❌ Failed to parse error response:', parseError)
+          throw new Error(`API Error: ${response.status} ${response.statusText} - ${errorText}`)
+        }
+        
+        throw new Error(errorData.details || errorData.error || 'Failed to generate with base template')
       }
 
       const responseData = await response.json()
+      console.log('✅ API Response data:', {
+        success: responseData.success,
+        fileCount: Object.keys(responseData.files || {}).length,
+        message: responseData.message
+      })
+      
       const { files: generatedFiles } = responseData
       
       if (!generatedFiles || typeof generatedFiles !== 'object') {
@@ -271,6 +293,10 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
       }
 
     } catch (error) {
+      console.error('❌ Generation error details:', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
+      })
       throw error
     }
   }
@@ -369,6 +395,34 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
     })
   }
 
+  // Debug function to test generation directly
+  const testGeneration = async () => {
+    console.log('🧪 Testing generation directly (test mode)...')
+    
+    // Add test message to chat
+    const testMessage: ChatMessage = {
+      id: Date.now().toString(),
+      type: 'system',
+      content: '🧪 Running production test - Base template only (no external APIs)',
+      timestamp: new Date()
+    }
+    setChatMessages(prev => [...prev, testMessage])
+    
+    try {
+      await generateApp('Create a simple todo app', true) // Test mode enabled
+    } catch (error) {
+      console.error('🧪 Test generation failed:', error)
+      // Add error message to chat
+      const errorMessage: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        type: 'assistant',
+        content: `❌ Test failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        timestamp: new Date()
+      }
+      setChatMessages(prev => [...prev, errorMessage])
+    }
+  }
+
   return (
     <div className="h-screen flex flex-col bg-black text-gray-100">
       {/* Header */}
@@ -415,6 +469,16 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
                 {Object.keys(files).length}
               </span>
             )}
+          </button>
+          
+          {/* Debug Test Button */}
+          <button
+            onClick={testGeneration}
+            disabled={isGenerating}
+            className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+          >
+            <Zap className="w-4 h-4" />
+            <span>Test Gen</span>
           </button>
         </div>
       </div>

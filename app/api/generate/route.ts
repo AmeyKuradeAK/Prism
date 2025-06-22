@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
     }
     console.log(`✅ Authentication successful: ${userId}`)
 
-    const { prompt, useBaseTemplate } = await request.json()
+    const { prompt, useBaseTemplate, testMode } = await request.json()
 
     if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
       console.log('❌ Invalid prompt provided')
@@ -35,6 +35,47 @@ export async function POST(request: NextRequest) {
     console.log(`🚀 V0-style React Native generation for: "${prompt.substring(0, 100)}..."`)
     console.log(`🌐 Environment: ${process.env.NODE_ENV}`)
     console.log(`🔑 Mistral API Key present: ${!!process.env.MISTRAL_API_KEY}`)
+    console.log(`🧪 Test mode: ${testMode ? 'enabled' : 'disabled'}`)
+
+    // If test mode, skip pipeline and use base template directly
+    if (testMode) {
+      console.log('🧪 Test mode enabled - using base template only')
+      try {
+        const { generateExpoBaseTemplate } = await import('@/lib/generators/templates/expo-base-template')
+        const testFiles = generateExpoBaseTemplate('TestApp')
+        
+        console.log(`🧪 Test mode successful: ${Object.keys(testFiles).length} files`)
+        
+        return new Response(
+          JSON.stringify({
+            success: true,
+            files: testFiles,
+            message: `Test mode: Generated ${Object.keys(testFiles).length} base template files`,
+            fileCount: Object.keys(testFiles).length,
+            totalSize: Object.values(testFiles).reduce((size, content) => size + content.length, 0),
+            pipeline: 'test-mode: base-template-only',
+            testMode: true
+          }),
+          { 
+            status: 200,
+            headers: { 'Content-Type': 'application/json' }
+          }
+        )
+      } catch (testError) {
+        console.error('❌ Test mode failed:', testError)
+        return new Response(
+          JSON.stringify({ 
+            error: 'Test mode failed',
+            details: testError instanceof Error ? testError.message : 'Unknown test error',
+            stack: testError instanceof Error ? testError.stack?.substring(0, 1000) : undefined
+          }),
+          { 
+            status: 500,
+            headers: { 'Content-Type': 'application/json' }
+          }
+        )
+      }
+    }
 
     try {
       // 🚀 USE COMPLETE V0.DEV PIPELINE

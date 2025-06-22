@@ -1,162 +1,109 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { Mistral } from '@mistralai/mistralai'
+import { NextRequest } from 'next/server'
+import { auth } from '@clerk/nextjs/server'
 
-export async function GET() {
-  const diagnostics = {
-    timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV,
-    apiKeyStatus: 'unknown',
-    apiKeyLength: 0,
-    networkTest: 'pending',
-    mistralConnection: 'pending'
-  }
-
+export async function GET(request: NextRequest) {
   try {
-    // 1. Check API Key
-    const apiKey = process.env.MISTRAL_API_KEY
-    if (!apiKey) {
-      diagnostics.apiKeyStatus = 'missing'
-    } else if (apiKey.length < 10) {
-      diagnostics.apiKeyStatus = 'invalid_length'
-      diagnostics.apiKeyLength = apiKey.length
-    } else {
-      diagnostics.apiKeyStatus = 'present'
-      diagnostics.apiKeyLength = apiKey.length
+    console.log('🔍 Starting production diagnostics...')
+    
+    const diagnostics: any = {
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV,
+      results: {}
     }
 
-    // 2. Test Mistral SDK initialization
+    // Test 1: Authentication
     try {
-      const mistral = new Mistral({ apiKey: apiKey || 'test' })
-      diagnostics.mistralConnection = 'sdk_initialized'
-    } catch (sdkError) {
-      diagnostics.mistralConnection = `sdk_error: ${sdkError instanceof Error ? sdkError.message : 'unknown'}`
+      const { userId } = await auth()
+      diagnostics.results.auth = {
+        status: userId ? 'success' : 'no_user',
+        userId: userId ? 'present' : 'missing'
+      }
+    } catch (error) {
+      diagnostics.results.auth = {
+        status: 'error',
+        error: error instanceof Error ? error.message : 'Unknown auth error'
+      }
     }
 
-    // 3. Test basic network connectivity (without making actual API call)
+    // Test 2: Base Template Import
     try {
-      // Simple network test - just check if we can resolve DNS
-      const testUrl = 'https://api.mistral.ai'
-      diagnostics.networkTest = `attempting_connection_to: ${testUrl}`
-    } catch (networkError) {
-      diagnostics.networkTest = `network_error: ${networkError instanceof Error ? networkError.message : 'unknown'}`
+      const { generateExpoBaseTemplate } = await import('@/lib/generators/templates/expo-base-template')
+      const testFiles = generateExpoBaseTemplate('DiagnosticTest')
+      diagnostics.results.baseTemplate = {
+        status: 'success',
+        fileCount: Object.keys(testFiles).length,
+        sampleFiles: Object.keys(testFiles).slice(0, 3)
+      }
+    } catch (error) {
+      diagnostics.results.baseTemplate = {
+        status: 'error',
+        error: error instanceof Error ? error.message : 'Unknown import error',
+        stack: error instanceof Error ? error.stack?.substring(0, 500) : undefined
+      }
     }
 
-    return NextResponse.json({
-      success: true,
-      message: 'React Native V0 Diagnostics',
-      diagnostics,
-      recommendations: generateRecommendations(diagnostics)
-    })
+    // Test 3: V0 Pipeline Import
+    try {
+      const { runV0Pipeline } = await import('@/lib/generators/v0-pipeline')
+      diagnostics.results.v0Pipeline = {
+        status: 'success',
+        imported: true
+      }
+    } catch (error) {
+      diagnostics.results.v0Pipeline = {
+        status: 'error',
+        error: error instanceof Error ? error.message : 'Unknown pipeline import error'
+      }
+    }
+
+    // Test 4: Environment Variables
+    diagnostics.results.environment = {
+      nodeEnv: process.env.NODE_ENV,
+      hasMistralKey: !!process.env.MISTRAL_API_KEY,
+      mistralKeyLength: process.env.MISTRAL_API_KEY?.length || 0,
+      hasClerkKeys: !!(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY && process.env.CLERK_SECRET_KEY),
+      hasMongoUri: !!process.env.MONGODB_URI
+    }
+
+    // Test 5: Simple Pipeline Test (without external APIs)
+    try {
+      // Import the analysis function directly
+      const { analyzePrompt } = await import('@/lib/generators/v0-pipeline')
+      const testAnalysis = analyzePrompt('Create a simple todo app')
+      diagnostics.results.promptAnalysis = {
+        status: 'success',
+        analysis: testAnalysis
+      }
+    } catch (error) {
+      diagnostics.results.promptAnalysis = {
+        status: 'error',
+        error: error instanceof Error ? error.message : 'Unknown analysis error'
+      }
+    }
+
+    console.log('🔍 Diagnostics complete:', diagnostics)
+
+    return new Response(
+      JSON.stringify(diagnostics, null, 2),
+      { 
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    )
 
   } catch (error) {
-    return NextResponse.json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Diagnostic failed',
-      diagnostics,
-      timestamp: new Date().toISOString()
-    }, { status: 500 })
-  }
-}
-
-function generateRecommendations(diagnostics: any): string[] {
-  const recommendations = []
-
-  if (diagnostics.apiKeyStatus === 'missing') {
-    recommendations.push('❌ Set MISTRAL_API_KEY environment variable')
-    recommendations.push('📝 Get API key from: https://console.mistral.ai/')
-  } else if (diagnostics.apiKeyStatus === 'invalid_length') {
-    recommendations.push('❌ MISTRAL_API_KEY appears to be invalid (too short)')
-    recommendations.push('🔑 Verify your API key from Mistral console')
-  } else if (diagnostics.apiKeyStatus === 'present') {
-    recommendations.push('✅ MISTRAL_API_KEY is present and valid length')
-  }
-
-  if (diagnostics.mistralConnection.includes('error')) {
-    recommendations.push('❌ Mistral SDK initialization failed')
-    recommendations.push('📦 Check @mistralai/mistralai package installation')
-  } else {
-    recommendations.push('✅ Mistral SDK initialized successfully')
-  }
-
-  // Network troubleshooting
-  recommendations.push('🌐 Network troubleshooting steps:')
-  recommendations.push('  1. Check internet connectivity')
-  recommendations.push('  2. Verify firewall/proxy settings')
-  recommendations.push('  3. Check Mistral API status: https://status.mistral.ai/')
-  recommendations.push('  4. Try different network (mobile hotspot)')
-
-  return recommendations
-}
-
-export async function POST(request: NextRequest) {
-  try {
-    const { testApi = false } = await request.json()
-
-    if (!testApi) {
-      return NextResponse.json({
-        message: 'Use GET for basic diagnostics, or POST with {"testApi": true} for API test'
-      })
-    }
-
-    // Perform actual API test (minimal request)
-    const apiKey = process.env.MISTRAL_API_KEY
-    if (!apiKey) {
-      return NextResponse.json({
-        success: false,
-        error: 'MISTRAL_API_KEY not found'
-      }, { status: 400 })
-    }
-
-    console.log('🧪 Testing Mistral API connection...')
+    console.error('❌ Diagnostics failed:', error)
     
-    const mistral = new Mistral({ apiKey })
-    
-    try {
-      const startTime = Date.now()
-      
-      // Minimal API test
-      const response = await Promise.race([
-        mistral.chat.complete({
-          model: 'mistral-small-latest',
-          messages: [{ role: 'user', content: 'Hello' }],
-          maxTokens: 10
-        }),
-        new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('API timeout after 15 seconds')), 15000)
-        })
-      ]) as any
-
-      const duration = Date.now() - startTime
-
-      return NextResponse.json({
-        success: true,
-        message: 'Mistral API connection successful',
-        duration: `${duration}ms`,
-        responseLength: response.choices?.[0]?.message?.content?.length || 0
-      })
-
-    } catch (apiError) {
-      const errorMessage = apiError instanceof Error ? apiError.message : 'Unknown API error'
-      
-      console.error('❌ Mistral API test failed:', errorMessage)
-      
-      return NextResponse.json({
-        success: false,
-        error: `Mistral API test failed: ${errorMessage}`,
-        errorType: apiError instanceof Error ? apiError.name : 'Unknown',
-        troubleshooting: [
-          'Check API key validity',
-          'Verify network connectivity', 
-          'Check Mistral API status',
-          'Try again in a few minutes'
-        ]
-      }, { status: 500 })
-    }
-
-  } catch (error) {
-    return NextResponse.json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Test failed'
-    }, { status: 500 })
+    return new Response(
+      JSON.stringify({
+        error: 'Diagnostics failed',
+        message: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString()
+      }),
+      { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    )
   }
 } 
