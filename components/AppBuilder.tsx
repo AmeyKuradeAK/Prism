@@ -1288,6 +1288,41 @@ Generated on: ${new Date().toLocaleString()}
                     {mode === 'manual' ? 'Manual Builder' : 'AI App Builder'}
                   </h1>
                   <p className="text-xs text-white/40">Mode: {mode} | Files: {Object.keys(buildInfo.files).length} | Status: {buildInfo.status}</p>
+                  
+                  {/* Emergency Mode Switcher - Always Visible */}
+                  <div className="flex gap-2 mt-2">
+                    <button
+                      onClick={() => {
+                        console.log('🔄 Switching to AI mode...');
+                        window.location.href = '/builder?mode=ai';
+                      }}
+                      className={`px-2 py-1 text-xs rounded ${
+                        mode === 'ai' ? 'bg-blue-500 text-white' : 'bg-gray-600 text-gray-300 hover:bg-gray-500'
+                      }`}
+                    >
+                      🤖 AI
+                    </button>
+                    <button
+                      onClick={() => {
+                        console.log('🔄 Switching to Manual mode...');
+                        window.location.href = '/builder?mode=manual';
+                      }}
+                      className={`px-2 py-1 text-xs rounded ${
+                        mode === 'manual' ? 'bg-green-500 text-white' : 'bg-gray-600 text-gray-300 hover:bg-gray-500'
+                      }`}
+                    >
+                      📂 Manual
+                    </button>
+                    <button
+                      onClick={() => {
+                        console.log('🔄 Loading template directly...');
+                        handleLoadTemplate();
+                      }}
+                      className="px-2 py-1 text-xs rounded bg-purple-500 text-white hover:bg-purple-600"
+                    >
+                      🚀 Load Now
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
