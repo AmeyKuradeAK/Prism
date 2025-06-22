@@ -84,9 +84,12 @@ export default function AppBuilder() {
 
   // Load manual template if mode is manual
   useEffect(() => {
+    console.log('🔧 AppBuilder mode:', mode, 'projectId:', projectId)
     if (mode === 'manual') {
+      console.log('📂 Auto-loading template for manual mode...')
       handleLoadTemplate()
     } else if (projectId) {
+      console.log('📄 Loading existing project:', projectId)
       loadProject(projectId)
     }
   }, [mode, projectId])
@@ -1284,6 +1287,7 @@ Generated on: ${new Date().toLocaleString()}
                   <h1 className="text-lg font-bold bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent">
                     {mode === 'manual' ? 'Manual Builder' : 'AI App Builder'}
                   </h1>
+                  <p className="text-xs text-white/40">Mode: {mode} | Files: {Object.keys(buildInfo.files).length} | Status: {buildInfo.status}</p>
                 </div>
               </div>
             </div>
@@ -1316,6 +1320,15 @@ Generated on: ${new Date().toLocaleString()}
                   </button>
                 </div>
               )}
+
+              {/* Always show Load Template button */}
+              <button
+                onClick={handleLoadTemplate}
+                className="flex items-center space-x-2 text-white/70 hover:text-white bg-blue-500/20 hover:bg-blue-500/30 px-4 py-2 rounded-xl transition-all"
+              >
+                <Download className="w-4 h-4" />
+                <span>📂 Load Template</span>
+              </button>
 
               {buildInfo.status === 'completed' && (
                 <>
