@@ -719,60 +719,69 @@ Generated on: ${new Date().toLocaleString()}
   }
 
   const organizeFiles = (files: { [key: string]: string }) => {
-    console.log('🗂️ Organizing files for UI display:', Object.keys(files))
+    console.log('🗂️ FIXING FOLDER ORGANIZATION - Input files:', Object.keys(files))
     const organized: { [key: string]: string[] } = {}
     
     Object.keys(files).forEach(filepath => {
-      // Remove leading slash for proper path parsing
+      // Remove leading slash for path parsing
       const cleanPath = filepath.startsWith('/') ? filepath.slice(1) : filepath
       const parts = cleanPath.split('/')
       
-      console.log(`📁 Processing: ${filepath} → parts: [${parts.join(', ')}]`)
+      console.log(`📁 File: ${filepath} → cleanPath: "${cleanPath}" → parts: [${parts.join(', ')}]`)
       
       if (parts.length === 1) {
-        // Root file (package.json, app.json, etc.)
+        // Root files (package.json, app.json, tsconfig.json, etc.)
         if (!organized['📱 Root']) organized['📱 Root'] = []
         organized['📱 Root'].push(filepath)
+        console.log(`  ✅ Added to Root: ${filepath}`)
       } else {
-        // File in directory - get proper folder structure
-        const dir = parts[0]
-        const subdirs = parts.slice(1, -1) // Get subdirectories
+        // Files in directories
+        const firstDir = parts[0]
+        const restOfPath = parts.slice(1)
         
-        let dirIcon: string
-        if (dir === 'app') {
-          if (subdirs.includes('(tabs)')) {
-            dirIcon = '📱 app/(tabs)'
+        let folderName: string
+        
+        if (firstDir === 'app') {
+          if (restOfPath.length > 1 && restOfPath[0] === '(tabs)') {
+            // app/(tabs)/file.tsx
+            folderName = '📱 app/(tabs)'
           } else {
-            dirIcon = '📱 app'
+            // app/file.tsx  
+            folderName = '📱 app'
           }
-        } else if (dir === 'components') {
-          if (subdirs.includes('ui')) {
-            dirIcon = '🧩 components/ui'
+        } else if (firstDir === 'components') {
+          if (restOfPath.length > 1 && restOfPath[0] === 'ui') {
+            // components/ui/file.tsx
+            folderName = '🧩 components/ui'
           } else {
-            dirIcon = '🧩 components'
+            // components/file.tsx
+            folderName = '🧩 components'
           }
-        } else if (dir === 'hooks') {
-          dirIcon = '🪝 hooks'
-        } else if (dir === 'constants') {
-          dirIcon = '⚙️ constants'
-        } else if (dir === 'types') {
-          dirIcon = '📝 types'
-        } else if (dir === 'utils') {
-          dirIcon = '🛠️ utils'
-        } else if (dir === 'assets') {
-          dirIcon = '🖼️ assets'
+        } else if (firstDir === 'hooks') {
+          folderName = '🪝 hooks'
+        } else if (firstDir === 'constants') {
+          folderName = '⚙️ constants'
+        } else if (firstDir === 'types') {
+          folderName = '📝 types'
+        } else if (firstDir === 'utils') {
+          folderName = '🛠️ utils'
+        } else if (firstDir === 'assets') {
+          folderName = '🖼️ assets'
         } else {
-          dirIcon = `📁 ${dir}`
+          folderName = `📁 ${firstDir}`
         }
         
-        if (!organized[dirIcon]) organized[dirIcon] = []
-        organized[dirIcon].push(filepath)
+        if (!organized[folderName]) organized[folderName] = []
+        organized[folderName].push(filepath)
+        console.log(`  ✅ Added to ${folderName}: ${filepath}`)
       }
     })
     
-    console.log('🗂️ Final organized structure:', organized)
-    console.log('🗂️ Total folders:', Object.keys(organized).length)
-    console.log('🗂️ Total files in display:', Object.values(organized).flat().length)
+    console.log('🗂️ FINAL ORGANIZED STRUCTURE:')
+    Object.entries(organized).forEach(([folder, files]) => {
+      console.log(`  📂 ${folder}: ${files.length} files`)
+      files.forEach(file => console.log(`    📄 ${file}`))
+    })
     
     return organized
   }
@@ -1340,44 +1349,48 @@ Generated on: ${new Date().toLocaleString()}
                 <h3 className="text-sm font-semibold text-white/80 mb-3">Files</h3>
                 <div className="space-y-1">
                   {Object.entries(organizedFiles).map(([dir, files]) => (
-                    <div key={dir}>
-                      {dir !== '📱 Root' && (
-                        <div className="flex items-center space-x-2 text-white/60 text-sm py-1">
-                          <Folder className="w-4 h-4" />
-                          <span>{dir}</span>
-                        </div>
-                      )}
-                      {files.map(filepath => (
-                        <button
-                          key={filepath}
-                          onClick={() => setSelectedFile(filepath)}
-                          className={`w-full flex items-center space-x-2 px-2 py-1 text-sm rounded-lg transition-colors ${
-                            selectedFile === filepath
-                              ? 'bg-purple-500/20 text-purple-300'
-                              : 'text-white/70 hover:text-white hover:bg-white/5'
-                          }`}
-                        >
-                          {getFileIcon(filepath)}
-                          <span className={`flex-1 text-left ${dir !== '📱 Root' ? 'ml-4' : ''}`}>
-                            {filepath.split('/').pop()}
-                          </span>
-                          
-                          {/* Show writing indicator */}
-                          {currentlyWritingFile === filepath && (
-                            <div className="flex items-center space-x-1">
-                              <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></div>
-                              <span className="text-xs text-green-400">Writing</span>
-                            </div>
-                          )}
-                          
-                          {/* Show character count for completed files */}
-                          {buildInfo.files[filepath] && currentlyWritingFile !== filepath && (
-                            <span className="text-xs text-white/40">
-                              {buildInfo.files[filepath].length}
+                    <div key={dir} className="mb-3">
+                      {/* ALWAYS show folder header */}
+                      <div className="flex items-center space-x-2 text-white/60 text-sm py-1 font-medium">
+                        <Folder className="w-4 h-4" />
+                        <span>{dir}</span>
+                        <span className="text-xs text-white/40">({files.length})</span>
+                      </div>
+                      
+                      {/* Files in this folder */}
+                      <div className="ml-4 space-y-1">
+                        {files.map(filepath => (
+                          <button
+                            key={filepath}
+                            onClick={() => setSelectedFile(filepath)}
+                            className={`w-full flex items-center space-x-2 px-2 py-1 text-sm rounded-lg transition-colors ${
+                              selectedFile === filepath
+                                ? 'bg-purple-500/20 text-purple-300'
+                                : 'text-white/70 hover:text-white hover:bg-white/5'
+                            }`}
+                          >
+                            {getFileIcon(filepath)}
+                            <span className="flex-1 text-left">
+                              {filepath.split('/').pop()}
                             </span>
-                          )}
-                        </button>
-                      ))}
+                            
+                            {/* Show writing indicator */}
+                            {currentlyWritingFile === filepath && (
+                              <div className="flex items-center space-x-1">
+                                <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></div>
+                                <span className="text-xs text-green-400">Writing</span>
+                              </div>
+                            )}
+                            
+                            {/* Show character count for completed files */}
+                            {buildInfo.files[filepath] && currentlyWritingFile !== filepath && (
+                              <span className="text-xs text-white/40">
+                                {buildInfo.files[filepath].length}
+                              </span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   ))}
                 </div>
