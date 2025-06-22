@@ -32,7 +32,15 @@ import {
   Palette,
   ChevronDown,
   ChevronRight,
-  X
+  X,
+  Send,
+  User,
+  Bot,
+  Plus,
+  MessageSquare,
+  Search,
+  Filter,
+  MoreVertical
 } from 'lucide-react'
 
 interface FileProgress {
@@ -57,26 +65,47 @@ interface BuildStatus {
   progress?: number
 }
 
+interface ChatMessage {
+  id: string
+  type: 'user' | 'assistant' | 'system'
+  content: string
+  timestamp: Date
+  isGenerating?: boolean
+}
+
 interface ProjectBuilderProps {
   projectId?: string
 }
 
 export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
-  const [prompt, setPrompt] = useState('')
+  // Chat and conversation state
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
+    {
+      id: '1',
+      type: 'system',
+      content: 'Welcome! I\'ll help you build your React Native app. Describe what you want to create, and I\'ll generate a complete project for you.',
+      timestamp: new Date()
+    }
+  ])
+  const [currentMessage, setCurrentMessage] = useState('')
   const [isGenerating, setIsGenerating] = useState(false)
-  const [logs, setLogs] = useState<string[]>([])
+  
+  // Project state
   const [files, setFiles] = useState<{ [key: string]: string }>({})
   const [activeFile, setActiveFile] = useState<string | null>(null)
   const [progressFiles, setProgressFiles] = useState<{ [key: string]: FileProgress }>({})
   const [project, setProject] = useState<any>(null)
   const [autoSaveStatus, setAutoSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved')
-  const [activeTab, setActiveTab] = useState<'code' | 'preview' | 'build' | 'deploy'>('code')
-  const [buildStatuses, setBuildStatuses] = useState<BuildStatus[]>([])
-  const [isBuilding, setIsBuilding] = useState(false)
+  
+  // UI state
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['root']))
   const [selectedPlatforms, setSelectedPlatforms] = useState<Set<string>>(new Set(['android']))
+  const [buildStatuses, setBuildStatuses] = useState<BuildStatus[]>([])
+  const [isBuilding, setIsBuilding] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
   
-  const consoleRef = useRef<HTMLDivElement>(null)
+  // Refs
+  const chatRef = useRef<HTMLDivElement>(null)
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   // Auto-save functionality
@@ -104,8 +133,8 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: projectId,
-          name: extractProjectName(prompt) || 'Untitled Project',
-          prompt,
+          name: extractProjectName(chatMessages.find(m => m.type === 'user')?.content || '') || 'Untitled Project',
+          prompt: chatMessages.find(m => m.type === 'user')?.content || '',
           files,
           lastModified: new Date().toISOString()
         })
@@ -132,81 +161,55 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
     }
   }, [files])
 
-  // Auto-scroll console to bottom when new logs are added
+  // Auto-scroll chat to bottom
   useEffect(() => {
-    if (consoleRef.current) {
-      // Use a small timeout to ensure DOM has fully updated and rendered
-      const scrollToBottom = () => {
-        if (consoleRef.current) {
-          consoleRef.current.scrollTop = consoleRef.current.scrollHeight
-        }
-      }
-      
-      // Try multiple times to ensure it works
-      requestAnimationFrame(() => {
-        scrollToBottom()
-        // Also try after a small delay to handle slow renders
-        setTimeout(scrollToBottom, 50)
-      })
+    if (chatRef.current) {
+      chatRef.current.scrollTop = chatRef.current.scrollHeight
     }
-  }, [logs])
+  }, [chatMessages])
 
-  // V0 response parser
-  const parseV0Response = (response: string): { [key: string]: string } => {
-    const files: { [key: string]: string } = {}
-    
-    try {
-      // First, try to extract JSON from the response
-      let jsonStart = response.indexOf('{')
-      let jsonEnd = response.lastIndexOf('}') + 1
-      
-      if (jsonStart === -1 || jsonEnd === 0) {
-        throw new Error('No JSON structure found in response')
-      }
-      
-      const jsonString = response.slice(jsonStart, jsonEnd)
-      const parsed = JSON.parse(jsonString)
-      
-      if (parsed.files && typeof parsed.files === 'object') {
-        // V0.dev style: files object
-        Object.entries(parsed.files).forEach(([path, content]) => {
-          if (typeof content === 'string' && content.length > 10) {
-            files[path] = content
-          }
-        })
-      }
-    } catch (jsonError) {
-      // Fallback: Try code block parsing
-      const codeBlockPattern = /```(?:\w+)?\s*(?:\/\/\s*)?([^\n]+)\n([\s\S]*?)```/g
-      let codeMatch
-      
-      while ((codeMatch = codeBlockPattern.exec(response)) !== null) {
-        const fileName = codeMatch[1]?.trim()
-        const content = codeMatch[2]?.trim()
-        
-        if (fileName && content) {
-          files[fileName] = content
-        }
-      }
+  // Handle chat message submission
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!currentMessage.trim() || isGenerating) return
+
+    const userMessage: ChatMessage = {
+      id: Date.now().toString(),
+      type: 'user',
+      content: currentMessage.trim(),
+      timestamp: new Date()
     }
-    
-    return files
+
+    setChatMessages(prev => [...prev, userMessage])
+    setCurrentMessage('')
+    setIsGenerating(true)
+
+    // Add loading message
+    const loadingMessage: ChatMessage = {
+      id: (Date.now() + 1).toString(),
+      type: 'assistant',
+      content: 'Generating your app...',
+      timestamp: new Date(),
+      isGenerating: true
+    }
+    setChatMessages(prev => [...prev, loadingMessage])
+
+    try {
+      await generateApp(userMessage.content)
+    } catch (error) {
+      // Update loading message with error
+      setChatMessages(prev => prev.map(msg => 
+        msg.id === loadingMessage.id 
+          ? { ...msg, content: `Sorry, I encountered an error: ${error instanceof Error ? error.message : 'Unknown error'}`, isGenerating: false }
+          : msg
+      ))
+    } finally {
+      setIsGenerating(false)
+    }
   }
 
-  const generateApp = async () => {
-    if (!prompt.trim()) return
-    
-    setIsGenerating(true)
-    setLogs(['🚀 Starting single AI call with solid Expo base template...'])
-    setFiles({})
-    setProgressFiles({})
-    setActiveFile(null)
-    
+  const generateApp = async (prompt: string) => {
     try {
-      // Use the new solid expo-base-template generator
-      setLogs(prev => [...prev, '📱 Getting solid Expo base template with AI enhancements...'])
-      setLogs(prev => [...prev, '🎯 Single call - no chunking (1-2 minutes)...'])
-      
       const response = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -222,20 +225,14 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
       }
 
       const responseData = await response.json()
-      console.log('🔍 API Response:', responseData)
-      
       const { files: generatedFiles } = responseData
       
       if (!generatedFiles || typeof generatedFiles !== 'object') {
         throw new Error(`Invalid files response: ${typeof generatedFiles}`)
       }
-      
-      setLogs(prev => [...prev, `✅ Generated ${Object.keys(generatedFiles).length} files with solid base template!`])
-      setLogs(prev => [...prev, `📁 Files: ${Object.keys(generatedFiles).slice(0, 5).join(', ')}...`])
 
       // Set all files in state
       setFiles(generatedFiles)
-      console.log('📁 Files set in state:', Object.keys(generatedFiles))
       
       // Update progress files for UI
       Object.entries(generatedFiles).forEach(([path, fileContent]) => {
@@ -248,8 +245,6 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
               isComplete: true
             }
           }))
-          
-          setLogs(prev => [...prev, `✅ Added ${path} (${fileContent.length} chars)`])
         }
       })
       
@@ -259,92 +254,28 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
         setActiveFile(firstFile)
       }
 
-      setLogs(prev => [...prev, '🎉 Complete Expo app generated successfully!'])
-      setLogs(prev => [...prev, '💾 Files stored in in-memory VFS (V0.dev style)'])
-      
+      // Update the loading message with success
+      setChatMessages(prev => prev.map(msg => 
+        msg.isGenerating 
+          ? { 
+              ...msg, 
+              content: `✅ Successfully generated your React Native app with ${Object.keys(generatedFiles).length} files! You can now view the code, make changes, or build your app.`,
+              isGenerating: false 
+            }
+          : msg
+      ))
+
       // Trigger auto-save if we have files
       if (Object.keys(generatedFiles).length > 0) {
         triggerAutoSave()
       }
 
-      setIsGenerating(false)
-
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-      console.error('❌ Generation error:', error)
-      setLogs(prev => [...prev, `❌ Generation failed: ${errorMessage}`])
-      setIsGenerating(false)
+      throw error
     }
   }
 
-  // Build functionality
-  const startBuild = async (platform: string) => {
-    setIsBuilding(true)
-    const buildId = `build-${Date.now()}-${platform}`
-    
-    const newBuild: BuildStatus = {
-      id: buildId,
-      status: 'building',
-      platform: platform as 'android' | 'ios' | 'web',
-      progress: 0
-    }
-    
-    setBuildStatuses(prev => [newBuild, ...prev])
-    
-    try {
-      const response = await fetch('/api/build', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          platform,
-          files,
-          projectName: project?.name || 'generated-app'
-        })
-      })
-      
-      if (!response.ok) throw new Error('Build failed to start')
-      
-      const result = await response.json()
-      
-      // Poll for build status
-      const pollBuild = async () => {
-        try {
-          const statusResponse = await fetch(`/api/build?buildId=${result.buildId}`)
-          const buildStatus = await statusResponse.json()
-          
-          setBuildStatuses(prev => prev.map(build => 
-            build.id === buildId 
-              ? { ...build, ...buildStatus, id: buildId }
-              : build
-          ))
-          
-          if (buildStatus.status === 'pending' || buildStatus.status === 'building') {
-            setTimeout(pollBuild, 2000)
-          } else {
-            setIsBuilding(false)
-          }
-        } catch (error) {
-          setBuildStatuses(prev => prev.map(build => 
-            build.id === buildId 
-              ? { ...build, status: 'error', error: 'Build monitoring failed' }
-              : build
-          ))
-          setIsBuilding(false)
-        }
-      }
-      
-      setTimeout(pollBuild, 2000)
-      
-    } catch (error) {
-      setBuildStatuses(prev => prev.map(build => 
-        build.id === buildId 
-          ? { ...build, status: 'error', error: error instanceof Error ? error.message : 'Build failed' }
-          : build
-      ))
-      setIsBuilding(false)
-    }
-  }
-
+  // File tree utilities
   const getFileIcon = (fileName: string) => {
     if (fileName.endsWith('.tsx') || fileName.endsWith('.ts')) return <Code className="w-4 h-4 text-blue-400" />
     if (fileName.endsWith('.json')) return <FileText className="w-4 h-4 text-yellow-400" />
@@ -369,74 +300,44 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
     return tree
   }
 
+  const filteredFiles = () => {
+    if (!searchQuery) return getFileTree()
+    
+    const filtered: { [key: string]: string[] } = {}
+    Object.entries(getFileTree()).forEach(([folder, fileList]) => {
+      const matchingFiles = fileList.filter(file => 
+        file.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+      if (matchingFiles.length > 0) {
+        filtered[folder] = matchingFiles
+      }
+    })
+    return filtered
+  }
+
   const extractProjectName = (prompt: string) => {
     const words = prompt.split(' ').slice(0, 4).join(' ')
     return words.length > 30 ? words.substring(0, 30) + '...' : words
   }
 
   const downloadProject = async () => {
-    if (Object.keys(files).length === 0) {
-      setLogs(prev => [...prev, '❌ No files to download'])
-      return
-    }
+    if (Object.keys(files).length === 0) return
 
     try {
-      setLogs(prev => [...prev, '📦 Creating ZIP archive in memory...'])
-      
-      // Create JSZip instance (V0.dev style in-memory VFS)
       const zip = new JSZip()
       
-      // Add generated files to zip
       Object.entries(files).forEach(([path, content]) => {
         zip.file(path, content)
-        setLogs(prev => [...prev, `✅ Added ${path} to archive`])
       })
       
-      // Add README with generation info
-      const readmeContent = `# Generated React Native App
-
-🚀 **Generated by V0-Flutter Clone**
-📱 **Framework:** React Native with Expo
-⚡ **Generated on:** ${new Date().toISOString()}
-🧠 **Original Prompt:** ${prompt}
-
-## Quick Start
-
-1. Extract this ZIP file
-2. Run: \`npm install\`
-3. Run: \`npx expo start\`
-
-## Features
-
-- ✅ Expo SDK 53
-- ✅ React Native 0.76
-- ✅ TypeScript support
-- ✅ NativeWind styling
-- ✅ Expo Router navigation
-- ✅ Auto-detected native modules
-
-## Generated Files
-
-${Object.keys(files).map(path => `- ${path}`).join('\n')}
-
----
-*Generated using AI-powered React Native app generation*
-`
+      const projectName = extractProjectName(chatMessages.find(m => m.type === 'user')?.content || '') || 'react-native-app'
+      const fileName = `${projectName.replace(/[^a-zA-Z0-9-]/g, '-')}-${Date.now()}.zip`
       
-      zip.file('README.md', readmeContent)
-      setLogs(prev => [...prev, '✅ Added README.md with generation info'])
-      
-      // Generate ZIP blob in memory (no disk writes!)
-      setLogs(prev => [...prev, '🔄 Generating ZIP archive...'])
       const content = await zip.generateAsync({ 
         type: 'blob',
         compression: 'DEFLATE',
         compressionOptions: { level: 6 }
       })
-      
-      // Create download link and trigger download
-      const projectName = extractProjectName(prompt) || 'react-native-app'
-      const fileName = `${projectName.replace(/[^a-zA-Z0-9-]/g, '-')}-${Date.now()}.zip`
       
       const url = URL.createObjectURL(content)
       const a = document.createElement('a')
@@ -447,12 +348,8 @@ ${Object.keys(files).map(path => `- ${path}`).join('\n')}
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
       
-      setLogs(prev => [...prev, `🎉 Downloaded: ${fileName} (${Math.round(content.size / 1024)}KB)`])
-      setLogs(prev => [...prev, '✅ V0.dev-style in-memory VFS download complete!'])
-      
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-      setLogs(prev => [...prev, `❌ Download failed: ${errorMessage}`])
+      console.error('Download failed:', error)
     }
   }
 
@@ -472,373 +369,160 @@ ${Object.keys(files).map(path => `- ${path}`).join('\n')}
     })
   }
 
-  // Test function to load base template directly
-  const testBaseTemplate = () => {
-    setLogs(['🧪 Testing base template directly...'])
-    
-    // Import and use the base template directly
-    import('@/lib/generators/templates/expo-base-template').then(({ generateExpoBaseTemplate }) => {
-      const testFiles = generateExpoBaseTemplate('TestApp')
-      
-      setLogs(prev => [...prev, `✅ Base template loaded: ${Object.keys(testFiles).length} files`])
-      setFiles(testFiles)
-      
-      // Set first file as active
-      const firstFile = Object.keys(testFiles)[0]
-      if (firstFile) {
-        setActiveFile(firstFile)
-      }
-      
-      setLogs(prev => [...prev, '🎉 Test complete - check Project Files!'])
-    }).catch(error => {
-      setLogs(prev => [...prev, `❌ Test failed: ${error.message}`])
-    })
-  }
-
-  // Comprehensive V0.dev Pipeline Test
-  const testV0Pipeline = async () => {
-    setLogs(['🚀 Testing complete V0.dev pipeline...'])
-    setFiles({})
-    setActiveFile(null)
-
-    try {
-      // Test the full pipeline
-      const { runV0Pipeline } = await import('@/lib/generators/v0-pipeline')
-      
-      setLogs(prev => [...prev, '📊 Step 1: Analyzing test prompt...'])
-      const testPrompt = 'Create a simple todo app with add and delete tasks'
-      
-      setLogs(prev => [...prev, '🎯 Step 2: Running complete V0.dev pipeline...'])
-      const pipelineFiles = await runV0Pipeline(testPrompt)
-      
-      setLogs(prev => [...prev, `✅ Pipeline complete: ${Object.keys(pipelineFiles).length} files generated`])
-      setLogs(prev => [...prev, `📁 Files: ${Object.keys(pipelineFiles).slice(0, 5).join(', ')}...`])
-      
-      // Set files in state
-      setFiles(pipelineFiles)
-      
-      // Set first file as active
-      const firstFile = Object.keys(pipelineFiles)[0]
-      if (firstFile) {
-        setActiveFile(firstFile)
-      }
-      
-      setLogs(prev => [...prev, '🎉 V0.dev pipeline test complete!'])
-      setLogs(prev => [...prev, '💾 Files should now appear in Project Files panel'])
-      
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-      setLogs(prev => [...prev, `❌ V0.dev pipeline test failed: ${errorMessage}`])
-      console.error('V0.dev Pipeline Test Error:', error)
-    }
-  }
-
   return (
-    <div className="h-screen flex flex-col bg-gray-950 text-gray-100">
+    <div className="h-screen flex flex-col bg-black text-gray-100">
       {/* Header */}
-      <div className="bg-gray-900 border-b border-gray-800 px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-                <Smartphone className="w-4 h-4 text-white" />
-              </div>
-              <div>
-                <h1 className="text-lg font-semibold text-gray-100">
-                  {project?.name || extractProjectName(prompt) || 'New React Native Project'}
-                </h1>
-                <div className="flex items-center space-x-3 text-sm text-gray-400">
-                  <span className="flex items-center space-x-1">
-                    <Zap className="w-3 h-3" />
-                    <span>Expo SDK 53</span>
+      <div className="bg-gray-900 border-b border-gray-800 px-6 py-3 flex items-center justify-between">
+        <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-3">
+            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+              <Smartphone className="w-4 h-4 text-white" />
+            </div>
+            <div>
+              <h1 className="text-lg font-semibold text-gray-100">
+                {project?.name || extractProjectName(chatMessages.find(m => m.type === 'user')?.content || '') || 'React Native Project'}
+              </h1>
+              <div className="flex items-center space-x-3 text-sm text-gray-400">
+                <span className="flex items-center space-x-1">
+                  <Package className="w-3 h-3" />
+                  <span>Expo SDK 53</span>
+                </span>
+                <span>•</span>
+                <span className="flex items-center space-x-1">
+                  {autoSaveStatus === 'saving' && <Loader2 className="w-3 h-3 animate-spin text-blue-400" />}
+                  {autoSaveStatus === 'saved' && <CheckCircle className="w-3 h-3 text-green-400" />}
+                  {autoSaveStatus === 'error' && <AlertCircle className="w-3 h-3 text-red-400" />}
+                  <span>
+                    {autoSaveStatus === 'saving' ? 'Saving...' : 
+                     autoSaveStatus === 'saved' ? 'Saved' : 'Save failed'}
                   </span>
-                  <span>•</span>
-                  <span className="flex items-center space-x-1">
-                    <Package className="w-3 h-3" />
-                    <span>React Native 0.76</span>
-                  </span>
-                  <span>•</span>
-                  <span className="flex items-center space-x-1">
-                    <Cloud className="w-3 h-3 text-purple-400" />
-                    <span className="text-purple-400">In-Memory VFS</span>
-                    <span className="text-xs bg-purple-400/20 text-purple-300 px-2 py-0.5 rounded-full">
-                      {(JSON.stringify(files).length / 1024).toFixed(1)}KB
-                    </span>
-                  </span>
-                  <span>•</span>
-                  <div className="flex items-center space-x-1">
-                    {autoSaveStatus === 'saving' && <Loader2 className="w-3 h-3 animate-spin text-blue-400" />}
-                    {autoSaveStatus === 'saved' && <CheckCircle className="w-3 h-3 text-green-400" />}
-                    {autoSaveStatus === 'error' && <AlertCircle className="w-3 h-3 text-red-400" />}
-                    <span>
-                      {autoSaveStatus === 'saving' ? 'Saving...' : 
-                       autoSaveStatus === 'saved' ? 'Saved' : 'Save failed'}
-                    </span>
-                  </div>
-                </div>
+                </span>
               </div>
             </div>
           </div>
-          
-          <div className="flex items-center space-x-3">
-            <button
-              onClick={downloadProject}
-              disabled={Object.keys(files).length === 0}
-              className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-green-600 to-emerald-600 rounded-lg hover:from-green-700 hover:to-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg"
-            >
-              <Download className="w-4 h-4" />
-              <span>Download ZIP</span>
-              {Object.keys(files).length > 0 && (
-                <span className="text-xs bg-white/20 px-1.5 py-0.5 rounded-full">
-                  {Object.keys(files).length}
-                </span>
-              )}
-            </button>
-            
-            <button className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">
-              <Cloud className="w-4 h-4" />
-              <span>Deploy</span>
-            </button>
-          </div>
         </div>
-
-        {/* Tabs */}
-        <div className="flex items-center space-x-1 mt-4">
-          {[
-            { id: 'code', label: 'Code', icon: Code },
-            { id: 'preview', label: 'Preview', icon: Eye },
-            { id: 'build', label: 'Build', icon: Hammer },
-            { id: 'deploy', label: 'Deploy', icon: Cloud }
-          ].map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className={`flex items-center space-x-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                activeTab === tab.id 
-                  ? 'bg-gray-800 text-white border border-gray-700' 
-                  : 'text-gray-400 hover:text-gray-300 hover:bg-gray-800/50'
-              }`}
-            >
-              <tab.icon className="w-4 h-4" />
-              <span>{tab.label}</span>
-            </button>
-          ))}
+        
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={downloadProject}
+            disabled={Object.keys(files).length === 0}
+            className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+          >
+            <Download className="w-4 h-4" />
+            <span>Download</span>
+            {Object.keys(files).length > 0 && (
+              <span className="text-xs bg-white/20 px-1.5 py-0.5 rounded-full">
+                {Object.keys(files).length}
+              </span>
+            )}
+          </button>
         </div>
       </div>
 
-      {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left Panel - Prompt & Generation */}
+        {/* Left Sidebar - VS Code style file explorer */}
         <div className="w-80 border-r border-gray-800 bg-gray-900 flex flex-col">
-          {/* Prompt Input */}
-          <div className="p-6 border-b border-gray-800">
-            <div className="flex items-center space-x-2 mb-3">
-              <Palette className="w-4 h-4 text-purple-400" />
-              <label className="text-sm font-medium text-gray-200">
-                Describe your app
-              </label>
-            </div>
-            <textarea
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder="Build a todo app with camera integration, user authentication, and offline storage..."
-              className="w-full h-32 p-3 bg-gray-800 border border-gray-700 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100 placeholder-gray-400"
-              disabled={isGenerating}
-            />
-            <button
-              onClick={generateApp}
-              disabled={isGenerating || !prompt.trim()}
-              className="mt-4 w-full flex items-center justify-center space-x-2 px-4 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-            >
-              {isGenerating ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Generating...</span>
-                </>
-              ) : (
-                <>
-                  <Play className="w-4 h-4" />
-                  <span>Generate App</span>
-                </>
-              )}
-            </button>
-            
-            {/* Test buttons for debugging */}
-            <div className="mt-2 space-y-2">
-              <button
-                onClick={testBaseTemplate}
-                className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-all text-sm"
-              >
-                <span>🧪 Test Base Template</span>
-              </button>
-              
-              <button
-                onClick={testV0Pipeline}
-                className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-purple-700 text-purple-100 rounded-lg hover:bg-purple-600 transition-all text-sm"
-              >
-                <span>🚀 Test V0.dev Pipeline</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Console */}
-          <div className="flex-1 flex flex-col min-h-0">
-            <div className="px-6 py-3 border-b border-gray-800 flex items-center justify-between flex-shrink-0">
-              <div className="flex items-center space-x-2">
-                <Terminal className="w-4 h-4 text-green-400" />
-                <span className="text-sm font-medium text-gray-200">Generation Log</span>
-              </div>
-              <button 
-                onClick={() => setLogs([])}
-                className="text-gray-400 hover:text-gray-300"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <div 
-              ref={consoleRef}
-              className="flex-1 p-4 overflow-y-auto overflow-x-hidden bg-gray-950 text-green-400 font-mono text-sm scroll-smooth min-h-0"
-            >
-              {logs.map((log, index) => (
-                <motion.div
-                  key={index}
-                  initial={{ opacity: 0, y: 5 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="mb-1 leading-relaxed"
-                >
-                  {log}
-                </motion.div>
-              ))}
-              {isGenerating && (
-                <motion.div
-                  animate={{ opacity: [1, 0.5, 1] }}
-                  transition={{ repeat: Infinity, duration: 1 }}
-                  className="flex items-center space-x-2 mt-2"
-                >
-                  <span className="text-blue-400">▊</span>
-                  <span className="text-gray-400">Generating...</span>
-                </motion.div>
-              )}
-              {logs.length === 0 && !isGenerating && (
-                <div className="text-gray-500 text-center mt-8">
-                  <Terminal className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                  <p>Generation logs will appear here</p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Center Panel - File Tree */}
-        <div className="w-64 border-r border-gray-800 bg-gray-900">
+          {/* Explorer Header */}
           <div className="p-4 border-b border-gray-800">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-medium text-gray-200 flex items-center space-x-2">
                 <Folder className="w-4 h-4 text-blue-400" />
-                <span>Project Files</span>
+                <span>EXPLORER</span>
               </h3>
               <div className="flex items-center space-x-2">
                 <span className="text-xs text-gray-500">
                   {Object.keys(files).length} files
                 </span>
-                {Object.keys(files).length > 0 && (
-                  <div className="flex items-center space-x-1">
-                    <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                    <span className="text-xs text-green-400">VFS</span>
-                  </div>
-                )}
               </div>
             </div>
+            
+            {/* Search */}
+            <div className="relative">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search files..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-200 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
           </div>
-          <div className="p-2 overflow-auto">
-            <AnimatePresence>
-              {Object.entries(getFileTree()).map(([folder, fileList]) => (
-                <div key={folder} className="mb-1">
-                  {folder !== 'root' && (
-                    <button
-                      onClick={() => toggleFolder(folder)}
-                      className="flex items-center space-x-2 w-full p-2 text-sm font-medium text-gray-300 hover:bg-gray-800 rounded transition-colors"
-                    >
-                      {expandedFolders.has(folder) ? (
-                        <ChevronDown className="w-4 h-4" />
-                      ) : (
-                        <ChevronRight className="w-4 h-4" />
-                      )}
-                      <FolderOpen className="w-4 h-4 text-blue-400" />
-                      <span>{folder}</span>
-                    </button>
-                  )}
-                  {(folder === 'root' || expandedFolders.has(folder)) && fileList.map(filePath => {
-                    const progress = progressFiles[filePath]
-                    const isActive = activeFile === filePath
-                    const isComplete = files[filePath] !== undefined
-                    
-                    return (
-                      <motion.div
-                        key={filePath}
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        className={`flex items-center space-x-2 p-2 ml-6 rounded cursor-pointer transition-colors ${
-                          isActive ? 'bg-blue-900/50 border border-blue-700/50' : 
-                          isComplete ? 'hover:bg-gray-800' : 'opacity-50'
-                        }`}
-                        onClick={() => isComplete && setActiveFile(filePath)}
+          
+          {/* File Tree - Scrollable */}
+          <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-gray-800">
+            <div className="p-2">
+              <AnimatePresence>
+                {Object.entries(filteredFiles()).map(([folder, fileList]) => (
+                  <div key={folder} className="mb-1">
+                    {folder !== 'root' && (
+                      <button
+                        onClick={() => toggleFolder(folder)}
+                        className="flex items-center space-x-2 w-full p-2 text-sm font-medium text-gray-300 hover:bg-gray-800 rounded transition-colors"
                       >
-                        {getFileIcon(filePath)}
-                        <span className="text-sm truncate flex-1 text-gray-300">
-                          {filePath.split('/').pop()}
-                        </span>
-                        {progress && !progress.isComplete && (
-                          <Loader2 className="w-3 h-3 animate-spin text-blue-400" />
+                        {expandedFolders.has(folder) ? (
+                          <ChevronDown className="w-4 h-4" />
+                        ) : (
+                          <ChevronRight className="w-4 h-4" />
                         )}
-                        {isComplete && (
-                          <CheckCircle className="w-3 h-3 text-green-400" />
-                        )}
-                      </motion.div>
-                    )
-                  })}
+                        <FolderOpen className="w-4 h-4 text-blue-400" />
+                        <span>{folder}</span>
+                      </button>
+                    )}
+                    
+                    {(folder === 'root' || expandedFolders.has(folder)) && fileList.map(filePath => {
+                      const isActive = activeFile === filePath
+                      const isComplete = files[filePath] !== undefined
+                      
+                      return (
+                        <motion.div
+                          key={filePath}
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          className={`flex items-center space-x-2 p-2 ml-6 rounded cursor-pointer transition-colors ${
+                            isActive ? 'bg-blue-900/50 border-l-2 border-blue-400' : 
+                            isComplete ? 'hover:bg-gray-800' : 'opacity-50'
+                          }`}
+                          onClick={() => isComplete && setActiveFile(filePath)}
+                        >
+                          {getFileIcon(filePath)}
+                          <span className="text-sm truncate flex-1 text-gray-300">
+                            {filePath.split('/').pop()}
+                          </span>
+                          {isComplete && (
+                            <CheckCircle className="w-3 h-3 text-green-400" />
+                          )}
+                        </motion.div>
+                      )
+                    })}
+                  </div>
+                ))}
+              </AnimatePresence>
+              
+              {Object.keys(files).length === 0 && (
+                <div className="text-center mt-8 text-gray-500">
+                  <Folder className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">No files yet</p>
+                  <p className="text-xs text-gray-600 mt-2">Start a conversation to generate your app</p>
                 </div>
-              ))}
-            </AnimatePresence>
-            
-            {Object.keys(files).length === 0 && !isGenerating && (
-              <div className="text-center mt-8 text-gray-500">
-                <Folder className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">No files generated yet</p>
-                <p className="text-xs text-gray-600 mt-2">Files will be stored in memory like v0.dev</p>
-              </div>
-            )}
-            
-            {/* Memory Status Panel */}
-            {Object.keys(files).length > 0 && (
-              <div className="p-3 mx-3 mb-3 bg-purple-900/20 border border-purple-700/30 rounded-lg">
-                <div className="flex items-center space-x-2 mb-2">
-                  <div className="w-2 h-2 bg-purple-400 rounded-full animate-pulse"></div>
-                  <span className="text-xs font-medium text-purple-300">In-Memory File System</span>
-                </div>
-                <div className="text-xs text-purple-200/70 space-y-1">
-                  <div>📁 Files: {Object.keys(files).length}</div>
-                  <div>💾 Size: {(JSON.stringify(files).length / 1024).toFixed(1)}KB</div>
-                  <div>🔄 Status: {autoSaveStatus === 'saved' ? 'Synced to DB' : 'Syncing...'}</div>
-                  <div>⚡ Persistence: Until page reload</div>
-                </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Right Panel - Dynamic Content Based on Tab */}
-        <div className="flex-1 bg-gray-900">
-          {activeTab === 'code' && (
-            <>
-              <div className="p-4 border-b border-gray-800 flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <Eye className="w-4 h-4 text-gray-400" />
-                  <span className="text-sm font-medium text-gray-200">
-                    {activeFile || 'Select a file'}
-                  </span>
-                </div>
-                {activeFile && (
+        {/* Main Content Area */}
+        <div className="flex-1 flex flex-col">
+          {/* Code Editor Area */}
+          <div className="flex-1 bg-gray-900">
+            {activeFile ? (
+              <>
+                <div className="p-4 border-b border-gray-800 flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <Eye className="w-4 h-4 text-gray-400" />
+                    <span className="text-sm font-medium text-gray-200">
+                      {activeFile}
+                    </span>
+                  </div>
                   <button
                     onClick={() => copyToClipboard(files[activeFile] || '')}
                     className="flex items-center space-x-1 px-3 py-1 text-xs bg-gray-800 hover:bg-gray-700 rounded border border-gray-700 transition-colors"
@@ -846,172 +530,136 @@ ${Object.keys(files).map(path => `- ${path}`).join('\n')}
                     <Copy className="w-3 h-3" />
                     <span>Copy</span>
                   </button>
-                )}
-              </div>
-              <div className="h-full overflow-auto">
-                {activeFile ? (
+                </div>
+                <div className="h-full overflow-auto">
                   <div className="p-4">
-                    <pre className="bg-gray-950 p-4 rounded-lg overflow-auto text-sm border border-gray-800">
+                    <pre className="bg-black p-4 rounded-lg overflow-auto text-sm border border-gray-800 h-full">
                       <code className="text-gray-300">
                         {progressFiles[activeFile]?.content || files[activeFile] || ''}
                       </code>
                     </pre>
                   </div>
-                ) : (
-                  <div className="flex items-center justify-center h-full text-gray-500">
-                    <div className="text-center">
-                      <Code className="w-16 h-16 mx-auto mb-4 text-gray-700" />
-                      <p className="text-lg font-medium mb-2">Select a file to view</p>
-                      <p className="text-sm text-gray-600">Choose from the file tree to see the code</p>
-                    </div>
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center justify-center h-full text-gray-500">
+                <div className="text-center">
+                  <Code className="w-16 h-16 mx-auto mb-4 text-gray-700" />
+                  <p className="text-lg font-medium mb-2">Select a file to view</p>
+                  <p className="text-sm text-gray-600">Choose from the file explorer to see the code</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Chat Interface - ChatGPT Style */}
+          <div className="h-80 border-t border-gray-800 bg-black flex flex-col">
+            {/* Chat Header */}
+            <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <MessageSquare className="w-4 h-4 text-blue-400" />
+                <span className="text-sm font-medium text-gray-200">AI Assistant</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                {isGenerating && (
+                  <div className="flex items-center space-x-2">
+                    <Loader2 className="w-4 h-4 animate-spin text-blue-400" />
+                    <span className="text-xs text-blue-400">Generating...</span>
                   </div>
                 )}
               </div>
-            </>
-          )}
+            </div>
 
-          {activeTab === 'build' && (
-            <div className="p-6">
-              <div className="mb-6">
-                <h3 className="text-lg font-semibold text-gray-200 mb-2">Expo EAS Build</h3>
-                <p className="text-sm text-gray-400">Build your app for production deployment</p>
-              </div>
-
-              {/* Platform Selection */}
-              <div className="mb-6">
-                <h4 className="text-sm font-medium text-gray-300 mb-3">Select Platforms</h4>
-                <div className="grid grid-cols-3 gap-3">
-                  {[
-                    { id: 'android', label: 'Android', icon: Smartphone },
-                    { id: 'ios', label: 'iOS', icon: Smartphone },
-                    { id: 'web', label: 'Web', icon: Monitor }
-                  ].map(platform => (
-                    <button
-                      key={platform.id}
-                      onClick={() => {
-                        const newSet = new Set(selectedPlatforms)
-                        if (newSet.has(platform.id)) {
-                          newSet.delete(platform.id)
-                        } else {
-                          newSet.add(platform.id)
-                        }
-                        setSelectedPlatforms(newSet)
-                      }}
-                      className={`flex items-center space-x-2 p-3 rounded-lg border transition-colors ${
-                        selectedPlatforms.has(platform.id)
-                          ? 'bg-blue-900/30 border-blue-600 text-blue-300'
-                          : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600'
-                      }`}
-                    >
-                      <platform.icon className="w-4 h-4" />
-                      <span className="text-sm font-medium">{platform.label}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Build Button */}
-              <button
-                onClick={() => selectedPlatforms.forEach(platform => startBuild(platform))}
-                disabled={isBuilding || selectedPlatforms.size === 0 || Object.keys(files).length === 0}
-                className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-gradient-to-r from-green-600 to-blue-600 text-white rounded-lg hover:from-green-700 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all mb-6"
-              >
-                {isBuilding ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Building...</span>
-                  </>
-                ) : (
-                  <>
-                                         <Hammer className="w-4 h-4" />
-                     <span>Start Build</span>
-                  </>
-                )}
-              </button>
-
-              {/* Build History */}
-              <div>
-                <h4 className="text-sm font-medium text-gray-300 mb-3">Build History</h4>
-                <div className="space-y-3">
-                  {buildStatuses.map(build => (
-                    <motion.div
-                      key={build.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="p-4 bg-gray-800 rounded-lg border border-gray-700"
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center space-x-2">
-                          <div className={`w-2 h-2 rounded-full ${
-                            build.status === 'building' ? 'bg-yellow-400 animate-pulse' :
-                            build.status === 'success' ? 'bg-green-400' :
-                            build.status === 'error' ? 'bg-red-400' : 'bg-gray-400'
-                          }`} />
-                          <span className="text-sm font-medium text-gray-200">
-                            {build.platform.charAt(0).toUpperCase() + build.platform.slice(1)} Build
-                          </span>
-                        </div>
-                        <span className={`text-xs px-2 py-1 rounded ${
-                          build.status === 'building' ? 'bg-yellow-900 text-yellow-300' :
-                          build.status === 'success' ? 'bg-green-900 text-green-300' :
-                          build.status === 'error' ? 'bg-red-900 text-red-300' : 'bg-gray-700 text-gray-300'
-                        }`}>
-                          {build.status}
-                        </span>
-                      </div>
-                      
-                      {build.status === 'building' && (
-                        <div className="w-full bg-gray-700 rounded-full h-2 mb-2">
-                          <div 
-                            className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                            style={{ width: `${build.progress || 0}%` }}
-                          />
-                        </div>
-                      )}
-                      
-                      {build.downloadUrl && (
-                        <button className="flex items-center space-x-2 text-sm text-blue-400 hover:text-blue-300">
-                          <Download className="w-4 h-4" />
-                          <span>Download APK</span>
-                        </button>
-                      )}
-                      
-                      {build.error && (
-                        <p className="text-sm text-red-400 mt-2">{build.error}</p>
-                      )}
-                    </motion.div>
-                  ))}
+            {/* Chat Messages - Scrollable */}
+            <div 
+              ref={chatRef}
+              className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-gray-800 p-4 space-y-4"
+            >
+              {chatMessages.map((message) => (
+                <motion.div
+                  key={message.id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className={`flex items-start space-x-3 ${
+                    message.type === 'user' ? 'flex-row-reverse space-x-reverse' : ''
+                  }`}
+                >
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                    message.type === 'user' 
+                      ? 'bg-blue-600' 
+                      : message.type === 'assistant' 
+                        ? 'bg-purple-600' 
+                        : 'bg-gray-600'
+                  }`}>
+                    {message.type === 'user' ? (
+                      <User className="w-4 h-4 text-white" />
+                    ) : message.type === 'assistant' ? (
+                      <Bot className="w-4 h-4 text-white" />
+                    ) : (
+                      <Settings className="w-4 h-4 text-white" />
+                    )}
+                  </div>
                   
-                  {buildStatuses.length === 0 && (
-                    <div className="text-center py-8 text-gray-500">
-                                             <Hammer className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                      <p className="text-sm">No builds yet</p>
+                  <div className={`max-w-[80%] ${
+                    message.type === 'user' ? 'text-right' : 'text-left'
+                  }`}>
+                    <div className={`inline-block p-3 rounded-lg ${
+                      message.type === 'user'
+                        ? 'bg-blue-600 text-white'
+                        : message.type === 'assistant'
+                          ? 'bg-gray-800 text-gray-200'
+                          : 'bg-gray-700 text-gray-300'
+                    }`}>
+                      {message.isGenerating ? (
+                        <div className="flex items-center space-x-2">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>{message.content}</span>
+                        </div>
+                      ) : (
+                        <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                      )}
                     </div>
-                  )}
+                    <p className="text-xs text-gray-500 mt-1">
+                      {message.timestamp.toLocaleTimeString()}
+                    </p>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+
+            {/* Chat Input */}
+            <div className="p-4 border-t border-gray-800">
+              <form onSubmit={handleSendMessage} className="flex items-end space-x-3">
+                <div className="flex-1">
+                  <textarea
+                    value={currentMessage}
+                    onChange={(e) => setCurrentMessage(e.target.value)}
+                    placeholder="Describe your app or ask for changes..."
+                    className="w-full p-3 bg-gray-800 border border-gray-700 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-400"
+                    rows={3}
+                    disabled={isGenerating}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault()
+                        handleSendMessage(e)
+                      }
+                    }}
+                  />
                 </div>
-              </div>
+                <button
+                  type="submit"
+                  disabled={!currentMessage.trim() || isGenerating}
+                  className="flex items-center justify-center w-10 h-10 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+                >
+                  {isGenerating ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Send className="w-4 h-4" />
+                  )}
+                </button>
+              </form>
             </div>
-          )}
-
-          {activeTab === 'preview' && (
-            <div className="flex items-center justify-center h-full text-gray-500">
-              <div className="text-center">
-                <Eye className="w-16 h-16 mx-auto mb-4 text-gray-700" />
-                <p className="text-lg font-medium mb-2">Live Preview</p>
-                <p className="text-sm text-gray-600">App preview will be available soon</p>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'deploy' && (
-            <div className="flex items-center justify-center h-full text-gray-500">
-              <div className="text-center">
-                <Cloud className="w-16 h-16 mx-auto mb-4 text-gray-700" />
-                <p className="text-lg font-medium mb-2">Deploy to Stores</p>
-                <p className="text-sm text-gray-600">Deployment options coming soon</p>
-              </div>
-            </div>
-          )}
+          </div>
         </div>
       </div>
     </div>

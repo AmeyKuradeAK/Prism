@@ -19,7 +19,41 @@ const config: Config = {
       },
     },
   },
-  plugins: [],
+  plugins: [
+    function({ addUtilities }: any) {
+      addUtilities({
+        '.scrollbar-thin': {
+          '&::-webkit-scrollbar': {
+            width: '6px',
+            height: '6px',
+          },
+          '&::-webkit-scrollbar-track': {
+            backgroundColor: 'transparent',
+          },
+          '&::-webkit-scrollbar-thumb': {
+            backgroundColor: '#4b5563',
+            borderRadius: '3px',
+          },
+          '&::-webkit-scrollbar-thumb:hover': {
+            backgroundColor: '#6b7280',
+          },
+        },
+        '.scrollbar-thumb-gray-700': {
+          '&::-webkit-scrollbar-thumb': {
+            backgroundColor: '#374151',
+          },
+          '&::-webkit-scrollbar-thumb:hover': {
+            backgroundColor: '#4b5563',
+          },
+        },
+        '.scrollbar-track-gray-800': {
+          '&::-webkit-scrollbar-track': {
+            backgroundColor: '#1f2937',
+          },
+        },
+      });
+    },
+  ],
 };
 
 export default config; 
