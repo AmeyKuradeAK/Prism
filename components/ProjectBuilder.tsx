@@ -170,25 +170,26 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
 
   // Load base template
   const handleLoadTemplate = async () => {
-    console.log('📂 Loading COMPLETE demo-1 base template...')
+    console.log('📂 Loading template with client memfs...')
     setIsGenerating(true)
     
     // Add loading message
     const loadingMessage: ChatMessage = {
       id: Date.now().toString(),
       type: 'assistant',
-      content: '📂 Loading base React Native template...',
+      content: '📂 Loading base React Native template with client memfs...',
       timestamp: new Date(),
       isGenerating: true
     }
     setChatMessages(prev => [...prev, loadingMessage])
 
     try {
-      // Import and generate template
-      const { generateCompleteDemo1Template } = await import('@/lib/generators/templates/complete-demo1-template')
-      const templateFiles = generateCompleteDemo1Template('BaseTemplate')
+      // Use client memfs to load template
+      const clientMemFS = (await import('@/lib/utils/client-memfs')).default
+      await clientMemFS.loadBaseTemplate('BaseTemplate')
+      const templateFiles = clientMemFS.getAllFiles()
       
-      console.log(`✅ Base template loaded: ${Object.keys(templateFiles).length} files`)
+      console.log(`✅ Template loaded: ${Object.keys(templateFiles).length} files`)
       console.log('📋 All template files:', Object.keys(templateFiles).sort())
       
       // Set files
@@ -205,7 +206,7 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
         prev.map(msg => 
           msg.isGenerating ? {
             ...msg,
-            content: `✅ Base template loaded successfully! ${Object.keys(templateFiles).length} files created.`,
+            content: `✅ Base template loaded successfully! ${Object.keys(templateFiles).length} files created with client memfs.`,
             isGenerating: false
           } : msg
         )
@@ -269,18 +270,18 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
 
   const generateApp = async (prompt: string, testMode: boolean = false, quickMode: boolean = false) => {
     try {
-      console.log('🚀 Starting hybrid client-side AI + base template generation...')
+      console.log('🚀 Starting client-side memfs AI generation...')
       console.log('📝 Prompt:', prompt)
-      console.log('🧪 Test mode:', testMode)
+      console.log('🧪 Test mode:', testMode, 'Quick mode:', quickMode)
       
-      // Step 1: Always load base template first (into virtual memfs)
-      console.log('📦 Step 1: Loading base template into memfs...')
-      const { generateCompleteDemo1Template } = await import('@/lib/generators/templates/complete-demo1-template')
-      const { loadFilesIntoMemfs } = await import('@/lib/utils/simple-memfs')
+      // Step 1: Load base template into client memfs
+      console.log('📦 Step 1: Loading base template into client memfs...')
+      const clientMemFS = (await import('@/lib/utils/client-memfs')).default
       
-      const baseFiles = generateCompleteDemo1Template('BaseApp')
-      await loadFilesIntoMemfs(baseFiles)
-      console.log(`✅ Base template loaded: ${Object.keys(baseFiles).length} files in memfs`)
+      await clientMemFS.loadBaseTemplate('MyApp')
+      const baseFiles = clientMemFS.getAllFiles()
+      
+      console.log(`✅ Base template loaded: ${Object.keys(baseFiles).length} files`)
       
       // Set base files immediately so user sees progress
       setFiles(baseFiles)
@@ -397,29 +398,21 @@ Then restart the dev server.`,
       const aiData = await aiResponse.json()
       console.log('🤖 AI Response received:', aiData.choices?.[0]?.message?.content?.substring(0, 200))
       
-      // Step 3: Parse AI-generated files
+      // Step 4: Parse AI-generated files
       const { parseCodeFromResponse } = await import('@/lib/utils/code-parser')
       const aiGeneratedFiles = parseCodeFromResponse(aiData.choices?.[0]?.message?.content || '')
       
-             console.log(`🔄 Step 4: Parsed ${aiGeneratedFiles.length} AI-generated files`)
+      console.log(`🔄 Step 4: Parsed ${aiGeneratedFiles.length} AI-generated files`)
        
-       // Step 5: Merge AI files into base template (in memfs)
-      const mergedFiles = { ...baseFiles }
-      let aiFileCount = 0
+      // Step 5: Merge AI files into base template using intelligent client memfs
+      console.log('🔄 Step 5: Intelligent merging with client memfs...')
+      clientMemFS.mergeAIFiles(aiGeneratedFiles)
       
-      aiGeneratedFiles.forEach(file => {
-        if (file.path && file.content) {
-          console.log(`🔄 Merging AI file: ${file.path}`)
-          mergedFiles[file.path] = file.content
-          aiFileCount++
-        }
-      })
+      const mergedFiles = clientMemFS.getAllFiles()
+      const counts = clientMemFS.getFileCount()
       
-             console.log(`✅ Step 5: Merged ${aiFileCount} AI files into base template`)
-      console.log(`📊 Final result: ${Object.keys(mergedFiles).length} total files`)
-      
-      // Update memfs with merged files
-      await loadFilesIntoMemfs(mergedFiles)
+      console.log(`✅ Step 5: Intelligent merge complete`)
+      console.log(`📊 Final result: ${counts.base} base + ${counts.ai} AI = ${counts.total} total files`)
       
       // Set all merged files in state
       setFiles(mergedFiles)
@@ -443,7 +436,7 @@ Then restart the dev server.`,
         msg.isGenerating 
           ? { 
               ...msg, 
-              content: `✅ Generated enhanced React Native app! Base template (${Object.keys(baseFiles).length} files) + AI enhancements (${aiFileCount} files) = ${Object.keys(mergedFiles).length} total files in memfs.`,
+              content: `✅ Generated enhanced React Native app! Base template (${counts.base} files) + AI enhancements (${counts.ai} files) = ${counts.total} total files with intelligent merging.`,
               isGenerating: false 
             }
           : msg
@@ -485,26 +478,22 @@ Then restart the dev server.`,
   }
 
   const getFileTree = () => {
-    console.log('🗂️ Organizing files into tree structure...')
+    console.log('🗂️ Getting organized files - using fallback organization...')
+    
+    // Fallback to manual organization
     console.log('📋 Raw file paths:', Object.keys(files).sort())
     
     const organized: { [key: string]: string[] } = {}
     
     Object.keys(files).forEach(path => {
-      console.log(`🔍 Processing file: ${path}`)
-      
-      // Remove leading slash if it exists
       const cleanPath = path.startsWith('/') ? path.slice(1) : path
       const parts = cleanPath.split('/')
       
       let folderName = ''
       
-      // Root files (package.json, app.json, etc.)
       if (parts.length === 1) {
         folderName = '📄 Project Files'
-      }
-      // App files
-      else if (parts[0] === 'app') {
+      } else if (parts[0] === 'app') {
         if (parts.length === 2) {
           folderName = '📱 app'
         } else if (parts[1] === '(tabs)') {
@@ -512,9 +501,7 @@ Then restart the dev server.`,
         } else {
           folderName = '📱 app'
         }
-      }
-      // Components
-      else if (parts[0] === 'components') {
+      } else if (parts[0] === 'components') {
         if (parts.length === 2) {
           folderName = '🧩 components'
         } else if (parts[1] === 'ui') {
@@ -522,25 +509,19 @@ Then restart the dev server.`,
         } else {
           folderName = '🧩 components'
         }
-      }
-      // Hooks
-      else if (parts[0] === 'hooks') {
+      } else if (parts[0] === 'hooks') {
         folderName = '🪝 hooks'
-      }
-      // Constants
-      else if (parts[0] === 'constants') {
+      } else if (parts[0] === 'constants') {
         folderName = '⚙️ constants'
-      }
-      // Assets
-      else if (parts[0] === 'assets') {
+      } else if (parts[0] === 'lib') {
+        folderName = '📚 lib'
+      } else if (parts[0] === 'utils') {
+        folderName = '🔧 utils'
+      } else if (parts[0] === 'types') {
+        folderName = '📝 types'
+      } else if (parts[0] === 'assets') {
         folderName = '🖼️ assets'
-      }
-      // Scripts
-      else if (parts[0] === 'scripts') {
-        folderName = '📜 scripts'
-      }
-      // Other directories
-      else {
+      } else {
         folderName = `📁 ${parts[0]}`
       }
       
@@ -548,8 +529,6 @@ Then restart the dev server.`,
         organized[folderName] = []
       }
       organized[folderName].push(path)
-      
-      console.log(`  → Added to folder: ${folderName}`)
     })
     
     // Sort files within each folder
@@ -557,7 +536,7 @@ Then restart the dev server.`,
       organized[folder].sort()
     })
     
-    console.log('✅ Final organization:', organized)
+    console.log('✅ Fallback organization complete')
     console.log(`📊 Total folders: ${Object.keys(organized).length}`)
     
     return organized
@@ -741,6 +720,45 @@ Then restart the dev server.`,
             <Folder className="w-4 h-4" />
             <span>📂 Load Template</span>
           </button>
+          
+          {/* Test Client MemFS Button */}
+          <button
+            onClick={async () => {
+              console.log('🧪 Testing Client MemFS...')
+              try {
+                const clientMemFS = (await import('@/lib/utils/client-memfs')).default
+                await clientMemFS.loadBaseTemplate('TestApp')
+                const baseFiles = clientMemFS.getAllFiles()
+                console.log(`✅ Base: ${Object.keys(baseFiles).length} files`)
+                
+                // Mock AI files
+                const mockAI = [
+                  { path: '/components/TestButton.tsx', content: 'export default function TestButton() { return null; }' },
+                  { path: '/lib/utils.ts', content: 'export const test = true;' }
+                ]
+                clientMemFS.mergeAIFiles(mockAI)
+                
+                const merged = clientMemFS.getAllFiles()
+                const counts = clientMemFS.getFileCount()
+                console.log(`🔄 Merged: ${counts.base} base + ${counts.ai} AI = ${counts.total} total`)
+                
+                const organized = clientMemFS.getOrganizedFiles()
+                console.log('📊 Folders:', Object.keys(organized))
+                
+                // Update UI to show test results
+                setFiles(merged)
+                setActiveFile('/components/TestButton.tsx')
+                
+              } catch (error) {
+                console.error('❌ Test failed:', error)
+              }
+            }}
+            disabled={isGenerating}
+            className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+          >
+            <span>🧪</span>
+            <span>Test MemFS</span>
+          </button>
         </div>
       </div>
 
@@ -791,11 +809,39 @@ Then restart the dev server.`,
                           <ChevronRight className="w-4 h-4" />
                         )}
                         <FolderOpen className="w-4 h-4 text-blue-400" />
-                        <span>{folder}</span>
+                        <span>{folder} ({fileList.length})</span>
                       </button>
                     )}
                     
-                    {(folder === 'root' || expandedFolders.has(folder)) && fileList.map(filePath => {
+                    {/* Root files - always show, no folder header */}
+                    {folder === 'root' && fileList.map(filePath => {
+                      const isActive = activeFile === filePath
+                      const isComplete = files[filePath] !== undefined
+                      
+                      return (
+                        <motion.div
+                          key={filePath}
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          className={`flex items-center space-x-2 p-2 rounded cursor-pointer transition-colors ${
+                            isActive ? 'bg-blue-900/50 border-l-2 border-blue-400' : 
+                            isComplete ? 'hover:bg-gray-800' : 'opacity-50'
+                          }`}
+                          onClick={() => isComplete && setActiveFile(filePath)}
+                        >
+                          {getFileIcon(filePath)}
+                          <span className="text-sm truncate flex-1 text-gray-300">
+                            {filePath.split('/').pop()}
+                          </span>
+                          {isComplete && (
+                            <CheckCircle className="w-3 h-3 text-green-400" />
+                          )}
+                        </motion.div>
+                      )
+                    })}
+                    
+                    {/* Folder files - show when expanded */}
+                    {folder !== 'root' && expandedFolders.has(folder) && fileList.map(filePath => {
                       const isActive = activeFile === filePath
                       const isComplete = files[filePath] !== undefined
                       
