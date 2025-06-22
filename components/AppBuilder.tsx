@@ -23,7 +23,8 @@ import {
   Eye,
   EyeOff,
   X,
-  CheckCircle
+  CheckCircle,
+  Search
 } from 'lucide-react'
 import Link from 'next/link'
 import PromptInput from './PromptInput'
@@ -139,12 +140,28 @@ export default function AppBuilder() {
 
     try {
       // Import the base template generator directly - using COMPLETE demo-1 structure
-      const { generateDemo1BaseTemplate } = await import('@/lib/generators/templates/complete-demo1-template')
+      const { generateCompleteDemo1Template } = await import('@/lib/generators/templates/complete-demo1-template')
       
       console.log('📂 Loading COMPLETE demo-1 base template directly...')
-      const templateFiles = generateDemo1BaseTemplate('ManualApp')
+      const templateFiles = generateCompleteDemo1Template('ManualApp')
       
       console.log(`✅ Base template loaded: ${Object.keys(templateFiles).length} files`)
+      console.log('📋 All template files:', Object.keys(templateFiles).sort())
+      
+      // Expected 26 files verification
+      if (Object.keys(templateFiles).length !== 26) {
+        console.warn(`⚠️ Expected 26 files but got ${Object.keys(templateFiles).length}`)
+        console.warn('📄 Missing files might cause issues')
+      }
+      
+      // Load into memfs for preview
+      try {
+        const { loadFilesIntoMemfs } = await import('@/lib/utils/simple-memfs')
+        const memfsSuccess = loadFilesIntoMemfs(templateFiles)
+        console.log('📂 memfs loading result:', memfsSuccess ? '✅ Success' : '❌ Failed')
+      } catch (memfsError) {
+        console.warn('⚠️ memfs loading failed:', memfsError)
+      }
       
       setBuildInfo({
         status: 'completed',
@@ -152,6 +169,13 @@ export default function AppBuilder() {
         currentStep: `Template loaded - ${Object.keys(templateFiles).length} files`,
         files: templateFiles
       })
+      
+      // Auto-select first file
+      const firstFile = Object.keys(templateFiles)[0]
+      if (firstFile) {
+        setSelectedFile(firstFile)
+      }
+      
     } catch (error) {
       console.error('Failed to load template:', error)
       setBuildInfo(prev => ({
@@ -695,12 +719,15 @@ Generated on: ${new Date().toLocaleString()}
   }
 
   const organizeFiles = (files: { [key: string]: string }) => {
+    console.log('🗂️ Organizing files for UI display:', Object.keys(files))
     const organized: { [key: string]: string[] } = {}
     
     Object.keys(files).forEach(filepath => {
       // Remove leading slash for proper path parsing
       const cleanPath = filepath.startsWith('/') ? filepath.slice(1) : filepath
       const parts = cleanPath.split('/')
+      
+      console.log(`📁 Processing: ${filepath} → parts: [${parts.join(', ')}]`)
       
       if (parts.length === 1) {
         // Root file (package.json, app.json, etc.)
@@ -714,26 +741,26 @@ Generated on: ${new Date().toLocaleString()}
         let dirIcon: string
         if (dir === 'app') {
           if (subdirs.includes('(tabs)')) {
-            dirIcon = '📱 App/(tabs)'
+            dirIcon = '📱 app/(tabs)'
           } else {
-            dirIcon = '📱 App'
+            dirIcon = '📱 app'
           }
         } else if (dir === 'components') {
           if (subdirs.includes('ui')) {
-            dirIcon = '🧩 Components/ui'
+            dirIcon = '🧩 components/ui'
           } else {
-            dirIcon = '🧩 Components'
+            dirIcon = '🧩 components'
           }
         } else if (dir === 'hooks') {
-          dirIcon = '🪝 Hooks'
+          dirIcon = '🪝 hooks'
         } else if (dir === 'constants') {
-          dirIcon = '⚙️ Constants'
+          dirIcon = '⚙️ constants'
         } else if (dir === 'types') {
-          dirIcon = '📝 Types'
+          dirIcon = '📝 types'
         } else if (dir === 'utils') {
-          dirIcon = '🛠️ Utils'
+          dirIcon = '🛠️ utils'
         } else if (dir === 'assets') {
-          dirIcon = '🖼️ Assets'
+          dirIcon = '🖼️ assets'
         } else {
           dirIcon = `📁 ${dir}`
         }
@@ -742,6 +769,10 @@ Generated on: ${new Date().toLocaleString()}
         organized[dirIcon].push(filepath)
       }
     })
+    
+    console.log('🗂️ Final organized structure:', organized)
+    console.log('🗂️ Total folders:', Object.keys(organized).length)
+    console.log('🗂️ Total files in display:', Object.values(organized).flat().length)
     
     return organized
   }
@@ -1273,13 +1304,28 @@ Generated on: ${new Date().toLocaleString()}
               )}
 
               {buildInfo.status === 'completed' && (
-                <button
-                  onClick={() => window.open('https://expo.dev', '_blank')}
-                  className="flex items-center space-x-2 text-white/70 hover:text-white bg-white/5 hover:bg-white/10 px-4 py-2 rounded-xl transition-all"
-                >
-                  <Play className="w-4 h-4" />
-                  <span>Test in Expo</span>
-                </button>
+                <>
+                  <button
+                    onClick={() => window.open('https://expo.dev', '_blank')}
+                    className="flex items-center space-x-2 text-white/70 hover:text-white bg-white/5 hover:bg-white/10 px-4 py-2 rounded-xl transition-all"
+                  >
+                    <Play className="w-4 h-4" />
+                    <span>Test in Expo</span>
+                  </button>
+                  
+                  <button
+                    onClick={async () => {
+                      const { debugMemfsState, debugFileStructure } = await import('@/lib/utils/debug-memfs')
+                      console.log('=== 🔍 DEBUG MEMFS STATE ===')
+                      debugMemfsState('Manual Debug Check')
+                      debugFileStructure(buildInfo.files, 'UI Display Files')
+                    }}
+                    className="flex items-center space-x-2 text-white/70 hover:text-white bg-white/5 hover:bg-white/10 px-4 py-2 rounded-xl transition-all"
+                  >
+                    <Search className="w-4 h-4" />
+                    <span>🔍 Debug memfs</span>
+                  </button>
+                </>
               )}
             </div>
           </div>
