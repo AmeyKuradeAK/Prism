@@ -11,6 +11,49 @@
 
 import { generateExpoBaseTemplate } from '@/lib/generators/templates/expo-base-template'
 
+// 🚦 Rate Limiting for Mistral API (1 RPS, 500k tokens/minute)
+class MistralRateLimiter {
+  private lastRequestTime = 0
+  private tokenUsageMinute = 0
+  private minuteStartTime = 0
+  private readonly MAX_TOKENS_PER_MINUTE = 450000 // Leave buffer for 500k limit
+  private readonly MIN_REQUEST_INTERVAL = 1100 // 1.1 seconds to ensure 1 RPS
+
+  async waitForRateLimit(estimatedTokens: number): Promise<void> {
+    const now = Date.now()
+    
+    // Reset token counter every minute
+    if (now - this.minuteStartTime > 60000) {
+      this.tokenUsageMinute = 0
+      this.minuteStartTime = now
+      console.log('🔄 Mistral rate limiter: Reset token counter for new minute')
+    }
+    
+    // Check token limit
+    if (this.tokenUsageMinute + estimatedTokens > this.MAX_TOKENS_PER_MINUTE) {
+      const waitTime = 60000 - (now - this.minuteStartTime)
+      console.log(`🕐 Mistral rate limiter: Token limit reached, waiting ${Math.ceil(waitTime/1000)}s`)
+      await new Promise(resolve => setTimeout(resolve, waitTime))
+      this.tokenUsageMinute = 0
+      this.minuteStartTime = Date.now()
+    }
+    
+    // Check RPS limit
+    const timeSinceLastRequest = now - this.lastRequestTime
+    if (timeSinceLastRequest < this.MIN_REQUEST_INTERVAL) {
+      const waitTime = this.MIN_REQUEST_INTERVAL - timeSinceLastRequest
+      console.log(`🚦 Mistral rate limiter: Waiting ${waitTime}ms for RPS limit`)
+      await new Promise(resolve => setTimeout(resolve, waitTime))
+    }
+    
+    this.lastRequestTime = Date.now()
+    this.tokenUsageMinute += estimatedTokens
+    console.log(`📊 Mistral rate limiter: ${this.tokenUsageMinute}/${this.MAX_TOKENS_PER_MINUTE} tokens used this minute`)
+  }
+}
+
+const mistralLimiter = new MistralRateLimiter()
+
 // 📊 Prompt Classification (like v0.dev)
 interface AppAnalysis {
   type: 'todo' | 'social' | 'ecommerce' | 'fitness' | 'finance' | 'productivity' | 'game' | 'utility' | 'other'
@@ -229,215 +272,179 @@ function createGenerationPlan(analysis: AppAnalysis, prompt: string): Generation
   }
 }
 
-// 🧠 V0.dev-style Prompt Engineering
+// 🧠 Token-Optimized Prompt Engineering (Mistral 1 RPS limit)
 function generateV0StylePrompts(analysis: AppAnalysis, originalPrompt: string) {
-  const systemPrompt = `You are a React Native code generator that works exactly like v0.dev but for mobile apps.
+  const systemPrompt = `Expert React Native dev. Generate for Expo SDK 53.
 
-CONTEXT: You have a solid Expo React Native foundation with:
-✅ Modern Expo Router (app/ directory routing)  
-✅ React Native 0.79.4 + Expo SDK 53
-✅ Themed components (ThemedText, ThemedView)
-✅ TypeScript + proper structure
+Base exists: Expo Router, TypeScript, ThemedText/ThemedView
 
-ANALYSIS:
-- App Type: ${analysis.type}
-- Complexity: ${analysis.complexity}
-- Features: ${analysis.features.join(', ')}
-- Screens Needed: ${analysis.screens.join(', ')}
-- Components Needed: ${analysis.components.join(', ')}
+App: ${analysis.type}, ${analysis.complexity}
+Need: ${analysis.components.slice(0, 3).join(', ')}
 
-RULES (v0.dev style):
-1. Generate production-ready, clean code
-2. Use proper TypeScript types
-3. Follow Expo Router conventions
-4. Import from existing themed components
-5. Add proper error handling
-6. Make responsive designs
-7. Use modern React Native patterns
-
-OUTPUT FORMAT:
-===FILE: path/to/file.tsx===
-[complete file content]
+Format:
+===FILE: path/file.tsx===
+[code]
 ===END===`
 
-  const userPrompt = `Generate a ${analysis.type} app: "${originalPrompt}"
+  const userPrompt = `"${originalPrompt.substring(0, 80)}..."
 
-Required screens: ${analysis.screens.join(', ')}
-Required components: ${analysis.components.join(', ')}
-Features to implement: ${analysis.features.join(', ') || 'basic functionality'}
+Generate: ${analysis.components.slice(0, 2).join(', ')}
+Screens: ${analysis.screens.slice(0, 2).join(', ')}
 
-Make it production-ready with proper navigation, state management, and clean UI.`
+Production-ready, clean UI.`
 
   return {
     system: systemPrompt,
-    user: userPrompt,
-    followUp: analysis.complexity === 'complex' 
-      ? 'Add advanced error handling, loading states, and performance optimizations.'
-      : undefined
+    user: userPrompt
   }
 }
 
-// 🧠 LLM Generation with V0.dev prompts
+// 🧠 LLM Generation with Rate Limiting & Retry Logic
 async function generateWithLLM(plan: GenerationPlan, baseFiles: { [key: string]: string }): Promise<{ [key: string]: string }> {
-  try {
-    console.log('🔌 Importing Mistral AI...')
-    const { Mistral } = await import('@mistralai/mistralai')
-    
-    console.log('🤖 Creating Mistral client...')
-    const mistral = new Mistral({ apiKey: process.env.MISTRAL_API_KEY! })
+  const maxRetries = 3
+  let lastError: Error | null = null
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`🔌 Importing Mistral AI (attempt ${attempt}/${maxRetries})...`)
+      const { Mistral } = await import('@mistralai/mistralai')
+      
+      console.log('🤖 Creating Mistral client...')
+      const mistral = new Mistral({ apiKey: process.env.MISTRAL_API_KEY! })
 
-    console.log('📤 Sending request to Mistral API...')
-    const response = await mistral.chat.complete({
-      model: 'mistral-small-latest',
-      messages: [
-        { role: 'system', content: plan.prompts.system },
-        { role: 'user', content: plan.prompts.user }
-      ],
-      temperature: 0.2,
-      maxTokens: 4000
-    })
+      // Estimate token usage (rough approximation: 1 token ≈ 4 characters)
+      const systemTokens = Math.ceil(plan.prompts.system.length / 4)
+      const userTokens = Math.ceil(plan.prompts.user.length / 4)
+      const maxTokens = 2500 // Reduced to save tokens
+      const estimatedTotalTokens = systemTokens + userTokens + maxTokens
+      
+      console.log(`📊 Token estimation: ${systemTokens} + ${userTokens} + ${maxTokens} = ${estimatedTotalTokens} total`)
+      
+      // Apply rate limiting
+      console.log('🚦 Applying Mistral rate limiting...')
+      await mistralLimiter.waitForRateLimit(estimatedTotalTokens)
 
-    console.log('📥 Received response from Mistral API')
-    const responseContent = response.choices[0]?.message?.content || ''
-    
-    if (!responseContent) {
-      throw new Error('Empty response from Mistral API')
-    }
-    
-    const contentString = typeof responseContent === 'string' 
-      ? responseContent 
-      : Array.isArray(responseContent) 
-        ? responseContent.map(chunk => 
-            chunk.type === 'text' ? chunk.text : ''
-          ).join('')
-        : String(responseContent)
+      console.log('📤 Sending request to Mistral API...')
+      const startTime = Date.now()
+      
+      const response = await Promise.race([
+        mistral.chat.complete({
+          model: 'mistral-small-latest',
+          messages: [
+            { role: 'system', content: plan.prompts.system },
+            { role: 'user', content: plan.prompts.user }
+          ],
+          temperature: 0.2,
+          maxTokens: maxTokens
+        }),
+        new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('Mistral API timeout after 45 seconds')), 45000)
+        })
+      ]) as any
 
-    console.log(`🔍 Parsing LLM response (${contentString.length} chars)...`)
-    
-    // Parse LLM response
-    const { parseCodeFromResponse } = await import('@/lib/utils/code-parser')
-    const generatedFiles = parseCodeFromResponse(contentString)
-    
-    console.log(`📁 Parsed ${generatedFiles.length} files from LLM response`)
-    console.log(`📋 Generated file paths: ${generatedFiles.map(f => f.path).join(', ')}`)
-    
-    // START: ENHANCED FILE INTEGRATION LOGIC
-    console.log('🔄 Starting enhanced file integration...')
-    
-    // Create a copy of base files to work with
-    const allFiles = { ...baseFiles }
-    const baseFileCount = Object.keys(baseFiles).length
-    
-    console.log(`📊 Base template has ${baseFileCount} files`)
-    console.log(`📊 AI generated ${generatedFiles.length} additional files`)
-    
-    // Process each AI-generated file with smart integration
-    for (const file of generatedFiles) {
-      if (!file.path || !file.content) {
-        console.log(`⚠️ Skipping invalid file: ${file.path || 'unknown'}`)
-        continue
+      const duration = Date.now() - startTime
+      console.log(`📥 Received response from Mistral API in ${duration}ms`)
+      
+      const responseContent = response.choices[0]?.message?.content || ''
+      
+      if (!responseContent) {
+        throw new Error('Empty response from Mistral API')
       }
       
-      const normalizedPath = file.path.trim()
-      console.log(`🔧 Processing AI file: ${normalizedPath} (${file.content.length} chars)`)
+      const contentString = typeof responseContent === 'string' 
+        ? responseContent 
+        : Array.isArray(responseContent) 
+          ? responseContent.map(chunk => 
+              chunk.type === 'text' ? chunk.text : ''
+            ).join('')
+          : String(responseContent)
+
+      console.log(`🔍 Parsing LLM response (${contentString.length} chars)...`)
       
-      // SMART INTEGRATION RULES:
+      // Parse LLM response
+      const { parseCodeFromResponse } = await import('@/lib/utils/code-parser')
+      const generatedFiles = parseCodeFromResponse(contentString)
       
-      // 1. If it's a new component, place it in the components/ directory
-      if (normalizedPath.includes('Component') || normalizedPath.includes('component')) {
-        const componentPath = normalizedPath.startsWith('components/') 
-          ? normalizedPath 
-          : `components/${normalizedPath.split('/').pop()}`
+      console.log(`📁 Parsed ${generatedFiles.length} files from LLM response`)
+      
+      // Enhanced file integration
+      const allFiles = { ...baseFiles }
+      const baseFileCount = Object.keys(baseFiles).length
+      
+      console.log(`🔄 Integrating ${generatedFiles.length} AI files with ${baseFileCount} base files...`)
+      
+      // Process each AI-generated file
+      for (const file of generatedFiles) {
+        if (!file.path || !file.content) continue
         
-        allFiles[componentPath] = file.content
-        console.log(`✅ Added component: ${componentPath}`)
-        continue
-      }
-      
-      // 2. If it's a screen/page, place it in the app/ directory
-      if (normalizedPath.includes('Screen') || normalizedPath.includes('screen') || 
-          normalizedPath.includes('Page') || normalizedPath.includes('page')) {
-        const screenPath = normalizedPath.startsWith('app/') 
-          ? normalizedPath 
-          : `app/${normalizedPath.split('/').pop()}`
+        const normalizedPath = file.path.trim()
         
-        allFiles[screenPath] = file.content
-        console.log(`✅ Added screen: ${screenPath}`)
-        continue
-      }
-      
-      // 3. If it's modifying an existing base file, merge intelligently
-      if (allFiles[normalizedPath]) {
-        console.log(`🔄 Merging with existing file: ${normalizedPath}`)
-        
-        // For package.json, merge dependencies
-        if (normalizedPath === 'package.json') {
+        // Smart placement rules
+        if (normalizedPath.includes('Component') || normalizedPath.includes('component')) {
+          const componentPath = normalizedPath.startsWith('components/') 
+            ? normalizedPath 
+            : `components/${normalizedPath.split('/').pop()}`
+          allFiles[componentPath] = file.content
+        } else if (normalizedPath.includes('Screen') || normalizedPath.includes('screen')) {
+          const screenPath = normalizedPath.startsWith('app/') 
+            ? normalizedPath 
+            : `app/${normalizedPath.split('/').pop()}`
+          allFiles[screenPath] = file.content
+        } else if (allFiles[normalizedPath] && normalizedPath === 'package.json') {
+          // Merge package.json dependencies
           try {
             const basePackage = JSON.parse(allFiles[normalizedPath])
             const aiPackage = JSON.parse(file.content)
-            
-            // Merge dependencies
             if (aiPackage.dependencies) {
               basePackage.dependencies = { ...basePackage.dependencies, ...aiPackage.dependencies }
             }
-            if (aiPackage.devDependencies) {
-              basePackage.devDependencies = { ...basePackage.devDependencies, ...aiPackage.devDependencies }
-            }
-            if (aiPackage.scripts) {
-              basePackage.scripts = { ...basePackage.scripts, ...aiPackage.scripts }
-            }
-            
             allFiles[normalizedPath] = JSON.stringify(basePackage, null, 2)
-            console.log(`✅ Merged package.json dependencies`)
-          } catch (error) {
-            console.log(`⚠️ Failed to merge package.json, using AI version`)
+          } catch {
             allFiles[normalizedPath] = file.content
           }
-        } 
-        // For TypeScript/React files, replace if AI version is more substantial
-        else if (normalizedPath.endsWith('.tsx') || normalizedPath.endsWith('.ts')) {
-          if (file.content.length > allFiles[normalizedPath].length * 1.2) {
-            allFiles[normalizedPath] = file.content
-            console.log(`✅ Replaced ${normalizedPath} with enhanced AI version`)
-          } else {
-            console.log(`📋 Kept base version of ${normalizedPath} (more substantial)`)
-          }
-        }
-        // For other files, prefer AI version if it's significantly different
-        else {
+        } else {
           allFiles[normalizedPath] = file.content
-          console.log(`✅ Updated ${normalizedPath} with AI version`)
         }
-      } 
-      // 4. New file - add directly
-      else {
-        allFiles[normalizedPath] = file.content
-        console.log(`✅ Added new file: ${normalizedPath}`)
       }
+      
+      const finalFileCount = Object.keys(allFiles).length
+      console.log(`🎉 Integration complete: ${finalFileCount} total files`)
+      
+      return allFiles
+      
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error('Unknown error')
+      
+      console.error(`❌ LLM attempt ${attempt}/${maxRetries} failed:`, lastError.message)
+      
+      // Check if error is retryable
+      const isRateLimitError = lastError.message.includes('429') || lastError.message.includes('rate limit')
+      const isRetryableError = isRateLimitError || 
+        lastError.message.includes('timeout') || 
+        lastError.message.includes('500') || 
+        lastError.message.includes('502') || 
+        lastError.message.includes('503') ||
+        lastError.message.includes('network')
+      
+      // Don't retry auth errors
+      if (lastError.message.includes('401') || lastError.message.includes('unauthorized')) {
+        console.error('🔑 Authentication failed - check API key')
+        throw lastError
+      }
+      
+      // If this is the last attempt or non-retryable error, throw
+      if (attempt === maxRetries || !isRetryableError) {
+        throw lastError
+      }
+      
+      // Exponential backoff for retries
+      const backoffTime = Math.min(1000 * Math.pow(2, attempt - 1), 10000)
+      console.log(`⏳ Retrying in ${backoffTime}ms...`)
+      await new Promise(resolve => setTimeout(resolve, backoffTime))
     }
-    
-    const finalFileCount = Object.keys(allFiles).length
-    const addedFiles = finalFileCount - baseFileCount
-    
-    console.log(`🎉 Integration complete!`)
-    console.log(`📊 Final result: ${finalFileCount} total files (${baseFileCount} base + ${addedFiles} AI-generated/modified)`)
-    console.log(`📁 Final file list: ${Object.keys(allFiles).slice(0, 10).join(', ')}${finalFileCount > 10 ? '...' : ''}`)
-    
-    // Validate the integrated result
-    const componentsAdded = Object.keys(allFiles).filter(path => path.startsWith('components/')).length
-    const screensAdded = Object.keys(allFiles).filter(path => path.startsWith('app/')).length
-    
-    console.log(`📱 Integration stats: ${componentsAdded} components, ${screensAdded} screens/pages`)
-    
-    return allFiles
-    
-  } catch (error) {
-    console.error('❌ LLM generation failed:', {
-      error: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined
-    })
-    throw error
   }
+  
+  throw lastError || new Error('All retry attempts failed')
 }
 
 // 🛠️ AST Validation & Auto-fix (like v0.dev)
