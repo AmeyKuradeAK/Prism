@@ -7,7 +7,7 @@ export interface IUser extends Document {
   firstName?: string
   lastName?: string
   avatar?: string
-  plan: 'spark' | 'nova' | 'fusion' | 'galaxy' | 'enterprise'
+  plan: 'spark' | 'pro' | 'premium' | 'team' | 'enterprise'
   credits: number  // Based on plan
   subscription?: {
     planId: string
@@ -66,7 +66,7 @@ const UserSchema = new mongoose.Schema<IUser>({
   },
   plan: { 
     type: String, 
-    enum: ['spark', 'nova', 'fusion', 'galaxy', 'enterprise'], 
+    enum: ['spark', 'pro', 'premium', 'team', 'enterprise'], 
     default: 'spark' 
   },
   credits: { 

@@ -514,25 +514,39 @@ export default function UserSettings() {
                   <div className="bg-gradient-to-r from-green-500/10 to-blue-500/10 border border-green-500/20 rounded-xl p-6">
                     <div className="flex items-start space-x-4">
                       <Sparkles className="w-6 h-6 text-green-400 mt-1" />
-                      <div>
-                        <h3 className="text-xl font-semibold text-white mb-2">Free Forever Plan</h3>
+                      <div className="w-full">
+                        <h3 className="text-xl font-semibold text-white mb-2">⚡ Spark Plan (Free)</h3>
                         <p className="text-white/70 mb-4">
-                          You're currently on our free plan with unlimited projects and generations. 
-                          Enjoy building amazing React Native apps!
+                          You're currently on our free plan. Upgrade to unlock unlimited generations and premium features!
                         </p>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                        
+                        {/* Usage Stats */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                           <div className="bg-white/5 rounded-lg p-4">
-                            <div className="text-2xl font-bold text-green-400">∞</div>
-                            <div className="text-white/80 text-sm">Projects</div>
+                            <div className="text-2xl font-bold text-blue-400">3</div>
+                            <div className="text-white/80 text-sm">Projects/month</div>
                           </div>
                           <div className="bg-white/5 rounded-lg p-4">
-                            <div className="text-2xl font-bold text-blue-400">∞</div>
-                            <div className="text-white/80 text-sm">Generations</div>
+                            <div className="text-2xl font-bold text-green-400">10</div>
+                            <div className="text-white/80 text-sm">AI Generations/month</div>
                           </div>
                           <div className="bg-white/5 rounded-lg p-4">
-                            <div className="text-2xl font-bold text-purple-400">∞</div>
-                            <div className="text-white/80 text-sm">Builds</div>
+                            <div className="text-2xl font-bold text-purple-400">Basic</div>
+                            <div className="text-white/80 text-sm">Features</div>
                           </div>
+                        </div>
+                        
+                        {/* Upgrade CTA */}
+                        <div className="flex flex-col sm:flex-row gap-3">
+                          <a
+                            href="/pricing"
+                            className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-3 rounded-lg font-medium hover:from-purple-500 hover:to-pink-500 transition-colors text-center"
+                          >
+                            Upgrade to Plus ($19/month)
+                          </a>
+                          <button className="bg-white/10 border border-white/20 text-white px-6 py-3 rounded-lg font-medium hover:bg-white/20 transition-colors">
+                            View All Plans
+                          </button>
                         </div>
                       </div>
                     </div>

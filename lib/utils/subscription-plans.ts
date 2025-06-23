@@ -52,7 +52,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
   },
   {
     id: 'pro',
-    name: '🚀 Pro',
+    name: '🚀 Plus',
     tagline: 'For serious individual developers',
     price: { monthly: 19, yearly: 190 },
     features: [
@@ -78,11 +78,11 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
   },
   {
     id: 'premium',
-    name: '💎 Premium',
+    name: '💎 Pro',
     tagline: 'Maximum power for professionals',
     price: { monthly: 49, yearly: 490 },
     features: [
-      'Everything in Pro',
+      'Everything in Plus',
       'Unlimited AI generations',
       'All AI models (GPT-4, Claude, etc.)',
       'Custom branding',
@@ -107,7 +107,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     tagline: 'Collaboration for teams and agencies',
     price: { monthly: 99, yearly: 990 },
     features: [
-      'Everything in Premium',
+      'Everything in Pro',
       'Team collaboration (10 seats)',
       'Shared workspaces',
       'Team management dashboard',
@@ -131,7 +131,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     id: 'enterprise',
     name: '🏢 Enterprise',
     tagline: 'Large organizations with custom needs',
-    price: { monthly: 0, yearly: 0 }, // Custom pricing
+    price: { monthly: 299, yearly: 2990 }, // Placeholder pricing - handle custom deals separately
     features: [
       'Everything in Team',
       'Unlimited team seats',

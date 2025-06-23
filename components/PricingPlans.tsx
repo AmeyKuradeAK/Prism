@@ -11,8 +11,8 @@ export default function PricingPlans() {
   const getPlanIcon = (planId: string) => {
     switch (planId) {
       case 'spark': return <Zap className="w-8 h-8" />
-      case 'pro': return <Star className="w-8 h-8" />
-      case 'premium': return <Crown className="w-8 h-8" />
+      case 'pro': return <Star className="w-8 h-8" /> // Plus plan
+      case 'premium': return <Crown className="w-8 h-8" /> // Pro plan
       case 'team': return <Users className="w-8 h-8" />
       case 'enterprise': return <Building className="w-8 h-8" />
       default: return <Zap className="w-8 h-8" />
@@ -22,8 +22,8 @@ export default function PricingPlans() {
   const getPlanColor = (planId: string) => {
     switch (planId) {
       case 'spark': return 'from-blue-500 to-cyan-500'
-      case 'pro': return 'from-purple-500 to-pink-500'
-      case 'premium': return 'from-orange-500 to-red-500'
+      case 'pro': return 'from-purple-500 to-pink-500' // Plus plan
+      case 'premium': return 'from-orange-500 to-red-500' // Pro plan
       case 'team': return 'from-green-500 to-emerald-500'
       case 'enterprise': return 'from-slate-500 to-gray-500'
       default: return 'from-blue-500 to-cyan-500'
@@ -31,17 +31,17 @@ export default function PricingPlans() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto">
+    <div className="max-w-6xl mx-auto">
       {/* Billing Toggle */}
       <div className="flex justify-center mb-12">
-        <div className="bg-white/10 backdrop-blur-xl rounded-full p-1 border border-white/20">
+        <div className="bg-gray-100 rounded-full p-1 border border-gray-200">
           <div className="flex">
             <button
               onClick={() => setIsYearly(false)}
               className={`px-6 py-2 rounded-full font-medium transition-all ${
                 !isYearly 
-                  ? 'bg-white text-slate-900' 
-                  : 'text-white hover:text-white/80'
+                  ? 'bg-black text-white' 
+                  : 'text-gray-600 hover:text-gray-800'
               }`}
             >
               Monthly
@@ -50,13 +50,13 @@ export default function PricingPlans() {
               onClick={() => setIsYearly(true)}
               className={`px-6 py-2 rounded-full font-medium transition-all relative ${
                 isYearly 
-                  ? 'bg-white text-slate-900' 
-                  : 'text-white hover:text-white/80'
+                  ? 'bg-black text-white' 
+                  : 'text-gray-600 hover:text-gray-800'
               }`}
             >
               Yearly
-              <span className="absolute -top-2 -right-2 bg-green-500 text-white text-xs px-2 py-0.5 rounded-full">
-                Save up to 17%
+              <span className="absolute -top-2 -right-2 bg-black text-white text-xs px-2 py-0.5 rounded-full">
+                2 months free
               </span>
             </button>
           </div>
@@ -64,7 +64,7 @@ export default function PricingPlans() {
       </div>
 
       {/* Plans Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
         {SUBSCRIPTION_PLANS.map((plan, index) => {
           const price = isYearly ? plan.price.yearly : plan.price.monthly
           const yearlyPrice = plan.price.yearly
@@ -77,14 +77,14 @@ export default function PricingPlans() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.1 }}
-              className={`relative bg-white/5 backdrop-blur-xl rounded-2xl border border-white/10 p-6 hover:bg-white/10 transition-all duration-300 ${
-                plan.popular ? 'ring-2 ring-purple-500/50 scale-105' : ''
+              className={`relative bg-white rounded-2xl border-2 p-8 hover:shadow-xl transition-all duration-300 ${
+                plan.popular ? 'border-black shadow-lg scale-105' : 'border-gray-200 hover:border-gray-300'
               }`}
             >
               {/* Popular Badge */}
               {plan.popular && (
                 <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                  <div className="bg-gradient-to-r from-purple-500 to-pink-500 text-white text-sm font-semibold px-4 py-1 rounded-full">
+                  <div className="bg-black text-white text-sm font-semibold px-4 py-1 rounded-full">
                     Most Popular
                   </div>
                 </div>
@@ -92,53 +92,57 @@ export default function PricingPlans() {
 
               {/* Plan Icon & Name */}
               <div className="text-center mb-6">
-                <div className={`w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br ${getPlanColor(plan.id)} flex items-center justify-center text-white`}>
+                <div className="w-12 h-12 mx-auto mb-4 rounded-xl bg-gray-100 flex items-center justify-center text-gray-800">
                   {getPlanIcon(plan.id)}
                 </div>
                 
-                <h3 className="text-2xl font-bold text-white mb-2">{plan.name}</h3>
-                <p className="text-white/60 text-sm">{plan.tagline}</p>
+                <h3 className="text-2xl font-bold text-gray-900 mb-2">{plan.name}</h3>
+                <p className="text-gray-600 text-sm">{plan.tagline}</p>
               </div>
 
               {/* Pricing */}
-              <div className="text-center mb-6">
-                {plan.id === 'enterprise' ? (
-                  <div>
-                    <div className="text-3xl font-bold text-white">Custom</div>
-                    <div className="text-white/60 text-sm">Contact us</div>
-                  </div>
-                ) : (
-                  <div>
-                    <div className="text-3xl font-bold text-white">
+              <div className="text-center mb-8">
+                <div className="text-4xl font-bold text-gray-900 mb-2">
+                  {isYearly && plan.price.yearly > 0 ? (
+                    <>
+                      {formatPrice(Math.round(plan.price.yearly / 12))}
+                      <span className="text-lg font-normal text-gray-600">/month</span>
+                    </>
+                  ) : (
+                    <>
                       {formatPrice(price)}
                       {price > 0 && (
-                        <span className="text-lg font-normal text-white/60">
-                          /{isYearly ? 'year' : 'month'}
-                        </span>
+                        <span className="text-lg font-normal text-gray-600">/month</span>
                       )}
-                    </div>
-                    
-                    {isYearly && savings > 0 && (
-                      <div className="text-green-400 text-sm font-medium">
-                        Save {savings}% yearly
-                      </div>
-                    )}
-                    
-                    {!isYearly && plan.price.yearly > 0 && (
-                      <div className="text-white/50 text-sm">
-                        or {formatPrice(Math.round(plan.price.yearly / 12))}/month billed yearly
-                      </div>
-                    )}
+                    </>
+                  )}
+                </div>
+                
+                {isYearly && plan.price.yearly > 0 && (
+                  <div className="text-gray-500 text-sm">
+                    Billed annually ({formatPrice(plan.price.yearly)}/year)
+                  </div>
+                )}
+                
+                {isYearly && savings > 0 && (
+                  <div className="text-gray-900 text-sm font-medium">
+                    Save {savings}% with yearly billing
+                  </div>
+                )}
+                
+                {!isYearly && plan.price.yearly > 0 && (
+                  <div className="text-gray-500 text-sm">
+                    or {formatPrice(Math.round(plan.price.yearly / 12))}/month billed yearly
                   </div>
                 )}
               </div>
 
               {/* Features */}
-              <div className="space-y-3 mb-8">
+              <div className="space-y-4 mb-8">
                 {plan.features.map((feature, featureIndex) => (
                   <div key={featureIndex} className="flex items-start space-x-3">
-                    <Check className="w-5 h-5 text-green-400 mt-0.5 flex-shrink-0" />
-                    <span className="text-white/80 text-sm">{feature}</span>
+                    <Check className="w-5 h-5 text-gray-900 mt-0.5 flex-shrink-0" />
+                    <span className="text-gray-700 text-sm">{feature}</span>
                   </div>
                 ))}
               </div>
@@ -146,15 +150,24 @@ export default function PricingPlans() {
               {/* CTA Button */}
               <div className="mt-auto">
                 {plan.id === 'spark' ? (
-                  <button className="w-full bg-white/10 border border-white/20 text-white py-3 rounded-xl font-medium hover:bg-white/20 transition-colors">
+                  <button className="w-full bg-gray-100 border border-gray-300 text-gray-900 py-3 rounded-xl font-medium hover:bg-gray-200 transition-colors">
                     Get Started Free
                   </button>
                 ) : plan.id === 'enterprise' ? (
-                  <button className="w-full bg-gradient-to-r from-slate-600 to-gray-600 text-white py-3 rounded-xl font-medium hover:from-slate-500 hover:to-gray-500 transition-colors">
-                    Contact Sales
-                  </button>
+                  <div className="space-y-3">
+                    <button className="w-full bg-black text-white py-3 rounded-xl font-medium hover:bg-gray-800 transition-colors">
+                      Start Enterprise
+                    </button>
+                    <button className="w-full bg-gray-100 border border-gray-300 text-gray-900 py-2 rounded-xl text-sm hover:bg-gray-200 transition-colors">
+                      Contact for Custom Pricing
+                    </button>
+                  </div>
                 ) : (
-                  <button className={`w-full bg-gradient-to-r ${getPlanColor(plan.id)} text-white py-3 rounded-xl font-medium hover:opacity-90 transition-opacity`}>
+                  <button className={`w-full text-white py-3 rounded-xl font-medium transition-colors ${
+                    plan.popular 
+                      ? 'bg-black hover:bg-gray-800' 
+                      : 'bg-gray-800 hover:bg-gray-700'
+                  }`}>
                     Upgrade to {plan.name.split(' ')[1]}
                   </button>
                 )}

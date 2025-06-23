@@ -39,6 +39,12 @@ export default function Header() {
               Examples
             </Link>
             <Link
+              href="/pricing"
+              className="text-slate-600 hover:text-slate-800 transition-colors font-medium"
+            >
+              Pricing
+            </Link>
+            <Link
               href="/docs"
               className="text-slate-600 hover:text-slate-800 transition-colors"
             >
@@ -100,6 +106,13 @@ export default function Header() {
                 onClick={() => setIsMobileMenuOpen(false)}
               >
                 Examples
+              </Link>
+              <Link
+                href="/pricing"
+                className="block text-slate-600 hover:text-slate-800 transition-colors font-medium"
+                onClick={() => setIsMobileMenuOpen(false)}
+              >
+                Pricing
               </Link>
               <Link
                 href="/docs"

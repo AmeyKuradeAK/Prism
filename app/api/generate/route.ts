@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
+import { checkGenerationLimit, incrementGenerationCount, createUsageLimitResponse } from '@/lib/utils/plan-protection'
 
 // Helper function to create optimized prompts
 function createOptimizedPrompt(prompt: string): string {
@@ -39,6 +40,16 @@ export async function POST(request: NextRequest) {
       )
     }
     console.log(`✅ Authentication successful: ${userId}`)
+
+    // Check generation limits based on user's plan
+    const { allowed, remaining, limit } = await checkGenerationLimit()
+    
+    if (!allowed) {
+      console.log(`❌ Generation limit reached: ${remaining}/${limit}`)
+      return createUsageLimitResponse(limit, 'AI generations')
+    }
+    
+    console.log(`✅ Generation allowed: ${remaining === -1 ? 'unlimited' : remaining} remaining`)
 
     const { prompt, useBaseTemplate, testMode, quickMode } = await request.json()
 
@@ -131,6 +142,9 @@ export async function POST(request: NextRequest) {
         )
       }
       
+      // Track usage for paid users
+      await incrementGenerationCount()
+      
       console.log(`✅ AI generation success: ${Object.keys(files).length} files`)
       return new Response(
         JSON.stringify({
@@ -142,7 +156,8 @@ export async function POST(request: NextRequest) {
           provider: aiResponse.provider,
           model: aiResponse.model,
           cost: aiResponse.cost,
-          tokensUsed: aiResponse.tokensUsed
+          tokensUsed: aiResponse.tokensUsed,
+          remaining: remaining === -1 ? -1 : remaining - 1
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } }
       )
