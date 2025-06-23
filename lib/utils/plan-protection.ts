@@ -6,7 +6,7 @@ import connectToDatabase from '../database/mongodb'
 
 export interface PlanLimits {
   projectsPerMonth: number
-  aiGenerationsPerMonth: number
+  promptsPerMonth: number
   customApiKeys: boolean
   prioritySupport: boolean
   exportCode: boolean
@@ -75,7 +75,7 @@ export async function canPerformAction(action: keyof PlanLimits): Promise<boolea
 }
 
 /**
- * Check and update usage limits for AI generations
+ * Check and update usage limits for AI generations (prompt-based)
  */
 export async function checkGenerationLimit(): Promise<{ allowed: boolean; remaining: number; limit: number }> {
   try {
@@ -92,18 +92,16 @@ export async function checkGenerationLimit(): Promise<{ allowed: boolean; remain
       return { allowed: false, remaining: 0, limit: 0 }
     }
 
-    // Check if user has unlimited generations (Premium or higher)
-    if (has({ plan: 'premium' }) || has({ plan: 'team' }) || has({ plan: 'enterprise' })) {
+    // Get current plan limits
+    const planLimits = await getCurrentPlanLimits()
+    const monthlyLimit = planLimits?.promptsPerMonth || 15 // Default to Spark plan limit
+
+    // Handle unlimited plans
+    if (monthlyLimit === -1) {
       return { allowed: true, remaining: -1, limit: -1 } // -1 indicates unlimited
     }
 
-    // Check Plus plan limit (200 generations)
-    let monthlyLimit = 10 // Default free plan limit
-    if (has({ plan: 'pro' })) { // This is the Plus plan
-      monthlyLimit = 200
-    }
-
-    const currentUsage = user.usage?.generationsThisMonth || 0
+    const currentUsage = user.usage?.promptsThisMonth || 0
     const remaining = monthlyLimit - currentUsage
     
     return {
@@ -118,7 +116,7 @@ export async function checkGenerationLimit(): Promise<{ allowed: boolean; remain
 }
 
 /**
- * Increment user's generation count
+ * Increment user's prompt count (updated for prompt-based billing)
  */
 export async function incrementGenerationCount(): Promise<void> {
   try {
@@ -131,16 +129,16 @@ export async function incrementGenerationCount(): Promise<void> {
       { clerkId: userId },
       { 
         $inc: { 
-          'usage.generationsThisMonth': 1,
-          'analytics.totalGenerations': 1
+          'usage.promptsThisMonth': 1,
+          'totalPrompts': 1
         },
         $set: {
-          'analytics.lastActiveAt': new Date()
+          'lastActiveAt': new Date()
         }
       }
     )
   } catch (error) {
-    console.error('Error incrementing generation count:', error)
+    console.error('Error incrementing prompt count:', error)
   }
 }
 

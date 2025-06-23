@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
-import { getCurrentPlan, getCurrentPlanLimits, checkGenerationLimit } from '@/lib/utils/plan-protection'
+import { getCurrentPlan, getCurrentPlanLimits } from '@/lib/utils/plan-protection'
 import connectToDatabase from '@/lib/database/mongodb'
 import User from '@/lib/database/models/User'
 
@@ -20,32 +20,42 @@ export async function GET() {
     // Get current plan from Clerk
     const currentPlan = await getCurrentPlan()
     const planLimits = await getCurrentPlanLimits()
-    const generationStatus = await checkGenerationLimit()
     
-    // Calculate usage percentages
-    const monthlyGenerations = user?.usage?.generationsThisMonth || 0
+    // Calculate usage percentages - using new prompt-based system
+    const monthlyPrompts = user?.usage?.promptsThisMonth || 0
     const monthlyProjects = user?.usage?.projectsThisMonth || 0
     
-    let generationUsagePercent = 0
-    if (planLimits?.aiGenerationsPerMonth && planLimits.aiGenerationsPerMonth > 0) {
-      generationUsagePercent = Math.round((monthlyGenerations / planLimits.aiGenerationsPerMonth) * 100)
+    // Get the prompt limit from the plan
+    const promptLimit = planLimits?.promptsPerMonth || 0
+    
+    let promptUsagePercent = 0
+    if (promptLimit && promptLimit > 0) {
+      promptUsagePercent = Math.round((monthlyPrompts / promptLimit) * 100)
     }
     
     let projectUsagePercent = 0
     if (planLimits?.projectsPerMonth && planLimits.projectsPerMonth > 0) {
       projectUsagePercent = Math.round((monthlyProjects / planLimits.projectsPerMonth) * 100)
     }
+
+    // Calculate remaining prompts
+    const promptsRemaining = Math.max(0, promptLimit - monthlyPrompts)
     
     return NextResponse.json({
       plan: currentPlan,
       limits: planLimits,
       usage: {
-        generationsThisMonth: monthlyGenerations,
+        promptsThisMonth: monthlyPrompts,
         projectsThisMonth: monthlyProjects,
-        generationsRemaining: generationStatus.remaining,
-        generationLimit: generationStatus.limit,
-        generationUsagePercent,
-        projectUsagePercent
+        promptsRemaining,
+        promptLimit,
+        promptUsagePercent,
+        projectUsagePercent,
+        // Keep backward compatibility for any existing frontend code
+        generationsThisMonth: monthlyPrompts, // For backward compatibility
+        generationsRemaining: promptsRemaining,
+        generationLimit: promptLimit,
+        generationUsagePercent: promptUsagePercent
       },
       features: {
         customApiKeys: planLimits?.customApiKeys || false,
