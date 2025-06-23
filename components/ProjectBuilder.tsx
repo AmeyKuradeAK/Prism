@@ -42,7 +42,8 @@ import {
   Search,
   Filter,
   MoreVertical,
-  ChevronUp
+  ChevronUp,
+  Trash
 } from 'lucide-react'
 
 interface FileProgress {
@@ -823,7 +824,7 @@ The base template is still loaded and functional. You can:
     }
   }
 
-  // Build functionality
+  // Real EAS Build functionality
   const startBuild = async (platform: 'android' | 'ios' | 'web') => {
     if (Object.keys(files).length === 0) {
       alert('No files to build. Please generate an app first.')
@@ -831,82 +832,220 @@ The base template is still loaded and functional. You can:
     }
 
     setIsBuilding(true)
-    const buildId = Date.now().toString()
     
-    const newBuild: BuildStatus = {
-      id: buildId,
-      status: 'pending',
-      platform,
-      progress: 0
-    }
-    
-    setBuilds(prev => [newBuild, ...prev])
-    setCurrentBuild(newBuild)
-    
-    // Add build message to chat
+    // Add build start message to chat
     const buildMessage: ChatMessage = {
       id: Date.now().toString(),
       type: 'system',
-      content: `🔨 Starting ${platform} build...
+      content: `🔨 Starting real EAS Build...
 
 📱 **Platform**: ${platform.charAt(0).toUpperCase() + platform.slice(1)}
 📦 **Files**: ${Object.keys(files).length} files
-⏱️ **Status**: Preparing build...`,
+⏱️ **Status**: Connecting to Expo Application Services...
+
+🔧 This will create a real ${platform === 'android' ? 'APK' : platform === 'ios' ? 'IPA' : 'web build'} file you can install on devices!`,
       timestamp: new Date()
     }
     setChatMessages(prev => [...prev, buildMessage])
 
     try {
-      // Simulate build process
-      for (let i = 0; i <= 100; i += 10) {
-        await new Promise(resolve => setTimeout(resolve, 500))
-        setBuilds(prev => prev.map(build => 
-          build.id === buildId 
-            ? { ...build, progress: i, status: i === 100 ? 'success' : 'building' }
-            : build
-        ))
-        setCurrentBuild(prev => prev ? { ...prev, progress: i, status: i === 100 ? 'success' : 'building' } : null)
+      // Call the real EAS Build API
+      const projectName = extractProjectName(chatMessages.find(m => m.type === 'user')?.content || '') || 'react-native-app'
+      
+      const response = await fetch('/api/eas/build', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          files,
+          platform,
+          projectName: projectName.replace(/[^a-zA-Z0-9-]/g, '-')
+        })
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || `Build failed with status ${response.status}`)
       }
 
-      // Success message
-      const successMessage: ChatMessage = {
+      const buildData = await response.json()
+      console.log('🚀 EAS Build started:', buildData)
+
+      // Create build status with real build ID
+      const newBuild: BuildStatus = {
+        id: buildData.buildId,
+        status: 'building',
+        platform,
+        progress: 0,
+        downloadUrl: buildData.buildUrl
+      }
+      
+      setBuilds(prev => [newBuild, ...prev])
+      setCurrentBuild(newBuild)
+
+      // Update chat with build started info
+      const buildStartedMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
         type: 'system',
-        content: `✅ **Build Complete!**
+        content: `✅ **EAS Build Started!**
 
+🆔 **Build ID**: \`${buildData.buildId}\`
 📱 **Platform**: ${platform.charAt(0).toUpperCase() + platform.slice(1)}
-📦 **Status**: Build successful
-⬇️ **Download**: Build artifacts ready
+⏱️ **Estimated Time**: ${buildData.estimatedDuration}
+📍 **Queue Position**: ${buildData.queuePosition}
 
-🎉 Your ${platform} app is ready for distribution!`,
+🔗 **Monitor Build**: [View on Expo Dashboard](${buildData.buildUrl})
+
+⏳ The build is now running on Expo's cloud infrastructure. You'll be notified when it completes with download links for the real APK/IPA file!`,
         timestamp: new Date()
       }
-      setChatMessages(prev => [...prev, successMessage])
+      setChatMessages(prev => [...prev, buildStartedMessage])
+
+      // Start polling for build status
+      pollBuildStatus(buildData.buildId, platform)
 
     } catch (error) {
+      console.error('EAS Build failed:', error)
+      
       // Error handling
-      setBuilds(prev => prev.map(build => 
-        build.id === buildId 
-          ? { ...build, status: 'error', error: error instanceof Error ? error.message : 'Build failed' }
-          : build
-      ))
-      setCurrentBuild(prev => prev ? { ...prev, status: 'error', error: error instanceof Error ? error.message : 'Build failed' } : null)
-
       const errorMessage: ChatMessage = {
         id: (Date.now() + 2).toString(),
         type: 'system',
-        content: `❌ **Build Failed**
+        content: `❌ **EAS Build Failed**
 
 📱 **Platform**: ${platform.charAt(0).toUpperCase() + platform.slice(1)}
 ⚠️ **Error**: ${error instanceof Error ? error.message : 'Unknown build error'}
 
-Please check your code and try again.`,
+**Common Issues:**
+- Missing \`EXPO_TOKEN\` in environment variables
+- Invalid Expo configuration  
+- Network connectivity issues
+- Expo account limitations
+
+**Solutions:**
+1. Check your \`.env\` file for \`EXPO_TOKEN\`
+2. Verify Expo account is active
+3. Try again or check Expo status
+
+[📖 Setup Guide](setup-token.md) | [🔧 Troubleshooting](docs/EAS_BUILD_SETUP.md)`,
         timestamp: new Date()
       }
       setChatMessages(prev => [...prev, errorMessage])
     } finally {
       setIsBuilding(false)
     }
+  }
+
+  // Poll build status for real-time updates
+  const pollBuildStatus = async (buildId: string, platform: string) => {
+    const maxAttempts = 60 // 30 minutes max (30 second intervals)
+    let attempts = 0
+
+    const poll = async () => {
+      try {
+        const response = await fetch(`/api/eas/build/${buildId}`)
+        if (!response.ok) return
+
+        const buildStatus = await response.json()
+        console.log('📊 Build status update:', buildStatus)
+
+        // Update build in state
+        setBuilds(prev => prev.map(build => 
+          build.id === buildId 
+            ? { 
+                ...build, 
+                status: buildStatus.status === 'finished' ? 'success' : 
+                       buildStatus.status === 'errored' ? 'error' : 'building',
+                progress: buildStatus.status === 'finished' ? 100 : 
+                         buildStatus.status === 'in-progress' ? 50 : 10,
+                downloadUrl: buildStatus.artifacts?.[0]?.url
+              }
+            : build
+        ))
+
+        setCurrentBuild(prev => prev ? {
+          ...prev,
+          status: buildStatus.status === 'finished' ? 'success' : 
+                 buildStatus.status === 'errored' ? 'error' : 'building',
+          progress: buildStatus.status === 'finished' ? 100 : 
+                   buildStatus.status === 'in-progress' ? 50 : 10,
+          downloadUrl: buildStatus.artifacts?.[0]?.url
+        } : null)
+
+        // Handle completion
+        if (buildStatus.status === 'finished') {
+          const successMessage: ChatMessage = {
+            id: Date.now().toString(),
+            type: 'system',
+            content: `🎉 **EAS Build Complete!**
+
+📱 **Platform**: ${platform.charAt(0).toUpperCase() + platform.slice(1)}
+🆔 **Build ID**: \`${buildId}\`
+📦 **Status**: Build successful
+⬇️ **Download**: Real ${platform === 'android' ? 'APK' : 'IPA'} file ready!
+
+${buildStatus.artifacts?.map((artifact: any) => 
+  `🔗 **Download ${platform.toUpperCase()}**: [${artifact.url.split('/').pop()}](${artifact.url})`
+).join('\n') || ''}
+
+🚀 **Next Steps**:
+- Download the ${platform === 'android' ? 'APK' : 'IPA'} file
+- Install on your ${platform === 'android' ? 'Android' : 'iOS'} device
+- Test your app in production!
+
+✨ Your AI-generated React Native app is now a real mobile application!`,
+            timestamp: new Date()
+          }
+          setChatMessages(prev => [...prev, successMessage])
+          return // Stop polling
+        }
+
+        if (buildStatus.status === 'errored') {
+          const errorMessage: ChatMessage = {
+            id: Date.now().toString(),
+            type: 'system',
+            content: `❌ **EAS Build Failed**
+
+🆔 **Build ID**: \`${buildId}\`
+📱 **Platform**: ${platform}
+⚠️ **Status**: Build errored on Expo servers
+
+**Possible Causes:**
+- Invalid app configuration
+- Missing dependencies  
+- Build timeout
+- Platform-specific issues
+
+**Next Steps:**
+1. Check the [Expo Dashboard](${buildStatus.buildUrl || 'https://expo.dev'}) for detailed logs
+2. Verify your app configuration
+3. Try building again
+
+[📖 Troubleshooting Guide](docs/EAS_BUILD_SETUP.md)`,
+            timestamp: new Date()
+          }
+          setChatMessages(prev => [...prev, errorMessage])
+          return // Stop polling
+        }
+
+        // Continue polling if still building
+        attempts++
+        if (attempts < maxAttempts) {
+          setTimeout(poll, 30000) // Poll every 30 seconds
+        }
+
+      } catch (error) {
+        console.error('Build status polling error:', error)
+        attempts++
+        if (attempts < maxAttempts) {
+          setTimeout(poll, 30000) // Retry on error
+        }
+      }
+    }
+
+    // Start polling after 10 seconds
+    setTimeout(poll, 10000)
   }
 
   return (
@@ -961,6 +1100,16 @@ Please check your code and try again.`,
             >
               <Download className="w-4 h-4" />
               <span>Download</span>
+            </button>
+
+            {/* Load Template Button */}
+            <button
+              onClick={handleLoadTemplate}
+              disabled={isGenerating}
+              className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-lg hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            >
+              <Package className="w-4 h-4" />
+              <span>Load Template</span>
             </button>
 
             {/* Chat Toggle Button */}
@@ -1250,62 +1399,178 @@ ${stateValidation.issues.length > 0 ? `⚠️ **Issues Found**:\n${stateValidati
               </>
             )}
 
-            {/* Preview Tab */}
+            {/* Preview Tab - Real App Preview */}
             {activeTab === 'preview' && (
-              <div className="flex-1 flex items-center justify-center bg-gray-900">
-                <div className="text-center">
-                  <div className="mx-auto mb-6 relative">
-                    {/* Phone Frame */}
-                    <div className="w-80 h-[640px] bg-black rounded-[3rem] p-4 border-8 border-gray-800 shadow-2xl">
-                      {/* Screen */}
-                      <div className="w-full h-full bg-gray-100 rounded-[2.5rem] overflow-hidden relative">
-                        {/* Status Bar */}
-                        <div className="h-8 bg-gray-900 flex items-center justify-between px-4 text-white text-xs">
-                          <span>9:41</span>
-                          <span>React Native App</span>
-                          <span>100%</span>
+              <div className="flex-1 bg-gray-900 p-6 overflow-auto">
+                <div className="max-w-6xl mx-auto">
+                  <div className="mb-6">
+                    <h2 className="text-2xl font-bold text-gray-200 mb-2">Live App Preview</h2>
+                    <p className="text-gray-400">Real-time preview of your generated React Native app</p>
+                  </div>
+
+                  {Object.keys(files).length > 0 ? (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                      {/* Mobile Preview */}
+                      <div className="flex flex-col items-center">
+                        <div className="w-80 h-[640px] bg-black rounded-[3rem] p-4 border-8 border-gray-800 shadow-2xl">
+                          <div className="w-full h-full bg-gray-100 rounded-[2.5rem] overflow-hidden relative">
+                            <div className="h-8 bg-gray-900 flex items-center justify-between px-4 text-white text-xs">
+                              <span>9:41</span>
+                              <span>{extractProjectName(chatMessages.find(m => m.type === 'user')?.content || '') || 'React Native App'}</span>
+                              <span>100%</span>
+                            </div>
+                            
+                            <div className="flex-1 bg-white text-black overflow-y-auto p-4">
+                              {(() => {
+                                const fileContent = Object.values(files).join(' ').toLowerCase()
+                                const isTodoApp = fileContent.includes('todo') || fileContent.includes('task')
+                                const isWeatherApp = fileContent.includes('weather') || fileContent.includes('temperature')
+                                const hasTabs = Object.keys(files).some(f => f.includes('(tabs)'))
+                                
+                                let appDisplayName = extractProjectName(chatMessages.find(m => m.type === 'user')?.content || '') || 'My App'
+                                if (files['package.json']) {
+                                  try {
+                                    const pkg = JSON.parse(files['package.json'])
+                                    appDisplayName = pkg.name || appDisplayName
+                                  } catch (e) {}
+                                }
+
+                                return (
+                                  <div>
+                                    <div className="text-center mb-6 pt-2">
+                                      <h1 className="text-xl font-bold text-gray-800 mb-1">
+                                        {appDisplayName.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                                      </h1>
+                                      <p className="text-sm text-gray-600">
+                                        {isGenerating ? 'Generating...' : 'Generated with AI'}
+                                      </p>
+                                    </div>
+
+                                    {hasTabs && (
+                                      <div className="flex bg-gray-100 rounded-lg p-1 mb-4">
+                                        <div className="flex-1 bg-blue-500 text-white text-xs py-2 px-3 rounded text-center font-medium">Home</div>
+                                        <div className="flex-1 text-gray-600 text-xs py-2 px-3 rounded text-center">
+                                          {isTodoApp ? 'Tasks' : isWeatherApp ? 'Forecast' : 'Explore'}
+                                        </div>
+                                        <div className="flex-1 text-gray-600 text-xs py-2 px-3 rounded text-center">Settings</div>
+                                      </div>
+                                    )}
+
+                                    <div className="space-y-3">
+                                      {isTodoApp ? (
+                                        <>
+                                          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                                            <div className="flex items-center space-x-2">
+                                              <div className="w-4 h-4 border-2 border-blue-500 rounded"></div>
+                                              <span className="text-sm">Complete project setup</span>
+                                            </div>
+                                          </div>
+                                          <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                                            <div className="flex items-center space-x-2">
+                                              <div className="w-4 h-4 bg-green-500 rounded flex items-center justify-center">
+                                                <span className="text-white text-xs">✓</span>
+                                              </div>
+                                              <span className="text-sm text-green-700">Generate React Native app</span>
+                                            </div>
+                                          </div>
+                                        </>
+                                      ) : isWeatherApp ? (
+                                        <>
+                                          <div className="bg-blue-500 text-white rounded-lg p-4 text-center">
+                                            <div className="text-2xl mb-1">☀️</div>
+                                            <div className="text-lg font-bold">72°F</div>
+                                            <div className="text-sm opacity-90">Sunny</div>
+                                          </div>
+                                          <div className="grid grid-cols-3 gap-2">
+                                            <div className="bg-gray-100 rounded p-2 text-center">
+                                              <div className="text-sm">🌤️</div>
+                                              <div className="text-xs">Tomorrow</div>
+                                            </div>
+                                            <div className="bg-gray-100 rounded p-2 text-center">
+                                              <div className="text-sm">🌧️</div>
+                                              <div className="text-xs">Thursday</div>
+                                            </div>
+                                            <div className="bg-gray-100 rounded p-2 text-center">
+                                              <div className="text-sm">⛅</div>
+                                              <div className="text-xs">Friday</div>
+                                            </div>
+                                          </div>
+                                        </>
+                                      ) : (
+                                        <div className="bg-blue-500 text-white rounded-lg p-4 text-center">
+                                          <div className="text-2xl mb-2">⚛️</div>
+                                          <div className="text-lg font-bold">Welcome!</div>
+                                          <div className="text-sm opacity-90">Your React Native app is ready</div>
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    <div className="mt-6 pt-4 border-t border-gray-200">
+                                      <div className="text-center text-xs text-gray-500">
+                                        {Object.keys(files).length} files • Generated by AI
+                                      </div>
+                                    </div>
+                                  </div>
+                                )
+                              })()}
+                            </div>
+                          </div>
                         </div>
                         
-                        {/* App Content */}
-                        <div className="flex-1 p-4 bg-white text-black">
-                          {Object.keys(files).length > 0 ? (
-                            <div className="text-center">
-                              <h1 className="text-2xl font-bold mb-4 text-gray-800">
-                                {extractProjectName(chatMessages.find(m => m.type === 'user')?.content || '') || 'My App'}
-                              </h1>
-                              <p className="text-gray-600 mb-6">Generated React Native App</p>
-                              
-                              {/* Simulate app screens */}
-                              <div className="space-y-4">
-                                <div className="bg-blue-500 text-white p-4 rounded-lg">
-                                  Home Screen
+                        <div className="mt-4 text-center">
+                          <h3 className="text-lg font-medium text-gray-200 mb-2">📱 Mobile Preview</h3>
+                          <p className="text-sm text-gray-400">Live preview based on your generated files</p>
+                        </div>
+                      </div>
+
+                      {/* File Analysis */}
+                      <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+                        <h3 className="text-lg font-medium text-gray-200 mb-4">📊 App Analysis</h3>
+                        <div className="space-y-4">
+                          <div>
+                            <h4 className="text-sm font-medium text-gray-300 mb-2">File Structure</h4>
+                            <div className="space-y-1">
+                              {Object.keys(files).slice(0, 6).map(file => (
+                                <div key={file} className="flex items-center space-x-2 text-xs">
+                                  <span className="text-blue-400">📄</span>
+                                  <span className="text-gray-400 truncate">{file}</span>
                                 </div>
-                                <div className="bg-green-500 text-white p-4 rounded-lg">
-                                  Features
-                                </div>
-                                <div className="bg-purple-500 text-white p-4 rounded-lg">
-                                  Settings
-                                </div>
+                              ))}
+                              {Object.keys(files).length > 6 && (
+                                <div className="text-xs text-gray-500">+{Object.keys(files).length - 6} more files...</div>
+                              )}
+                            </div>
+                          </div>
+                          
+                          <div>
+                            <h4 className="text-sm font-medium text-gray-300 mb-2">Build Ready</h4>
+                            <div className="space-y-2">
+                              <div className="flex items-center space-x-2">
+                                <span className={files['package.json'] ? 'text-green-400' : 'text-red-400'}>
+                                  {files['package.json'] ? '✅' : '❌'}
+                                </span>
+                                <span className="text-sm text-gray-400">Package.json</span>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <span className={Object.keys(files).some(f => f.includes('app/') || f.includes('App.')) ? 'text-green-400' : 'text-red-400'}>
+                                  {Object.keys(files).some(f => f.includes('app/') || f.includes('App.')) ? '✅' : '❌'}
+                                </span>
+                                <span className="text-sm text-gray-400">Main App File</span>
                               </div>
                             </div>
-                          ) : (
-                            <div className="flex items-center justify-center h-full text-gray-400">
-                              <div className="text-center">
-                                <Smartphone className="w-16 h-16 mx-auto mb-4" />
-                                <p>No app to preview</p>
-                                <p className="text-sm">Generate an app first</p>
-                              </div>
-                            </div>
-                          )}
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                  
-                  <div className="text-gray-400">
-                    <h3 className="text-lg font-medium mb-2">Live Preview</h3>
-                    <p className="text-sm">This shows how your app would look on a mobile device</p>
-                  </div>
+                  ) : (
+                    <div className="flex items-center justify-center h-96">
+                      <div className="text-center text-gray-500">
+                        <Smartphone className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                        <h3 className="text-lg font-medium mb-2">No App to Preview</h3>
+                        <p className="text-sm mb-4">Generate a React Native app first to see the live preview</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -1406,10 +1671,15 @@ ${stateValidation.issues.length > 0 ? `⚠️ **Issues Found**:\n${stateValidati
                                 {build.status}
                               </span>
                             </div>
-                            {build.status === 'success' && (
-                              <button className="text-blue-400 hover:text-blue-300 text-sm">
-                                Download
-                              </button>
+                            {build.status === 'success' && build.downloadUrl && (
+                              <a 
+                                href={build.downloadUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-400 hover:text-blue-300 text-sm underline"
+                              >
+                                Download {build.platform === 'android' ? 'APK' : build.platform === 'ios' ? 'IPA' : 'ZIP'}
+                              </a>
                             )}
                           </div>
                         ))}
