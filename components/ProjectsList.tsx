@@ -138,12 +138,12 @@ export default function ProjectsList() {
   if (projects.length === 0) {
     return (
       <div className="text-center py-12">
-        <File className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-        <h3 className="text-xl font-semibold text-gray-900 mb-2">No projects yet</h3>
-        <p className="text-gray-500 mb-6">Create your first React Native app using AI</p>
+        <File className="w-16 h-16 text-light mx-auto mb-4" />
+        <h3 className="text-xl font-semibold text-white mb-2">No projects yet</h3>
+        <p className="text-light mb-6">Create your first React Native app using AI</p>
         <a 
           href="/builder"
-          className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors"
+          className="btn-primary px-6 py-3"
         >
           Start Building
         </a>
@@ -154,8 +154,8 @@ export default function ProjectsList() {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-900">Your Projects</h2>
-        <p className="text-gray-500">{projects.length} project{projects.length !== 1 ? 's' : ''}</p>
+        <h2 className="heading-tertiary">Your Projects</h2>
+        <p className="text-light">{projects.length} project{projects.length !== 1 ? 's' : ''}</p>
       </div>
 
       <div className="grid gap-6">
@@ -165,12 +165,12 @@ export default function ProjectsList() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.1 }}
-            className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-lg transition-shadow"
+            className="card-glass p-6 hover:shadow-professional transition-professional"
           >
             <div className="flex justify-between items-start mb-4">
               <div className="flex-1">
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">{project.name}</h3>
-                <p className="text-gray-600 text-sm mb-3 line-clamp-2">{project.description}</p>
+                <h3 className="text-xl font-semibold text-white mb-2">{project.name}</h3>
+                <p className="text-light text-sm mb-3 line-clamp-2">{project.description}</p>
                 
                 {/* Tags */}
                 {project.tags && project.tags.length > 0 && (

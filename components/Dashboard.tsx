@@ -32,6 +32,10 @@ const DashboardHeader = dynamic(() => import('./dashboard/DashboardHeader'), {
   loading: () => <div className="h-16 bg-white/5 animate-pulse" />
 })
 
+const UsageAnalytics = dynamic(() => import('./dashboard/UsageAnalytics'), {
+  loading: () => <div className="bg-white/5 rounded-3xl p-6 animate-pulse h-64" />
+})
+
 interface UserStats {
   totalProjects: number
   completedProjects: number
@@ -180,7 +184,7 @@ export default function Dashboard() {
     <div className="min-h-screen bg-black">
       <DashboardHeader />
       
-      <div className="container mx-auto px-6 py-8">
+      <div className="container-professional py-8">
         {/* Error Banner */}
         {error && (
           <motion.div
@@ -263,6 +267,11 @@ export default function Dashboard() {
               </div>
             </motion.div>
           ))}
+        </div>
+
+        {/* Usage Analytics - Full Width */}
+        <div className="mb-8">
+          <UsageAnalytics userId={userId || ''} />
         </div>
 
         {/* Main Dashboard Grid */}

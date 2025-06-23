@@ -49,31 +49,28 @@ export default function AnalyticsOverview({ userStats }: AnalyticsOverviewProps)
       value: userStats.totalProjects,
       change: userStats.thisMonthProjects > 0 ? `+${userStats.thisMonthProjects}` : '0',
       trend: userStats.thisMonthProjects > 0 ? 'up' : 'neutral',
-      icon: <BarChart3 className="w-4 h-4" />,
-      color: 'from-blue-500 to-cyan-500'
+      icon: <BarChart3 className="w-4 h-4" />
     },
     {
       title: 'Completed',
       value: userStats.completedProjects,
       change: userStats.completedProjects > 0 ? `${Math.round((userStats.completedProjects / Math.max(userStats.totalProjects, 1)) * 100)}%` : '0%',
       trend: userStats.completedProjects > 0 ? 'up' : 'neutral',
-      icon: <TrendingUp className="w-4 h-4" />,
-      color: 'from-green-500 to-emerald-500'
+      icon: <TrendingUp className="w-4 h-4" />
     },
     {
       title: 'AI Generations',
       value: userStats.totalGenerations,
       change: userStats.totalGenerations > 0 ? `${userStats.totalGenerations} total` : 'None yet',
       trend: userStats.totalGenerations > 0 ? 'up' : 'neutral',
-      icon: <Eye className="w-4 h-4" />,
-      color: 'from-purple-500 to-pink-500'
+      icon: <Eye className="w-4 h-4" />
     }
   ]
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-black/80 backdrop-blur-xl border border-white/20 rounded-xl p-3 shadow-xl">
+        <div className="glass-dark rounded-professional p-3 shadow-professional">
           <p className="text-white font-medium mb-2">{label}</p>
           {payload.map((entry: any, index: number) => (
             <p key={index} className="text-sm" style={{ color: entry.color }}>
@@ -90,15 +87,15 @@ export default function AnalyticsOverview({ userStats }: AnalyticsOverviewProps)
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-6"
+      className="card-glass p-6"
     >
       <div className="flex items-center space-x-3 mb-6">
-        <div className="w-8 h-8 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg flex items-center justify-center">
+        <div className="w-8 h-8 bg-gradient-primary rounded-professional flex items-center justify-center shadow-professional">
           <TrendingUp className="w-4 h-4 text-white" />
         </div>
         <div>
           <h3 className="text-xl font-bold text-white">Analytics Overview</h3>
-          <p className="text-white/60 text-sm">Your development insights</p>
+          <p className="text-light text-sm">Your development insights</p>
         </div>
       </div>
 
@@ -110,25 +107,25 @@ export default function AnalyticsOverview({ userStats }: AnalyticsOverviewProps)
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: index * 0.1 }}
-            className="bg-white/5 rounded-2xl p-4 hover:bg-white/10 transition-all group"
+            className="glass-dark rounded-professional p-4 hover:bg-white/10 transition-professional group"
           >
             <div className="flex items-center justify-between mb-2">
-              <div className={`w-8 h-8 bg-gradient-to-br ${metric.color} rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform`}>
+              <div className="w-8 h-8 bg-gradient-glossy rounded-professional flex items-center justify-center group-hover:scale-110 transition-professional shadow-glossy">
                 <div className="text-white">
                   {metric.icon}
                 </div>
               </div>
-              <div className={`text-xs px-2 py-1 rounded-full ${
+              <div className={`text-xs px-2 py-1 rounded-professional ${
                 metric.trend === 'up' 
-                  ? 'bg-green-500/20 text-green-400' 
-                  : 'bg-gray-500/20 text-gray-400'
+                  ? 'bg-white/20 text-white' 
+                  : 'bg-gray-800 text-muted'
               }`}>
                 {metric.change}
               </div>
             </div>
             
             <div>
-              <h4 className="text-white/80 text-sm font-medium">{metric.title}</h4>
+              <h4 className="text-light text-sm font-medium">{metric.title}</h4>
               <p className="text-2xl font-bold text-white">{metric.value}</p>
             </div>
           </motion.div>
@@ -144,22 +141,22 @@ export default function AnalyticsOverview({ userStats }: AnalyticsOverviewProps)
               <AreaChart data={chartData}>
                 <defs>
                   <linearGradient id="projectsGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#8B5CF6" stopOpacity={0}/>
+                    <stop offset="5%" stopColor="#ffffff" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#ffffff" stopOpacity={0}/>
                   </linearGradient>
                 </defs>
                 <XAxis 
                   dataKey="date" 
                   axisLine={false}
                   tickLine={false}
-                  tick={{ fontSize: 10, fill: '#ffffff60' }}
+                  tick={{ fontSize: 10, fill: '#ffffff80' }}
                 />
                 <YAxis hide />
                 <Tooltip content={<CustomTooltip />} />
                 <Area
                   type="monotone"
                   dataKey="projects"
-                  stroke="#8B5CF6"
+                  stroke="#ffffff"
                   strokeWidth={2}
                   fill="url(#projectsGradient)"
                 />
@@ -169,10 +166,10 @@ export default function AnalyticsOverview({ userStats }: AnalyticsOverviewProps)
         </div>
       ) : (
         <div className="text-center py-8">
-          <div className="w-12 h-12 bg-white/5 rounded-xl flex items-center justify-center mx-auto mb-3">
-            <BarChart3 className="w-6 h-6 text-white/40" />
+          <div className="w-12 h-12 glass-dark rounded-professional flex items-center justify-center mx-auto mb-3">
+            <BarChart3 className="w-6 h-6 text-light" />
           </div>
-          <p className="text-white/60 text-sm">Start creating projects to see analytics</p>
+          <p className="text-light text-sm">Start creating projects to see analytics</p>
         </div>
       )}
     </motion.div>

@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
-import { checkGenerationLimit, incrementGenerationCount, createUsageLimitResponse } from '@/lib/utils/plan-protection'
+import { trackPromptUsage, canUserPerformAction } from '@/lib/utils/usage-tracker'
 import connectToDatabase from '@/lib/database/mongodb'
 import Project from '@/lib/database/models/Project'
 import User from '@/lib/database/models/User'
@@ -44,15 +44,24 @@ export async function POST(request: NextRequest) {
     }
     console.log(`✅ Authentication successful: ${userId}`)
 
-    // Check generation limits based on user's plan
-    const { allowed, remaining, limit } = await checkGenerationLimit()
+    // Check prompt usage limits based on user's plan
+    const canUseAI = await canUserPerformAction(userId, 'prompt')
     
-    if (!allowed) {
-      console.log(`❌ Generation limit reached: ${remaining}/${limit}`)
-      return createUsageLimitResponse(limit, 'AI generations')
+    if (!canUseAI) {
+      console.log(`❌ Prompt limit reached for user: ${userId}`)
+      return new Response(
+        JSON.stringify({ 
+          error: 'Prompt limit exceeded. Upgrade your plan to continue using AI generation.',
+          upgradeRequired: true 
+        }),
+        { 
+          status: 429,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      )
     }
     
-    console.log(`✅ Generation allowed: ${remaining === -1 ? 'unlimited' : remaining} remaining`)
+    console.log(`✅ Prompt generation allowed for user: ${userId}`)
 
     const { prompt, useBaseTemplate, testMode, quickMode } = await request.json()
 
@@ -145,8 +154,8 @@ export async function POST(request: NextRequest) {
         )
       }
       
-      // Track usage for paid users
-      await incrementGenerationCount()
+      // Track prompt usage
+      await trackPromptUsage(userId)
       
       // Auto-save project to database
       let projectId = null
@@ -171,7 +180,7 @@ export async function POST(request: NextRequest) {
           model: aiResponse.model,
           cost: aiResponse.cost,
           tokensUsed: aiResponse.tokensUsed,
-          remaining: remaining === -1 ? -1 : remaining - 1,
+          // Usage tracking handled separately
           projectId: projectId // Include project ID in response
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } }

@@ -12,49 +12,49 @@ export default function Header() {
     <motion.header
       initial={{ opacity: 0, y: -20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-white/80 backdrop-blur-md border-b border-slate-200/50 sticky top-0 z-50"
+      className="nav-professional sticky top-0 z-50"
     >
-      <div className="container mx-auto px-6 py-4">
-        <div className="flex items-center justify-between">
+      <div className="container-professional">
+        <div className="flex items-center justify-between py-4">
           {/* Logo */}
           <Link href="/" className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+            <div className="w-8 h-8 bg-gradient-primary rounded-professional flex items-center justify-center shadow-professional">
               <Zap className="w-5 h-5 text-white" />
             </div>
-            <span className="text-xl font-bold text-slate-800">NativeForge</span>
+            <span className="text-xl font-bold text-professional">Prism</span>
           </Link>
 
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center space-x-8">
             <Link
               href="/about"
-              className="text-slate-600 hover:text-slate-800 transition-colors"
+              className="text-muted hover:text-professional transition-professional"
             >
               About
             </Link>
             <Link
               href="/examples"
-              className="text-slate-600 hover:text-slate-800 transition-colors"
+              className="text-muted hover:text-professional transition-professional"
             >
               Examples
             </Link>
             <Link
               href="/pricing"
-              className="text-slate-600 hover:text-slate-800 transition-colors font-medium"
+              className="text-muted hover:text-professional transition-professional font-medium"
             >
               Pricing
             </Link>
             <Link
               href="/docs"
-              className="text-slate-600 hover:text-slate-800 transition-colors"
+              className="text-muted hover:text-professional transition-professional"
             >
               Documentation
             </Link>
             <a
-              href="https://github.com/yourusername/nativeforge"
+              href="https://github.com/yourusername/prism"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-slate-600 hover:text-slate-800 transition-colors"
+              className="text-muted hover:text-professional transition-professional"
             >
               <Github className="w-5 h-5" />
             </a>
@@ -64,7 +64,7 @@ export default function Header() {
           <div className="hidden md:block">
             <Link
               href="/dashboard"
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors inline-flex items-center space-x-2"
+              className="btn-primary inline-flex items-center space-x-2"
             >
               <Zap className="w-4 h-4" />
               <span>Get Started</span>
@@ -74,7 +74,7 @@ export default function Header() {
           {/* Mobile Menu Button */}
           <button
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="md:hidden p-2 text-slate-600 hover:text-slate-800 transition-colors"
+            className="md:hidden p-2 text-muted hover:text-professional transition-professional"
           >
             {isMobileMenuOpen ? (
               <X className="w-5 h-5" />
@@ -90,42 +90,42 @@ export default function Header() {
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            className="md:hidden mt-4 pt-4 border-t border-slate-200"
+            className="md:hidden mt-4 pt-4 border-professional"
           >
             <nav className="space-y-4">
               <Link
                 href="/about"
-                className="block text-slate-600 hover:text-slate-800 transition-colors"
+                className="block text-muted hover:text-professional transition-professional"
                 onClick={() => setIsMobileMenuOpen(false)}
               >
                 About
               </Link>
               <Link
                 href="/examples"
-                className="block text-slate-600 hover:text-slate-800 transition-colors"
+                className="block text-muted hover:text-professional transition-professional"
                 onClick={() => setIsMobileMenuOpen(false)}
               >
                 Examples
               </Link>
               <Link
                 href="/pricing"
-                className="block text-slate-600 hover:text-slate-800 transition-colors font-medium"
+                className="block text-muted hover:text-professional transition-professional font-medium"
                 onClick={() => setIsMobileMenuOpen(false)}
               >
                 Pricing
               </Link>
               <Link
                 href="/docs"
-                className="block text-slate-600 hover:text-slate-800 transition-colors"
+                className="block text-muted hover:text-professional transition-professional"
                 onClick={() => setIsMobileMenuOpen(false)}
               >
                 Documentation
               </Link>
               <a
-                href="https://github.com/yourusername/nativeforge"
+                href="https://github.com/yourusername/prism"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center space-x-2 text-slate-600 hover:text-slate-800 transition-colors"
+                className="flex items-center space-x-2 text-muted hover:text-professional transition-professional"
                 onClick={() => setIsMobileMenuOpen(false)}
               >
                 <Github className="w-4 h-4" />
@@ -133,7 +133,7 @@ export default function Header() {
               </a>
               <Link
                 href="/dashboard"
-                className="block bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors text-center"
+                className="btn-primary block text-center"
                 onClick={() => setIsMobileMenuOpen(false)}
               >
                 Get Started

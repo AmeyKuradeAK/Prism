@@ -112,10 +112,10 @@ export default function UserSettings() {
   ]
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+    <div className="min-h-screen bg-black">
       <DashboardHeader />
       
-      <div className="container mx-auto px-6 py-8">
+      <div className="container-professional py-8">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -123,12 +123,12 @@ export default function UserSettings() {
           className="mb-8"
         >
           <div className="flex items-center space-x-4 mb-4">
-            <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl flex items-center justify-center">
+            <div className="w-12 h-12 bg-gradient-primary rounded-xl-professional flex items-center justify-center shadow-professional">
               <Settings className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold text-white">Settings</h1>
-              <p className="text-white/60">Manage your account and preferences</p>
+              <h1 className="heading-secondary">Settings</h1>
+              <p className="text-light">Manage your account and preferences</p>
             </div>
           </div>
         </motion.div>
@@ -140,7 +140,7 @@ export default function UserSettings() {
             animate={{ opacity: 1, x: 0 }}
             className="lg:col-span-1"
           >
-            <div className="bg-white/5 backdrop-blur-xl rounded-2xl border border-white/10 p-6">
+            <div className="card-glass p-6">
               <nav className="space-y-2">
                 {tabs.map((tab) => {
                   const Icon = tab.icon
@@ -148,10 +148,10 @@ export default function UserSettings() {
                     <button
                       key={tab.id}
                       onClick={() => setActiveTab(tab.id)}
-                      className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all ${
+                      className={`w-full flex items-center space-x-3 px-4 py-3 rounded-professional transition-professional ${
                         activeTab === tab.id
-                          ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
-                          : 'text-white/60 hover:text-white hover:bg-white/5'
+                          ? 'bg-white text-black shadow-professional'
+                          : 'text-light hover:text-white hover:bg-white/10'
                       }`}
                     >
                       <Icon className="w-5 h-5" />
@@ -169,7 +169,7 @@ export default function UserSettings() {
             animate={{ opacity: 1, x: 0 }}
             className="lg:col-span-3"
           >
-            <div className="bg-white/5 backdrop-blur-xl rounded-2xl border border-white/10 p-6">
+            <div className="card-glass p-6">
               
               {/* Profile Tab */}
               {activeTab === 'profile' && (

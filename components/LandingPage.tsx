@@ -704,13 +704,13 @@ export default function LandingPage() {
 
       {/* Fixed Header */}
       <motion.header 
-        className="fixed top-0 left-0 right-0 z-50 bg-black/20 backdrop-blur-xl border-b border-white/10"
+        className="nav-dark fixed top-0 left-0 right-0 z-50"
         initial={{ y: -100 }}
         animate={{ y: 0 }}
         transition={{ delay: 0.5 }}
       >
-        <div className="container mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
+        <div className="container-professional">
+          <div className="flex items-center justify-between py-4">
             <motion.div 
               className="flex items-center space-x-3"
               whileHover={{ scale: 1.05 }}
@@ -720,38 +720,38 @@ export default function LandingPage() {
                 whileHover={{ rotate: 360 }}
                 transition={{ duration: 0.5 }}
               >
-                <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl flex items-center justify-center">
+                <div className="w-12 h-12 bg-gradient-primary rounded-xl-professional flex items-center justify-center shadow-professional">
                   <Wand2 className="w-6 h-6 text-white" />
                 </div>
-                <Sparkles className="w-4 h-4 text-yellow-400 absolute -top-1 -right-1 animate-pulse" />
+                <Sparkles className="w-4 h-4 text-white absolute -top-1 -right-1 animate-pulse" />
               </motion.div>
               <div>
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent">
+                <h1 className="text-2xl font-bold text-white">
                   Prism
                 </h1>
-                <p className="text-xs text-purple-300">AI-Powered App Builder</p>
+                <p className="text-xs text-light">AI-Powered App Builder</p>
               </div>
             </motion.div>
             
             <motion.div 
-              className="flex items-center space-x-4"
+              className="flex items-center space-x-6"
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.7 }}
             >
-              <Link href="/docs" className="text-white/80 hover:text-white transition-colors">
+              <Link href="/docs" className="text-light hover:text-white transition-professional">
                 Docs
               </Link>
-              <Link href="/pricing" className="text-white/80 hover:text-white transition-colors font-medium">
+              <Link href="/pricing" className="text-light hover:text-white transition-professional font-medium">
                 Pricing
               </Link>
-              <Link href="/sign-in" className="text-white/80 hover:text-white transition-colors">
+              <Link href="/sign-in" className="text-light hover:text-white transition-professional">
                 Sign In
               </Link>
               <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                 <Link 
                   href="/sign-up"
-                  className="bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white px-6 py-2 rounded-xl transition-all shadow-lg hover:shadow-purple-500/25"
+                  className="btn-glossy"
                 >
                   Try Free Now
                 </Link>
@@ -763,13 +763,13 @@ export default function LandingPage() {
 
       {/* Hero Section - Natural Scroll */}
       <motion.section 
-        className="relative z-10 min-h-screen flex items-center justify-center pt-20"
+        className="section-professional relative z-10 min-h-screen flex items-center justify-center pt-20"
         style={{ 
           y: smoothHeroY, 
           opacity: smoothHeroOpacity
         }}
       >
-        <div className="container mx-auto px-6">
+        <div className="container-professional">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
             {/* Left Column - Text */}
             <motion.div
@@ -782,41 +782,39 @@ export default function LandingPage() {
                 initial={{ opacity: 0, scale: 0.5 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: 1.2 }}
-                className="inline-flex items-center space-x-2 bg-gradient-to-r from-purple-500/20 to-pink-500/20 backdrop-blur-sm border border-white/20 rounded-full px-6 py-3"
+                className="glass inline-flex items-center space-x-2 rounded-xl-professional px-6 py-3"
               >
-                <Wand2 className="w-4 h-4 text-purple-400" />
-                <span className="text-white/90 text-sm font-medium">Completely Free • No Limits • No Credit Card</span>
-                <Sparkles className="w-4 h-4 text-yellow-400 animate-pulse" />
+                <Wand2 className="w-4 h-4 text-white" />
+                <span className="text-white text-sm font-medium">Professional • Fast • Reliable</span>
+                <Sparkles className="w-4 h-4 text-white animate-pulse" />
               </motion.div>
 
-              <h1 className="text-6xl md:text-7xl font-bold leading-tight">
-                <span className="bg-gradient-to-r from-white via-purple-200 to-pink-200 bg-clip-text text-transparent">
-                  Build Apps with
-                </span>
+              <h1 className="heading-primary">
+                Build Apps with
                 <br />
                 <motion.span 
-                  className="bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-400 bg-clip-text text-transparent"
+                  className="text-white"
                   animate={{
-                    backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'],
+                    opacity: [1, 0.8, 1],
                   }}
                   transition={{
-                    duration: 5,
+                    duration: 3,
                     repeat: Infinity,
-                    ease: "linear"
+                    ease: "easeInOut"
                   }}
                 >
-                  Crystal Clarity
+                  Professional Precision
                 </motion.span>
               </h1>
               
               <motion.p 
-                className="text-xl text-white/70 leading-relaxed max-w-lg"
+                className="text-xl text-light leading-relaxed max-w-lg"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 1.4 }}
               >
                 Transform your ideas into production-ready React Native Expo apps using the power of AI. 
-                Clear, simple, and precise - <span className="text-purple-400 font-semibold">Prism</span> makes it possible.
+                Clean, professional, and precise - <span className="text-white font-semibold">Prism</span> delivers excellence.
               </motion.p>
               
               <motion.div 
@@ -828,10 +826,10 @@ export default function LandingPage() {
                 <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                   <Link 
                     href="/builder"
-                    className="group bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white px-8 py-4 rounded-2xl text-lg font-bold transition-all shadow-2xl hover:shadow-purple-500/50 flex items-center space-x-3"
+                    className="btn-primary group px-8 py-4 text-lg font-bold flex items-center space-x-3"
                   >
                     <Wand2 className="w-5 h-5 group-hover:rotate-12 transition-transform" />
-                    <span>Start Building Free</span>
+                    <span>Start Building</span>
                     <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                   </Link>
                 </motion.div>
@@ -839,7 +837,7 @@ export default function LandingPage() {
                 <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                   <Link
                     href="/docs"
-                    className="group border-2 border-white/20 hover:border-white/40 text-white px-8 py-4 rounded-2xl text-lg font-bold transition-all backdrop-blur-sm hover:backdrop-blur-md flex items-center space-x-3"
+                    className="btn-ghost group px-8 py-4 text-lg font-bold flex items-center space-x-3"
                   >
                     <BookOpen className="w-5 h-5 group-hover:rotate-12 transition-transform" />
                     <span>View Docs</span>
@@ -848,21 +846,21 @@ export default function LandingPage() {
               </motion.div>
 
               <motion.div 
-                className="flex flex-wrap gap-6 text-white/60"
+                className="flex flex-wrap gap-6 text-muted"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 1.8 }}
               >
                 <div className="flex items-center space-x-2">
-                  <CheckCircle className="w-4 h-4 text-green-400" />
-                  <span className="text-sm">100% Free Forever</span>
+                  <CheckCircle className="w-4 h-4 text-white" />
+                  <span className="text-sm">Professional Quality</span>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <CheckCircle className="w-4 h-4 text-green-400" />
-                  <span className="text-sm">No Installation Required</span>
+                  <CheckCircle className="w-4 h-4 text-white" />
+                  <span className="text-sm">Production Ready</span>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <CheckCircle className="w-4 h-4 text-green-400" />
+                  <CheckCircle className="w-4 h-4 text-white" />
                   <span className="text-sm">Export-Ready Code</span>
                 </div>
               </motion.div>
@@ -882,23 +880,23 @@ export default function LandingPage() {
               
               {/* Floating Stats */}
               <motion.div 
-                className="absolute -bottom-8 -left-8 bg-black/40 backdrop-blur-xl border border-white/20 rounded-2xl p-6 text-center"
+                className="glass-dark absolute -bottom-8 -left-8 rounded-lg-professional p-6 text-center"
                 initial={{ opacity: 0, scale: 0 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: 2 }}
               >
                 <div className="text-3xl font-bold text-white">∞</div>
-                <div className="text-sm text-white/70">Free Projects</div>
+                <div className="text-sm text-light">Projects</div>
               </motion.div>
               
               <motion.div 
-                className="absolute -top-8 -right-8 bg-black/40 backdrop-blur-xl border border-white/20 rounded-2xl p-6 text-center"
+                className="glass-dark absolute -top-8 -right-8 rounded-lg-professional p-6 text-center"
                 initial={{ opacity: 0, scale: 0 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: 2.2 }}
               >
-                <div className="text-3xl font-bold text-green-400">24/7</div>
-                <div className="text-sm text-white/70">AI Available</div>
+                <div className="text-3xl font-bold text-white">24/7</div>
+                <div className="text-sm text-light">AI Available</div>
               </motion.div>
             </motion.div>
           </div>

@@ -26,17 +26,21 @@ export interface IUser extends Document {
     useOwnKeys?: boolean
   }
   usage: {
-    generationsThisMonth: number
-    buildsThisMonth: number
+    promptsThisMonth: number
     projectsThisMonth: number
     storageUsed: number
     lastResetAt: Date
+    dailyUsage: Array<{
+      date: Date
+      promptsUsed: number
+      projectsCreated: number
+    }>
   }
   analytics: {
-    totalGenerations: number
-    totalBuilds: number
+    totalPrompts: number
     totalProjects: number
     lastActiveAt: Date
+    accountAge: number
   }
   bio?: string
   website?: string
@@ -114,11 +118,7 @@ const UserSchema = new mongoose.Schema<IUser>({
     }
   },
   usage: {
-    generationsThisMonth: { 
-      type: Number, 
-      default: 0 
-    },
-    buildsThisMonth: { 
+    promptsThisMonth: { 
       type: Number, 
       default: 0 
     },
@@ -133,14 +133,15 @@ const UserSchema = new mongoose.Schema<IUser>({
     lastResetAt: { 
       type: Date, 
       default: Date.now 
-    }
+    },
+    dailyUsage: [{
+      date: { type: Date, required: true },
+      promptsUsed: { type: Number, default: 0 },
+      projectsCreated: { type: Number, default: 0 }
+    }]
   },
   analytics: {
-    totalGenerations: { 
-      type: Number, 
-      default: 0 
-    },
-    totalBuilds: { 
+    totalPrompts: { 
       type: Number, 
       default: 0 
     },
@@ -151,6 +152,10 @@ const UserSchema = new mongoose.Schema<IUser>({
     lastActiveAt: { 
       type: Date, 
       default: Date.now 
+    },
+    accountAge: {
+      type: Number,
+      default: 0
     }
   },
   bio: { 

@@ -9,7 +9,7 @@ export interface SubscriptionPlan {
   features: string[]
   limits: {
     projectsPerMonth: number
-    aiGenerationsPerMonth: number
+    promptsPerMonth: number
     customApiKeys: boolean
     prioritySupport: boolean
     exportCode: boolean
@@ -32,8 +32,8 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     tagline: 'Perfect for hobbyists and learners',
     price: { monthly: 0, yearly: 0 },
     features: [
+      '15 prompts per month (400k tokens each)',
       '3 projects per month',
-      '10 AI generations per month',
       'Basic templates',
       'Community support',
       'Expo SDK latest',
@@ -41,7 +41,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     ],
     limits: {
       projectsPerMonth: 3,
-      aiGenerationsPerMonth: 10,
+      promptsPerMonth: 15,
       customApiKeys: false,
       prioritySupport: false,
       exportCode: true,
@@ -56,8 +56,8 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     tagline: 'For serious individual developers',
     price: { monthly: 19, yearly: 190 },
     features: [
+      '200 prompts per month (400k tokens each)',
       'Unlimited projects',
-      '200 AI generations per month',
       'Custom API keys (bring your own)',
       'Premium templates',
       'Priority email support',
@@ -66,7 +66,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     ],
     limits: {
       projectsPerMonth: -1, // unlimited
-      aiGenerationsPerMonth: 200,
+      promptsPerMonth: 200,
       customApiKeys: true,
       prioritySupport: true,
       exportCode: true,
@@ -82,8 +82,8 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     tagline: 'Maximum power for professionals',
     price: { monthly: 49, yearly: 490 },
     features: [
+      '500 prompts per month (400k tokens each)',
       'Everything in Plus',
-      'Unlimited AI generations',
       'All AI models (GPT-4, Claude, etc.)',
       'Custom branding',
       'API access',
@@ -92,7 +92,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     ],
     limits: {
       projectsPerMonth: -1,
-      aiGenerationsPerMonth: -1,
+      promptsPerMonth: 500,
       customApiKeys: true,
       prioritySupport: true,
       exportCode: true,
@@ -107,6 +107,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     tagline: 'Collaboration for teams and agencies',
     price: { monthly: 99, yearly: 990 },
     features: [
+      '1,000-1,800 prompts per month (400k tokens each)',
       'Everything in Pro',
       'Team collaboration (10 seats)',
       'Shared workspaces',
@@ -118,7 +119,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     ],
     limits: {
       projectsPerMonth: -1,
-      aiGenerationsPerMonth: -1,
+      promptsPerMonth: 1400, // Average between 1k-1.8k
       customApiKeys: true,
       prioritySupport: true,
       exportCode: true,
@@ -133,6 +134,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     tagline: 'Large organizations with custom needs',
     price: { monthly: 299, yearly: 2990 }, // Placeholder pricing - handle custom deals separately
     features: [
+      'Unlimited prompts',
       'Everything in Team',
       'Unlimited team seats',
       'Custom AI models',
@@ -145,7 +147,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     ],
     limits: {
       projectsPerMonth: -1,
-      aiGenerationsPerMonth: -1,
+      promptsPerMonth: -1, // unlimited
       customApiKeys: true,
       prioritySupport: true,
       exportCode: true,
@@ -170,7 +172,7 @@ export function isFeatureAvailable(planId: string, feature: keyof SubscriptionPl
   return plan ? plan.limits[feature] === true : false
 }
 
-export function getMonthlyLimit(planId: string, limit: 'projectsPerMonth' | 'aiGenerationsPerMonth'): number {
+export function getMonthlyLimit(planId: string, limit: 'projectsPerMonth' | 'promptsPerMonth'): number {
   const plan = getPlanById(planId)
   if (!plan) return 0
   return plan.limits[limit] === -1 ? Infinity : plan.limits[limit]

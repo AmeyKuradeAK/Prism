@@ -6,7 +6,7 @@ import Project from '@/lib/database/models/Project'
 // GET - Fetch a specific project with all files
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const { userId } = await auth()
@@ -15,6 +15,7 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const params = await context.params
     const { id } = params
 
     if (!id) {
@@ -76,7 +77,7 @@ export async function GET(
 // PUT - Update project (rename, change description, etc.)
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const { userId } = await auth()
@@ -85,6 +86,7 @@ export async function PUT(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const params = await context.params
     const { id } = params
     const { name, description, tags } = await request.json()
 
@@ -130,7 +132,7 @@ export async function PUT(
 // DELETE - Delete a project
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const { userId } = await auth()
@@ -139,6 +141,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const params = await context.params
     const { id } = params
 
     await connectToDatabase()

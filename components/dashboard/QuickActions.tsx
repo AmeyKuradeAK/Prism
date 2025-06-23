@@ -11,24 +11,21 @@ export default function QuickActions() {
       title: 'AI Builder',
       description: 'Create apps with AI prompts',
       href: '/builder',
-      gradient: 'from-purple-500 to-pink-600',
-      hoverGradient: 'hover:from-purple-600 hover:to-pink-700'
+      primary: true
     },
     {
       icon: <Code className="w-5 h-5" />,
       title: 'Manual Project',
       description: 'Start with blank Expo template',
       href: '/builder?mode=manual',
-      gradient: 'from-blue-500 to-cyan-600',
-      hoverGradient: 'hover:from-blue-600 hover:to-cyan-700'
+      primary: false
     },
     {
       icon: <Layout className="w-5 h-5" />,
       title: 'Templates',
       description: 'Coming soon - Curated templates',
       href: '#',
-      gradient: 'from-green-500 to-emerald-600',
-      hoverGradient: 'hover:from-green-600 hover:to-emerald-700',
+      primary: false,
       disabled: true
     },
     {
@@ -36,21 +33,20 @@ export default function QuickActions() {
       title: 'Community',
       description: 'Coming soon - Share & discover',
       href: '#',
-      gradient: 'from-orange-500 to-red-600',
-      hoverGradient: 'hover:from-orange-600 hover:to-red-700',
+      primary: false,
       disabled: true
     }
   ]
 
   return (
     <motion.div 
-      className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-6"
+      className="card-glass p-6"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6 }}
     >
       <div className="flex items-center space-x-3 mb-6">
-        <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg flex items-center justify-center">
+        <div className="w-8 h-8 bg-gradient-primary rounded-professional flex items-center justify-center shadow-professional">
           <Wand2 className="w-4 h-4 text-white" />
         </div>
         <h3 className="text-xl font-bold text-white">Quick Actions</h3>
@@ -67,21 +63,23 @@ export default function QuickActions() {
             whileTap={action.disabled ? {} : { scale: 0.98 }}
           >
             {action.disabled ? (
-              <div className={`block p-4 rounded-2xl bg-gradient-to-r ${action.gradient} opacity-50 cursor-not-allowed group transition-all duration-300`}>
+              <div className="block p-4 rounded-professional bg-gray-800 opacity-50 cursor-not-allowed group transition-professional">
                 <div className="flex items-center space-x-3">
-                  <div className="flex-shrink-0 text-white">
+                  <div className="flex-shrink-0 text-light">
                     {action.icon}
                   </div>
                   <div>
-                    <h4 className="font-semibold text-white">{action.title}</h4>
-                    <p className="text-sm text-white/80">{action.description}</p>
+                    <h4 className="font-semibold text-light">{action.title}</h4>
+                    <p className="text-sm text-muted">{action.description}</p>
                   </div>
                 </div>
               </div>
             ) : (
               <Link
                 href={action.href}
-                className={`block p-4 rounded-2xl bg-gradient-to-r ${action.gradient} ${action.hoverGradient} text-white group transition-all duration-300 shadow-lg hover:shadow-xl`}
+                className={`block p-4 rounded-professional text-white group transition-professional shadow-professional hover:shadow-glossy ${
+                  action.primary ? 'btn-glossy' : 'bg-gray-800 hover:bg-gray-700'
+                }`}
               >
                 <div className="flex items-center space-x-3">
                   <div className="flex-shrink-0">
@@ -89,7 +87,7 @@ export default function QuickActions() {
                   </div>
                   <div>
                     <h4 className="font-semibold">{action.title}</h4>
-                    <p className="text-sm text-white/90">{action.description}</p>
+                    <p className="text-sm text-light">{action.description}</p>
                   </div>
                 </div>
               </Link>
@@ -99,14 +97,14 @@ export default function QuickActions() {
       </div>
       
       <motion.div 
-        className="mt-6 pt-6 border-t border-white/10"
+        className="mt-6 pt-6 border-t border-glass"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.6 }}
       >
         <div className="text-center">
-          <p className="text-sm text-white/60 mb-3">Need inspiration?</p>
-          <div className="text-white/40 text-sm">
+          <p className="text-sm text-light mb-3">Need inspiration?</p>
+          <div className="text-muted text-sm">
             Example apps coming soon
           </div>
         </div>

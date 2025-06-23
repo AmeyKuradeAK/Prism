@@ -9,24 +9,24 @@ export default function DashboardHeader() {
   const { user } = useUser()
 
   return (
-    <header className="bg-black/50 backdrop-blur-xl border-b border-white/10 sticky top-0 z-50">
-      <div className="container mx-auto px-6 py-4">
-        <div className="flex items-center justify-between">
+    <header className="nav-dark sticky top-0 z-50">
+      <div className="container-professional">
+        <div className="flex items-center justify-between py-4">
           {/* Logo and Navigation */}
           <div className="flex items-center space-x-8">
             <motion.div whileHover={{ scale: 1.05 }}>
               <Link href="/dashboard" className="flex items-center space-x-3">
                 <div className="relative">
-                  <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl flex items-center justify-center">
+                  <div className="w-10 h-10 bg-gradient-primary rounded-xl-professional flex items-center justify-center shadow-professional">
                     <Wand2 className="w-5 h-5 text-white" />
                   </div>
-                  <Sparkles className="w-3 h-3 text-yellow-400 absolute -top-1 -right-1 animate-pulse" />
+                  <Sparkles className="w-3 h-3 text-white absolute -top-1 -right-1 animate-pulse" />
                 </div>
                 <div>
-                  <span className="text-2xl font-bold bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent">
+                  <span className="text-2xl font-bold text-white">
                     Prism
                   </span>
-                  <p className="text-xs text-purple-300 -mt-1">AI Builder</p>
+                  <p className="text-xs text-light -mt-1">AI Builder</p>
                 </div>
               </Link>
             </motion.div>
@@ -34,26 +34,26 @@ export default function DashboardHeader() {
             <nav className="hidden lg:flex items-center space-x-6">
               <Link 
                 href="/dashboard" 
-                className="text-white/80 hover:text-white transition-colors px-3 py-2 rounded-lg hover:bg-white/5"
+                className="text-light hover:text-white transition-professional px-3 py-2 rounded-professional hover:bg-white/10"
               >
                 Dashboard
               </Link>
               <Link 
                 href="/builder" 
-                className="text-white/80 hover:text-white transition-colors px-3 py-2 rounded-lg hover:bg-white/5 flex items-center space-x-2"
+                className="text-light hover:text-white transition-professional px-3 py-2 rounded-professional hover:bg-white/10 flex items-center space-x-2"
               >
                 <Zap className="w-4 h-4" />
                 <span>Builder</span>
               </Link>
               <Link 
                 href="/templates" 
-                className="text-white/80 hover:text-white transition-colors px-3 py-2 rounded-lg hover:bg-white/5"
+                className="text-light hover:text-white transition-professional px-3 py-2 rounded-professional hover:bg-white/10"
               >
                 Templates
               </Link>
               <Link 
                 href="/community" 
-                className="text-white/80 hover:text-white transition-colors px-3 py-2 rounded-lg hover:bg-white/5"
+                className="text-light hover:text-white transition-professional px-3 py-2 rounded-professional hover:bg-white/10"
               >
                 Community
               </Link>
@@ -64,11 +64,11 @@ export default function DashboardHeader() {
           <div className="flex items-center space-x-4">
             {/* Global Search */}
             <div className="hidden md:block relative">
-              <Search className="w-4 h-4 absolute left-4 top-1/2 transform -translate-y-1/2 text-white/40" />
+              <Search className="w-4 h-4 absolute left-4 top-1/2 transform -translate-y-1/2 text-light" />
               <input
                 type="text"
                 placeholder="Search projects, templates..."
-                className="pl-12 pr-4 py-3 w-80 bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl focus:ring-2 focus:ring-purple-500 focus:border-transparent text-white placeholder-white/40 transition-all"
+                className="input-dark pl-12 pr-4 py-3 w-80"
               />
             </div>
 
@@ -78,17 +78,17 @@ export default function DashboardHeader() {
               <motion.button 
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                className="relative p-3 text-white/60 hover:text-white hover:bg-white/5 transition-all rounded-xl"
+                className="relative p-3 text-light hover:text-white hover:bg-white/10 transition-professional rounded-professional"
               >
                 <Bell className="w-5 h-5" />
-                <span className="absolute -top-1 -right-1 w-3 h-3 bg-gradient-to-r from-red-500 to-pink-500 rounded-full animate-pulse"></span>
+                <span className="absolute -top-1 -right-1 w-3 h-3 bg-white rounded-full animate-pulse"></span>
               </motion.button>
 
               {/* Help */}
               <motion.button 
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                className="p-3 text-white/60 hover:text-white hover:bg-white/5 transition-all rounded-xl"
+                className="p-3 text-light hover:text-white hover:bg-white/10 transition-professional rounded-professional"
               >
                 <HelpCircle className="w-5 h-5" />
               </motion.button>
@@ -97,7 +97,7 @@ export default function DashboardHeader() {
               <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                 <Link 
                   href="/settings"
-                  className="p-3 text-white/60 hover:text-white hover:bg-white/5 transition-all rounded-xl inline-block"
+                  className="p-3 text-light hover:text-white hover:bg-white/10 transition-professional rounded-professional inline-block"
                 >
                   <Settings className="w-5 h-5" />
                 </Link>
@@ -109,12 +109,12 @@ export default function DashboardHeader() {
               <UserButton
                 appearance={{
                   elements: {
-                    avatarBox: 'w-10 h-10 ring-2 ring-purple-500/20 hover:ring-purple-500/40 transition-all',
-                    userButtonPopoverCard: 'bg-black/90 backdrop-blur-xl border border-white/10 shadow-2xl',
+                    avatarBox: 'w-10 h-10 ring-2 ring-white/20 hover:ring-white/40 transition-professional',
+                    userButtonPopoverCard: 'glass-dark shadow-professional',
                     userButtonPopoverActions: 'p-3',
-                    userButtonPopoverActionButton: 'text-white/70 hover:text-white hover:bg-white/5 rounded-lg',
-                    userButtonPopoverActionButtonText: 'text-white/70',
-                    userButtonPopoverActionButtonIcon: 'text-white/40'
+                    userButtonPopoverActionButton: 'text-light hover:text-white hover:bg-white/10 rounded-professional',
+                    userButtonPopoverActionButtonText: 'text-light',
+                    userButtonPopoverActionButtonIcon: 'text-light'
                   }
                 }}
               />

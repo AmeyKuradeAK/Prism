@@ -1,4 +1,4 @@
-export const APP_NAME = 'NativeForge'
+export const APP_NAME = 'Prism'
 export const APP_DESCRIPTION = 'AI-Powered React Native App Builder'
 
 export const MISTRAL_MODEL = 'mistral-large-latest'
