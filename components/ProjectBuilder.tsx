@@ -980,30 +980,41 @@ The base template is still loaded and functional. You can:
         </div>
 
         {/* Main Content Area */}
-        <div className="flex-1 flex flex-col">
-          {/* Code Editor Area */}
-          <div className="flex-1 bg-gray-900">
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {/* Code Editor Area - Make this scrollable and flexible */}
+          <div className={`bg-gray-900 overflow-hidden flex flex-col ${isChatCollapsed ? 'flex-1' : 'flex-1 max-h-[calc(100vh-400px)]'}`}>
             {activeFile ? (
               <>
-                <div className="p-4 border-b border-gray-800 flex items-center justify-between">
+                <div className="flex-shrink-0 p-4 border-b border-gray-800 flex items-center justify-between">
                   <div className="flex items-center space-x-2">
                     <Eye className="w-4 h-4 text-gray-400" />
                     <span className="text-sm font-medium text-gray-200">
                       {activeFile}
                     </span>
                   </div>
-                  <button
-                    onClick={() => copyToClipboard(files[activeFile] || '')}
-                    className="flex items-center space-x-1 px-3 py-1 text-xs bg-gray-800 hover:bg-gray-700 rounded border border-gray-700 transition-colors"
-                  >
-                    <Copy className="w-3 h-3" />
-                    <span>Copy</span>
-                  </button>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => copyToClipboard(files[activeFile] || '')}
+                      className="flex items-center space-x-1 px-3 py-1 text-xs bg-gray-800 hover:bg-gray-700 rounded border border-gray-700 transition-colors"
+                    >
+                      <Copy className="w-3 h-3" />
+                      <span>Copy</span>
+                    </button>
+                    {/* Quick Chat Toggle in File Header */}
+                    <button
+                      onClick={() => setIsChatCollapsed(!isChatCollapsed)}
+                      className="flex items-center space-x-1 px-3 py-1 text-xs bg-purple-600 hover:bg-purple-700 rounded transition-colors"
+                    >
+                      <MessageSquare className="w-3 h-3" />
+                      <span>{isChatCollapsed ? 'Show' : 'Hide'}</span>
+                    </button>
+                  </div>
                 </div>
-                <div className="h-full overflow-auto">
+                {/* Scrollable Code Content */}
+                <div className="flex-1 overflow-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
                   <div className="p-4">
-                    <pre className="bg-black p-4 rounded-lg overflow-auto text-sm border border-gray-800 h-full">
-                      <code className="text-gray-300">
+                    <pre className="bg-black p-4 rounded-lg text-sm border border-gray-800 min-h-full">
+                      <code className="text-gray-300 whitespace-pre-wrap">
                         {progressFiles[activeFile]?.content || files[activeFile] || ''}
                       </code>
                     </pre>
@@ -1015,16 +1026,30 @@ The base template is still loaded and functional. You can:
                 <div className="text-center">
                   <Code className="w-16 h-16 mx-auto mb-4 text-gray-700" />
                   <p className="text-lg font-medium mb-2">Select a file to view</p>
-                  <p className="text-sm text-gray-600">Choose from the file explorer to see the code</p>
+                  <p className="text-sm text-gray-600 mb-4">Choose from the file explorer to see the code</p>
+                  {/* Quick access to chat when no file selected */}
+                  {isChatCollapsed && (
+                    <button
+                      onClick={() => setIsChatCollapsed(false)}
+                      className="flex items-center space-x-2 px-4 py-2 mx-auto text-sm bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors"
+                    >
+                      <MessageSquare className="w-4 h-4" />
+                      <span>Show AI Chat</span>
+                    </button>
+                  )}
                 </div>
               </div>
             )}
           </div>
 
-          {/* Chat Interface - ChatGPT Style */}
-          <div className={`h-80 border-t border-gray-800 bg-black flex flex-col min-h-[320px] ${isChatCollapsed ? 'hidden' : ''}`}>
-            {/* Chat Header */}
-            <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between">
+          {/* Chat Interface - Make it more accessible */}
+          <div className={`border-t border-gray-800 bg-black flex flex-col transition-all duration-300 ${
+            isChatCollapsed 
+              ? 'h-0 overflow-hidden' 
+              : 'h-80 min-h-[320px] max-h-96'
+          }`}>
+            {/* Chat Header with better controls */}
+            <div className="flex-shrink-0 px-4 py-3 border-b border-gray-800 flex items-center justify-between bg-gray-900">
               <div className="flex items-center space-x-2">
                 <MessageSquare className="w-4 h-4 text-blue-400" />
                 <span className="text-sm font-medium text-gray-200">AI Assistant</span>
@@ -1037,10 +1062,27 @@ The base template is still loaded and functional. You can:
                     <span className="text-xs text-blue-400">Generating...</span>
                   </div>
                 )}
+                {/* Minimize/Maximize Chat */}
+                <button
+                  onClick={() => setIsChatCollapsed(!isChatCollapsed)}
+                  className="flex items-center space-x-1 px-2 py-1 text-xs bg-gray-700 hover:bg-gray-600 rounded transition-colors"
+                >
+                  {isChatCollapsed ? (
+                    <>
+                      <ChevronUp className="w-3 h-3" />
+                      <span>Show</span>
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown className="w-3 h-3" />
+                      <span>Hide</span>
+                    </>
+                  )}
+                </button>
               </div>
             </div>
 
-            {/* Chat Messages - Scrollable */}
+            {/* Chat Messages - Properly scrollable */}
             <div 
               ref={chatRef}
               className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-gray-800 p-4 space-y-4"
@@ -1105,8 +1147,8 @@ The base template is still loaded and functional. You can:
               )}
             </div>
 
-            {/* Chat Input */}
-            <div className="p-4 border-t border-gray-800">
+            {/* Chat Input - Always visible when chat is open */}
+            <div className="flex-shrink-0 p-4 border-t border-gray-800 bg-gray-900">
               <form onSubmit={handleSendMessage} className="flex items-end space-x-3">
                 <div className="flex-1">
                   <textarea
@@ -1114,7 +1156,7 @@ The base template is still loaded and functional. You can:
                     onChange={(e) => setCurrentMessage(e.target.value)}
                     placeholder="Describe your app or ask for changes..."
                     className="w-full p-3 bg-gray-800 border border-gray-700 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-400"
-                    rows={3}
+                    rows={2}
                     disabled={isGenerating}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey) {
