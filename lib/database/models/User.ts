@@ -13,6 +13,9 @@ export interface IUser extends Document {
     expoVersion: string
     codeStyle: 'typescript' | 'javascript'
     theme: 'light' | 'dark'
+    preferredProvider?: string
+    preferredModel?: string
+    useOwnKeys?: boolean
   }
   usage: {
     generationsThisMonth: number
@@ -74,6 +77,18 @@ const UserSchema = new mongoose.Schema<IUser>({
       type: String, 
       enum: ['light', 'dark'], 
       default: 'light' 
+    },
+    preferredProvider: {
+      type: String,
+      default: 'mistral'
+    },
+    preferredModel: {
+      type: String,
+      default: 'Mistral Large'
+    },
+    useOwnKeys: {
+      type: Boolean,
+      default: false
     }
   },
   usage: {
