@@ -7,8 +7,16 @@ export interface IUser extends Document {
   firstName?: string
   lastName?: string
   avatar?: string
-  plan: 'free'  // Only free plan now
-  credits: number  // Unlimited but tracked for analytics
+  plan: 'spark' | 'nova' | 'fusion' | 'galaxy' | 'enterprise'
+  credits: number  // Based on plan
+  subscription?: {
+    planId: string
+    status: 'active' | 'canceled' | 'past_due' | 'trialing'
+    currentPeriodEnd: Date
+    cancelAtPeriodEnd: boolean
+    stripeSubscriptionId?: string
+    stripeCustomerId?: string
+  }
   preferences: {
     expoVersion: string
     codeStyle: 'typescript' | 'javascript'
@@ -20,7 +28,9 @@ export interface IUser extends Document {
   usage: {
     generationsThisMonth: number
     buildsThisMonth: number
+    projectsThisMonth: number
     storageUsed: number
+    lastResetAt: Date
   }
   analytics: {
     totalGenerations: number
@@ -56,12 +66,24 @@ const UserSchema = new mongoose.Schema<IUser>({
   },
   plan: { 
     type: String, 
-    enum: ['free'], 
-    default: 'free' 
+    enum: ['spark', 'nova', 'fusion', 'galaxy', 'enterprise'], 
+    default: 'spark' 
   },
   credits: { 
     type: Number, 
-    default: 999999  // Unlimited for free users
+    default: 10  // Based on plan limits
+  },
+  subscription: {
+    planId: { type: String },
+    status: { 
+      type: String, 
+      enum: ['active', 'canceled', 'past_due', 'trialing'],
+      default: 'active'
+    },
+    currentPeriodEnd: { type: Date },
+    cancelAtPeriodEnd: { type: Boolean, default: false },
+    stripeSubscriptionId: { type: String },
+    stripeCustomerId: { type: String }
   },
   preferences: {
     expoVersion: { 
@@ -100,9 +122,17 @@ const UserSchema = new mongoose.Schema<IUser>({
       type: Number, 
       default: 0 
     },
+    projectsThisMonth: { 
+      type: Number, 
+      default: 0 
+    },
     storageUsed: { 
       type: Number, 
       default: 0 
+    },
+    lastResetAt: { 
+      type: Date, 
+      default: Date.now 
     }
   },
   analytics: {

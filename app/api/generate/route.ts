@@ -1,11 +1,30 @@
 import { NextRequest } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 
+// Helper function to create optimized prompts
+function createOptimizedPrompt(prompt: string): string {
+  return `Create React Native Expo app: ${prompt.substring(0, 60)}
+
+REQUIREMENTS:
+- Expo SDK 53, TypeScript
+- Working code only
+- Format: ===FILE: path===\ncode\n===END===
+
+Generate 3-5 essential files:
+1. app/_layout.tsx (root)
+2. app/(tabs)/_layout.tsx (tabs)  
+3. app/(tabs)/index.tsx (home screen)
+4. components/ThemedText.tsx
+5. package.json (deps)
+
+FAST response needed!`
+}
+
 export async function POST(request: NextRequest) {
   const startTime = Date.now()
   
   try {
-    console.log('🚀 API Generate: Starting FREE AI generation with Mistral...')
+    console.log('🚀 API Generate: Starting AI generation with user preferences...')
     
     // Check authentication
     const { userId } = await auth()
@@ -34,8 +53,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.log(`🧠 FREE AI generation with Mistral for: "${prompt.substring(0, 100)}..."`)
-    console.log(`🔑 Mistral API Key present: ${!!process.env.MISTRAL_API_KEY}`)
+    console.log(`🧠 AI generation for: "${prompt.substring(0, 100)}..."`)
     console.log(`🧪 Test mode: ${testMode ? 'enabled' : 'disabled'}`)
     console.log(`⚡ Quick mode: ${quickMode ? 'enabled' : 'disabled'}`)
 
@@ -62,35 +80,97 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // OPTIMIZED MISTRAL GENERATION (FREE!)
-    if (!process.env.MISTRAL_API_KEY) {
-      throw new Error('Mistral API key not configured')
-    }
-
-    console.log('🚀 Starting OPTIMIZED FREE Mistral generation...')
+    // Use new AI generation service that respects user preferences
+    console.log('🚀 Starting AI generation with user preferences...')
     try {
-      const aiFiles = await generateWithOptimizedMistral(prompt)
-      if (Object.keys(aiFiles).length > 0) {
-        console.log(`✅ Mistral FREE AI success: ${Object.keys(aiFiles).length} files`)
+      const { aiGenerationService } = await import('@/lib/utils/ai-generation-service')
+      
+      // Get provider status for logging
+      const providerStatus = aiGenerationService.getProviderStatus()
+      console.log(`🤖 Using: ${providerStatus.provider} (${providerStatus.isUserOwned ? 'user-owned' : 'server-managed'})`)
+      
+      // Generate with selected provider
+      const aiResponse = await aiGenerationService.generate({
+        prompt: createOptimizedPrompt(prompt),
+        maxTokens: 2000,
+        temperature: 0.2,
+        userId
+      })
+      
+      // Parse AI response to extract files
+      const { parseCodeFromResponse } = await import('@/lib/utils/code-parser')
+      const generatedFiles = parseCodeFromResponse(aiResponse.content)
+      
+      // Convert to files object
+      const files: { [key: string]: string } = {}
+      generatedFiles.forEach(file => {
+        if (file.path && file.content) {
+          files[file.path] = file.content
+        }
+      })
+      
+      // If parsing failed, create enhanced demo-1 base template
+      if (Object.keys(files).length === 0) {
+        console.log('⚠️ AI parsing failed, using COMPLETE demo-1 base template...')
+        const { generateDemo1BaseTemplate } = await import('@/lib/generators/templates/complete-demo1-template')
+        const { analyzePrompt } = await import('@/lib/generators/v0-pipeline')
+        
+        const analysis = analyzePrompt(prompt)
+        const appName = `${analysis.type.charAt(0).toUpperCase() + analysis.type.slice(1)}App`
         return new Response(
           JSON.stringify({
             success: true,
-            files: aiFiles,
-            message: `FREE AI Generated ${Object.keys(aiFiles).length} files with Mistral`,
-            fileCount: Object.keys(aiFiles).length,
-            pipeline: 'optimized-mistral-free',
-            provider: 'Mistral (Free)',
-            cost: 'FREE! 🎉'
+            files: generateDemo1BaseTemplate(appName),
+            message: `AI parsing failed, using base template (${Object.keys(generateDemo1BaseTemplate(appName)).length} files)`,
+            fileCount: Object.keys(generateDemo1BaseTemplate(appName)).length,
+            pipeline: 'base-template-fallback',
+            provider: aiResponse.provider,
+            cost: aiResponse.cost
           }),
           { status: 200, headers: { 'Content-Type': 'application/json' } }
         )
       }
-    } catch (mistralError) {
-      console.error('❌ Optimized Mistral failed:', mistralError)
-      throw mistralError
+      
+      console.log(`✅ AI generation success: ${Object.keys(files).length} files`)
+      return new Response(
+        JSON.stringify({
+          success: true,
+          files: files,
+          message: `Generated ${Object.keys(files).length} files with ${aiResponse.provider}`,
+          fileCount: Object.keys(files).length,
+          pipeline: 'ai-generation-service',
+          provider: aiResponse.provider,
+          model: aiResponse.model,
+          cost: aiResponse.cost,
+          tokensUsed: aiResponse.tokensUsed
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )
+      
+    } catch (aiError) {
+      console.error('❌ AI generation failed:', aiError)
+      
+      // Fallback to base template
+      console.log('🔄 Falling back to base template...')
+      const { generateDemo1BaseTemplate } = await import('@/lib/generators/templates/complete-demo1-template')
+      const { analyzePrompt } = await import('@/lib/generators/v0-pipeline')
+      
+      const analysis = analyzePrompt(prompt)
+      const appName = `${analysis.type.charAt(0).toUpperCase() + analysis.type.slice(1)}App`
+      const files = generateDemo1BaseTemplate(appName)
+      
+      return new Response(
+        JSON.stringify({
+          success: true,
+          files: files,
+          message: `AI generation failed, using base template (${Object.keys(files).length} files)`,
+          fileCount: Object.keys(files).length,
+          pipeline: 'error-fallback',
+          error: aiError instanceof Error ? aiError.message : 'Unknown error'
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )
     }
-
-    throw new Error('Mistral generation failed')
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
