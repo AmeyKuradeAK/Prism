@@ -302,33 +302,25 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
         return
       }
       
-      // Step 2: Generate AI enhancements directly from client
+      // Step 2: Generate AI enhancements - better error handling
       console.log('🤖 Step 2: Getting secure encrypted API key...')
-      console.log('🔍 Debug - testMode:', testMode, 'quickMode:', quickMode)
       
-      // TEMPORARY: Check if .env.local exists and has required vars
+      // Check if environment variables are present
       const hasEncryptionKey = !!process.env.NEXT_PUBLIC_ENCRYPTION_KEY
       console.log('🔍 Environment check:')
       console.log('  - NEXT_PUBLIC_ENCRYPTION_KEY:', hasEncryptionKey ? '✅ Present' : '❌ Missing')
       
       if (!hasEncryptionKey) {
-        console.error('❌ Missing environment variables! Please create .env.local file')
+        console.error('❌ Missing encryption key! Showing base template only.')
         setChatMessages(prev => prev.map(msg => 
           msg.isGenerating 
             ? { 
                 ...msg, 
-                content: `📦 Base template loaded with ${Object.keys(baseFiles).length} files! 
-                
-❌ **Missing .env.local file!** 
+                content: `📦 Base template loaded with ${Object.keys(baseFiles).length} files!
 
-Please create a \`.env.local\` file with:
-\`\`\`
-MISTRAL_API_KEY=your_mistral_key_here
-ENCRYPTION_KEY=ed513c694f3d9c486e16e5fcbc8a738e9600584421e4a745b3cc8ae46bcf4e8e
-NEXT_PUBLIC_ENCRYPTION_KEY=ed513c694f3d9c486e16e5fcbc8a738e9600584421e4a745b3cc8ae46bcf4e8e
-\`\`\`
+⚠️ **AI Generation Disabled**: Missing encryption key in environment variables.
 
-Then restart the dev server.`,
+The base template is loaded and functional. To enable AI enhancements, add the encryption keys to your \`.env.local\` file and restart the server.`,
                 isGenerating: false 
               }
             : msg
@@ -336,6 +328,7 @@ Then restart the dev server.`,
         return
       }
       
+      // Try to get API key
       let apiKey: string
       try {
         const { getCachedDecryptedApiKey } = await import('@/lib/utils/crypto-client')
@@ -343,13 +336,16 @@ Then restart the dev server.`,
         apiKey = await getCachedDecryptedApiKey()
         console.log('🔐 API key decrypted successfully, length:', apiKey.length)
       } catch (keyError) {
-        console.error('❌ Failed to get API key, detailed error:', keyError)
-        console.error('❌ Error stack:', keyError instanceof Error ? keyError.stack : 'No stack')
+        console.error('❌ Failed to get API key:', keyError)
         setChatMessages(prev => prev.map(msg => 
           msg.isGenerating 
             ? { 
                 ...msg, 
-                content: `📦 Base template loaded with ${Object.keys(baseFiles).length} files! (API key error: ${keyError instanceof Error ? keyError.message : 'Unknown'})`,
+                content: `📦 Base template loaded with ${Object.keys(baseFiles).length} files!
+
+⚠️ **AI Generation Error**: ${keyError instanceof Error ? keyError.message : 'Unknown error'}
+
+The base template is loaded and functional. Check your API key configuration in the environment variables.`,
                 isGenerating: false 
               }
             : msg
@@ -357,7 +353,19 @@ Then restart the dev server.`,
         return
       }
       
-      console.log('🤖 Step 3: Calling Mistral AI with encrypted key...')
+      // Step 3: Call AI API with better error handling
+      console.log('🤖 Step 3: Calling Mistral AI...')
+      setChatMessages(prev => prev.map(msg => 
+        msg.isGenerating 
+          ? { 
+              ...msg, 
+              content: `🤖 Calling AI to enhance your app...
+
+Base template loaded (${Object.keys(baseFiles).length} files). Now generating AI enhancements...`
+            }
+          : msg
+      ))
+      
       const aiResponse = await fetch('https://api.mistral.ai/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -382,12 +390,17 @@ Then restart the dev server.`,
       })
       
       if (!aiResponse.ok) {
-        console.log('⚠️ AI generation failed, using base template only')
+        const errorText = await aiResponse.text()
+        console.log('⚠️ AI generation failed:', errorText)
         setChatMessages(prev => prev.map(msg => 
           msg.isGenerating 
             ? { 
                 ...msg, 
-                content: `📦 Base template loaded with ${Object.keys(baseFiles).length} files! (AI generation failed)`,
+                content: `📦 Base template loaded with ${Object.keys(baseFiles).length} files!
+
+⚠️ **AI Generation Failed**: ${aiResponse.status} ${aiResponse.statusText}
+
+The base template is loaded and functional. AI enhancement failed, but you can still use the base template.`,
                 isGenerating: false 
               }
             : msg
@@ -399,6 +412,15 @@ Then restart the dev server.`,
       console.log('🤖 AI Response received:', aiData.choices?.[0]?.message?.content?.substring(0, 200))
       
       // Step 4: Parse AI-generated files
+      setChatMessages(prev => prev.map(msg => 
+        msg.isGenerating 
+          ? { 
+              ...msg, 
+              content: `🔄 Processing AI response and merging files...`
+            }
+          : msg
+      ))
+      
       const { parseCodeFromResponse } = await import('@/lib/utils/code-parser')
       const aiGeneratedFiles = parseCodeFromResponse(aiData.choices?.[0]?.message?.content || '')
       
@@ -436,7 +458,15 @@ Then restart the dev server.`,
         msg.isGenerating 
           ? { 
               ...msg, 
-              content: `✅ Generated enhanced React Native app! Base template (${counts.base} files) + AI enhancements (${counts.ai} files) = ${counts.total} total files with intelligent merging.`,
+              content: `✅ **AI Generation Complete!**
+
+📊 **Final Result**: ${counts.base} base files + ${counts.ai} AI enhancements = **${counts.total} total files**
+
+🎉 Your enhanced React Native app is ready! The AI has added custom functionality to your base template. You can now:
+- 📁 Browse the file explorer to see all generated files
+- 👀 Click on any file to view the code
+- 📱 Use the build system to create APK/IPA files
+- 💾 Save your project for future editing`,
               isGenerating: false 
             }
           : msg
@@ -451,16 +481,19 @@ Then restart the dev server.`,
         stack: error instanceof Error ? error.stack : undefined
       })
       
-      // Fallback to base template on any error
-      const { generateCompleteDemo1Template } = await import('@/lib/generators/templates/complete-demo1-template')
-      const fallbackFiles = generateCompleteDemo1Template('FallbackApp')
-      setFiles(fallbackFiles)
-      
+      // Better error handling - don't fallback to different files, just show error
       setChatMessages(prev => prev.map(msg => 
         msg.isGenerating 
           ? { 
               ...msg, 
-              content: `⚠️ AI generation failed, using base template (${Object.keys(fallbackFiles).length} files). Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+              content: `❌ **Generation Error**
+
+Something went wrong during AI generation: ${error instanceof Error ? error.message : 'Unknown error'}
+
+The base template is still loaded and functional. You can:
+- Try generating again with a different prompt
+- Use the base template as-is
+- Check the browser console for more details`,
               isGenerating: false 
             }
           : msg
@@ -725,6 +758,16 @@ Then restart the dev server.`,
           <button
             onClick={async () => {
               console.log('🧪 Testing Client MemFS...')
+              
+              // Add a chat message to explain what's happening
+              const testMessage: ChatMessage = {
+                id: Date.now().toString(),
+                type: 'system',
+                content: '🧪 Testing MemFS functionality...',
+                timestamp: new Date()
+              }
+              setChatMessages(prev => [...prev, testMessage])
+              
               try {
                 const clientMemFS = (await import('@/lib/utils/client-memfs')).default
                 await clientMemFS.loadBaseTemplate('TestApp')
@@ -733,8 +776,8 @@ Then restart the dev server.`,
                 
                 // Mock AI files
                 const mockAI = [
-                  { path: '/components/TestButton.tsx', content: 'export default function TestButton() { return null; }' },
-                  { path: '/lib/utils.ts', content: 'export const test = true;' }
+                  { path: '/components/TestButton.tsx', content: 'export default function TestButton() { return <Text>Test Button Component</Text>; }' },
+                  { path: '/lib/utils.ts', content: 'export const test = true;\nexport const mockData = { message: "MemFS test successful!" };' }
                 ]
                 clientMemFS.mergeAIFiles(mockAI)
                 
@@ -749,8 +792,40 @@ Then restart the dev server.`,
                 setFiles(merged)
                 setActiveFile('/components/TestButton.tsx')
                 
+                // Add success message to chat
+                const successMessage: ChatMessage = {
+                  id: (Date.now() + 1).toString(),
+                  type: 'system',
+                  content: `✅ **MemFS Test Successful!**
+
+📊 **Results**: ${counts.base} base files + ${counts.ai} mock AI files = **${counts.total} total files**
+
+🧪 **What happened**: 
+- Loaded base React Native template
+- Added 2 mock AI-generated files
+- Merged everything using client-side MemFS
+- Files are now visible in the explorer
+
+This confirms that the MemFS system is working correctly. The issue with your prompts is likely related to API key configuration or AI generation, not the file system.`,
+                  timestamp: new Date()
+                }
+                setChatMessages(prev => [...prev, successMessage])
+                
               } catch (error) {
                 console.error('❌ Test failed:', error)
+                
+                // Add error message to chat
+                const errorMessage: ChatMessage = {
+                  id: (Date.now() + 2).toString(),
+                  type: 'system',
+                  content: `❌ **MemFS Test Failed**
+
+Error: ${error instanceof Error ? error.message : 'Unknown error'}
+
+This indicates there's an issue with the file system or template loading.`,
+                  timestamp: new Date()
+                }
+                setChatMessages(prev => [...prev, errorMessage])
               }
             }}
             disabled={isGenerating}
@@ -758,6 +833,75 @@ Then restart the dev server.`,
           >
             <span>🧪</span>
             <span>Test MemFS</span>
+          </button>
+          
+          {/* Debug Environment Button */}
+          <button
+            onClick={async () => {
+              console.log('🔍 Environment Debug Check...')
+              
+              const debugMessage: ChatMessage = {
+                id: Date.now().toString(),
+                type: 'system',
+                content: '🔍 Checking environment configuration...',
+                timestamp: new Date()
+              }
+              setChatMessages(prev => [...prev, debugMessage])
+              
+              try {
+                // Check environment variables
+                const hasEncryptionKey = !!process.env.NEXT_PUBLIC_ENCRYPTION_KEY
+                const encryptionKeyLength = process.env.NEXT_PUBLIC_ENCRYPTION_KEY?.length || 0
+                
+                let apiKeyStatus = 'Unknown'
+                let apiKeyError = ''
+                
+                try {
+                  const { getCachedDecryptedApiKey } = await import('@/lib/utils/crypto-client')
+                  const apiKey = await getCachedDecryptedApiKey()
+                  apiKeyStatus = apiKey ? `✅ Valid (${apiKey.length} chars)` : '❌ Empty'
+                } catch (keyError) {
+                  apiKeyStatus = '❌ Failed to decrypt'
+                  apiKeyError = keyError instanceof Error ? keyError.message : 'Unknown error'
+                }
+                
+                const debugResults: ChatMessage = {
+                  id: (Date.now() + 1).toString(),
+                  type: 'system',
+                  content: `🔍 **Environment Debug Results**
+
+**Environment Variables:**
+- \`NEXT_PUBLIC_ENCRYPTION_KEY\`: ${hasEncryptionKey ? `✅ Present (${encryptionKeyLength} chars)` : '❌ Missing'}
+
+**API Key Status:**
+- Decryption: ${apiKeyStatus}
+${apiKeyError ? `- Error: ${apiKeyError}` : ''}
+
+**Next Steps:**
+${!hasEncryptionKey ? '- Add NEXT_PUBLIC_ENCRYPTION_KEY to .env.local\n' : ''}${apiKeyStatus.includes('Failed') ? '- Check MISTRAL_API_KEY in .env.local\n- Verify ENCRYPTION_KEY matches NEXT_PUBLIC_ENCRYPTION_KEY\n' : ''}${apiKeyStatus.includes('Valid') ? '- ✅ Environment is properly configured!\n- Try generating an app with a simple prompt like "Create a todo app"' : ''}`,
+                  timestamp: new Date()
+                }
+                setChatMessages(prev => [...prev, debugResults])
+                
+              } catch (error) {
+                const errorMessage: ChatMessage = {
+                  id: (Date.now() + 2).toString(),
+                  type: 'system',
+                  content: `❌ **Debug Check Failed**
+
+Error: ${error instanceof Error ? error.message : 'Unknown error'}
+
+This indicates a serious configuration issue.`,
+                  timestamp: new Date()
+                }
+                setChatMessages(prev => [...prev, errorMessage])
+              }
+            }}
+            disabled={isGenerating}
+            className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-white bg-yellow-600 rounded-lg hover:bg-yellow-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+          >
+            <span>🔍</span>
+            <span>Debug Env</span>
           </button>
         </div>
       </div>
