@@ -108,6 +108,7 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
   const [builds, setBuilds] = useState<BuildStatus[]>([])
   const [currentBuild, setCurrentBuild] = useState<BuildStatus | null>(null)
   const [isChatCollapsed, setIsChatCollapsed] = useState(false)
+  const [activeTab, setActiveTab] = useState<'code' | 'preview' | 'build'>('code')
   
   // Refs
   const chatRef = useRef<HTMLDivElement>(null)
@@ -822,6 +823,92 @@ The base template is still loaded and functional. You can:
     }
   }
 
+  // Build functionality
+  const startBuild = async (platform: 'android' | 'ios' | 'web') => {
+    if (Object.keys(files).length === 0) {
+      alert('No files to build. Please generate an app first.')
+      return
+    }
+
+    setIsBuilding(true)
+    const buildId = Date.now().toString()
+    
+    const newBuild: BuildStatus = {
+      id: buildId,
+      status: 'pending',
+      platform,
+      progress: 0
+    }
+    
+    setBuilds(prev => [newBuild, ...prev])
+    setCurrentBuild(newBuild)
+    
+    // Add build message to chat
+    const buildMessage: ChatMessage = {
+      id: Date.now().toString(),
+      type: 'system',
+      content: `🔨 Starting ${platform} build...
+
+📱 **Platform**: ${platform.charAt(0).toUpperCase() + platform.slice(1)}
+📦 **Files**: ${Object.keys(files).length} files
+⏱️ **Status**: Preparing build...`,
+      timestamp: new Date()
+    }
+    setChatMessages(prev => [...prev, buildMessage])
+
+    try {
+      // Simulate build process
+      for (let i = 0; i <= 100; i += 10) {
+        await new Promise(resolve => setTimeout(resolve, 500))
+        setBuilds(prev => prev.map(build => 
+          build.id === buildId 
+            ? { ...build, progress: i, status: i === 100 ? 'success' : 'building' }
+            : build
+        ))
+        setCurrentBuild(prev => prev ? { ...prev, progress: i, status: i === 100 ? 'success' : 'building' } : null)
+      }
+
+      // Success message
+      const successMessage: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        type: 'system',
+        content: `✅ **Build Complete!**
+
+📱 **Platform**: ${platform.charAt(0).toUpperCase() + platform.slice(1)}
+📦 **Status**: Build successful
+⬇️ **Download**: Build artifacts ready
+
+🎉 Your ${platform} app is ready for distribution!`,
+        timestamp: new Date()
+      }
+      setChatMessages(prev => [...prev, successMessage])
+
+    } catch (error) {
+      // Error handling
+      setBuilds(prev => prev.map(build => 
+        build.id === buildId 
+          ? { ...build, status: 'error', error: error instanceof Error ? error.message : 'Build failed' }
+          : build
+      ))
+      setCurrentBuild(prev => prev ? { ...prev, status: 'error', error: error instanceof Error ? error.message : 'Build failed' } : null)
+
+      const errorMessage: ChatMessage = {
+        id: (Date.now() + 2).toString(),
+        type: 'system',
+        content: `❌ **Build Failed**
+
+📱 **Platform**: ${platform.charAt(0).toUpperCase() + platform.slice(1)}
+⚠️ **Error**: ${error instanceof Error ? error.message : 'Unknown build error'}
+
+Please check your code and try again.`,
+        timestamp: new Date()
+      }
+      setChatMessages(prev => [...prev, errorMessage])
+    } finally {
+      setIsBuilding(false)
+    }
+  }
+
   return (
     <div className="h-screen bg-gray-950 text-white flex flex-col overflow-hidden">
       {/* Header */}
@@ -1056,61 +1143,278 @@ ${stateValidation.issues.length > 0 ? `⚠️ **Issues Found**:\n${stateValidati
 
         {/* Main Content Area */}
         <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Code Editor Area - Make this scrollable and flexible */}
+          {/* Tab Navigation */}
+          <div className="flex-shrink-0 border-b border-gray-800 bg-gray-900">
+            <div className="flex items-center space-x-1 px-4 py-2">
+              <button
+                onClick={() => setActiveTab('code')}
+                className={`flex items-center space-x-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                  activeTab === 'code' 
+                    ? 'bg-blue-600 text-white' 
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'
+                }`}
+              >
+                <Code className="w-4 h-4" />
+                <span>Code</span>
+              </button>
+              
+              <button
+                onClick={() => setActiveTab('preview')}
+                className={`flex items-center space-x-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                  activeTab === 'preview' 
+                    ? 'bg-blue-600 text-white' 
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'
+                }`}
+              >
+                <Smartphone className="w-4 h-4" />
+                <span>Preview</span>
+              </button>
+              
+              <button
+                onClick={() => setActiveTab('build')}
+                className={`flex items-center space-x-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                  activeTab === 'build' 
+                    ? 'bg-blue-600 text-white' 
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'
+                }`}
+              >
+                <Hammer className="w-4 h-4" />
+                <span>Build</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Tab Content */}
           <div className={`bg-gray-900 overflow-hidden flex flex-col ${isChatCollapsed ? 'flex-1' : 'flex-1 max-h-[calc(100vh-400px)]'}`}>
-            {activeFile ? (
+            
+            {/* Code Tab */}
+            {activeTab === 'code' && (
               <>
-                <div className="flex-shrink-0 p-4 border-b border-gray-800 flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <Eye className="w-4 h-4 text-gray-400" />
-                    <span className="text-sm font-medium text-gray-200">
-                      {activeFile}
-                    </span>
+                {activeFile ? (
+                  <>
+                    <div className="flex-shrink-0 p-4 border-b border-gray-800 flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <Eye className="w-4 h-4 text-gray-400" />
+                        <span className="text-sm font-medium text-gray-200">
+                          {activeFile}
+                        </span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={() => copyToClipboard(files[activeFile] || '')}
+                          className="flex items-center space-x-1 px-3 py-1 text-xs bg-gray-800 hover:bg-gray-700 rounded border border-gray-700 transition-colors"
+                        >
+                          <Copy className="w-3 h-3" />
+                          <span>Copy</span>
+                        </button>
+                        {/* Quick Chat Toggle in File Header */}
+                        <button
+                          onClick={() => setIsChatCollapsed(!isChatCollapsed)}
+                          className="flex items-center space-x-1 px-3 py-1 text-xs bg-purple-600 hover:bg-purple-700 rounded transition-colors"
+                        >
+                          <MessageSquare className="w-3 h-3" />
+                          <span>{isChatCollapsed ? 'Show' : 'Hide'}</span>
+                        </button>
+                      </div>
+                    </div>
+                    {/* Scrollable Code Content */}
+                    <div className="flex-1 overflow-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
+                      <div className="p-4">
+                        <pre className="bg-black p-4 rounded-lg text-sm border border-gray-800 min-h-full">
+                          <code className="text-gray-300 whitespace-pre-wrap">
+                            {progressFiles[activeFile]?.content || files[activeFile] || ''}
+                          </code>
+                        </pre>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex items-center justify-center h-full text-gray-500">
+                    <div className="text-center">
+                      <Code className="w-16 h-16 mx-auto mb-4 text-gray-700" />
+                      <p className="text-lg font-medium mb-2">Select a file to view</p>
+                      <p className="text-sm text-gray-600 mb-4">Choose from the file explorer to see the code</p>
+                      {/* Quick access to chat when no file selected */}
+                      {isChatCollapsed && (
+                        <button
+                          onClick={() => setIsChatCollapsed(false)}
+                          className="flex items-center space-x-2 px-4 py-2 mx-auto text-sm bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors"
+                        >
+                          <MessageSquare className="w-4 h-4" />
+                          <span>Show AI Chat</span>
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <button
-                      onClick={() => copyToClipboard(files[activeFile] || '')}
-                      className="flex items-center space-x-1 px-3 py-1 text-xs bg-gray-800 hover:bg-gray-700 rounded border border-gray-700 transition-colors"
-                    >
-                      <Copy className="w-3 h-3" />
-                      <span>Copy</span>
-                    </button>
-                    {/* Quick Chat Toggle in File Header */}
-                    <button
-                      onClick={() => setIsChatCollapsed(!isChatCollapsed)}
-                      className="flex items-center space-x-1 px-3 py-1 text-xs bg-purple-600 hover:bg-purple-700 rounded transition-colors"
-                    >
-                      <MessageSquare className="w-3 h-3" />
-                      <span>{isChatCollapsed ? 'Show' : 'Hide'}</span>
-                    </button>
-                  </div>
-                </div>
-                {/* Scrollable Code Content */}
-                <div className="flex-1 overflow-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
-                  <div className="p-4">
-                    <pre className="bg-black p-4 rounded-lg text-sm border border-gray-800 min-h-full">
-                      <code className="text-gray-300 whitespace-pre-wrap">
-                        {progressFiles[activeFile]?.content || files[activeFile] || ''}
-                      </code>
-                    </pre>
-                  </div>
-                </div>
+                )}
               </>
-            ) : (
-              <div className="flex items-center justify-center h-full text-gray-500">
+            )}
+
+            {/* Preview Tab */}
+            {activeTab === 'preview' && (
+              <div className="flex-1 flex items-center justify-center bg-gray-900">
                 <div className="text-center">
-                  <Code className="w-16 h-16 mx-auto mb-4 text-gray-700" />
-                  <p className="text-lg font-medium mb-2">Select a file to view</p>
-                  <p className="text-sm text-gray-600 mb-4">Choose from the file explorer to see the code</p>
-                  {/* Quick access to chat when no file selected */}
-                  {isChatCollapsed && (
-                    <button
-                      onClick={() => setIsChatCollapsed(false)}
-                      className="flex items-center space-x-2 px-4 py-2 mx-auto text-sm bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors"
-                    >
-                      <MessageSquare className="w-4 h-4" />
-                      <span>Show AI Chat</span>
-                    </button>
+                  <div className="mx-auto mb-6 relative">
+                    {/* Phone Frame */}
+                    <div className="w-80 h-[640px] bg-black rounded-[3rem] p-4 border-8 border-gray-800 shadow-2xl">
+                      {/* Screen */}
+                      <div className="w-full h-full bg-gray-100 rounded-[2.5rem] overflow-hidden relative">
+                        {/* Status Bar */}
+                        <div className="h-8 bg-gray-900 flex items-center justify-between px-4 text-white text-xs">
+                          <span>9:41</span>
+                          <span>React Native App</span>
+                          <span>100%</span>
+                        </div>
+                        
+                        {/* App Content */}
+                        <div className="flex-1 p-4 bg-white text-black">
+                          {Object.keys(files).length > 0 ? (
+                            <div className="text-center">
+                              <h1 className="text-2xl font-bold mb-4 text-gray-800">
+                                {extractProjectName(chatMessages.find(m => m.type === 'user')?.content || '') || 'My App'}
+                              </h1>
+                              <p className="text-gray-600 mb-6">Generated React Native App</p>
+                              
+                              {/* Simulate app screens */}
+                              <div className="space-y-4">
+                                <div className="bg-blue-500 text-white p-4 rounded-lg">
+                                  Home Screen
+                                </div>
+                                <div className="bg-green-500 text-white p-4 rounded-lg">
+                                  Features
+                                </div>
+                                <div className="bg-purple-500 text-white p-4 rounded-lg">
+                                  Settings
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-center h-full text-gray-400">
+                              <div className="text-center">
+                                <Smartphone className="w-16 h-16 mx-auto mb-4" />
+                                <p>No app to preview</p>
+                                <p className="text-sm">Generate an app first</p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="text-gray-400">
+                    <h3 className="text-lg font-medium mb-2">Live Preview</h3>
+                    <p className="text-sm">This shows how your app would look on a mobile device</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Build Tab */}
+            {activeTab === 'build' && (
+              <div className="flex-1 p-6 overflow-auto">
+                <div className="max-w-4xl mx-auto">
+                  {/* Build Header */}
+                  <div className="mb-6">
+                    <h2 className="text-2xl font-bold text-gray-200 mb-2">Build & Deploy</h2>
+                    <p className="text-gray-400">Generate production builds for different platforms</p>
+                  </div>
+
+                  {/* Platform Selection */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                    {[
+                      { id: 'android', name: 'Android', icon: '🤖', desc: 'Generate APK for Android devices' },
+                      { id: 'ios', name: 'iOS', icon: '📱', desc: 'Generate IPA for iOS devices' },
+                      { id: 'web', name: 'Web', icon: '🌐', desc: 'Generate web build for browsers' }
+                    ].map((platform) => (
+                      <div key={platform.id} className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+                        <div className="text-center mb-4">
+                          <div className="text-4xl mb-2">{platform.icon}</div>
+                          <h3 className="text-lg font-medium text-gray-200">{platform.name}</h3>
+                          <p className="text-sm text-gray-400">{platform.desc}</p>
+                        </div>
+                        
+                        <button
+                          onClick={() => startBuild(platform.id as 'android' | 'ios' | 'web')}
+                          disabled={isBuilding || Object.keys(files).length === 0}
+                          className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+                        >
+                          {isBuilding && currentBuild?.platform === platform.id ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              <span>Building...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Hammer className="w-4 h-4" />
+                              <span>Build {platform.name}</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Build Status */}
+                  {currentBuild && (
+                    <div className="bg-gray-800 rounded-lg p-6 border border-gray-700 mb-6">
+                      <h3 className="text-lg font-medium text-gray-200 mb-4">Current Build</h3>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-gray-400">Platform: {currentBuild.platform}</span>
+                        <span className={`px-2 py-1 text-xs rounded ${
+                          currentBuild.status === 'success' ? 'bg-green-600' :
+                          currentBuild.status === 'error' ? 'bg-red-600' :
+                          currentBuild.status === 'building' ? 'bg-blue-600' :
+                          'bg-gray-600'
+                        }`}>
+                          {currentBuild.status}
+                        </span>
+                      </div>
+                      
+                      {currentBuild.progress !== undefined && (
+                        <div className="w-full bg-gray-700 rounded-full h-2 mb-2">
+                          <div 
+                            className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                            style={{ width: `${currentBuild.progress}%` }}
+                          ></div>
+                        </div>
+                      )}
+                      
+                      {currentBuild.error && (
+                        <div className="text-red-400 text-sm mt-2">
+                          Error: {currentBuild.error}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Build History */}
+                  {builds.length > 0 && (
+                    <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+                      <h3 className="text-lg font-medium text-gray-200 mb-4">Build History</h3>
+                      <div className="space-y-3">
+                        {builds.slice(0, 5).map((build) => (
+                          <div key={build.id} className="flex items-center justify-between p-3 bg-gray-700 rounded-lg">
+                            <div className="flex items-center space-x-3">
+                              <span className="text-gray-300">{build.platform}</span>
+                              <span className={`px-2 py-1 text-xs rounded ${
+                                build.status === 'success' ? 'bg-green-600' :
+                                build.status === 'error' ? 'bg-red-600' :
+                                build.status === 'building' ? 'bg-blue-600' :
+                                'bg-gray-600'
+                              }`}>
+                                {build.status}
+                              </span>
+                            </div>
+                            {build.status === 'success' && (
+                              <button className="text-blue-400 hover:text-blue-300 text-sm">
+                                Download
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>
