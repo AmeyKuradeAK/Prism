@@ -100,6 +100,17 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
   const [project, setProject] = useState<any>(null)
   const [autoSaveStatus, setAutoSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved')
   
+  // Project context persistence
+  const [projectContext, setProjectContext] = useState<{
+    projectType?: string
+    features: string[]
+    mainPrompt?: string
+    technologies: string[]
+  }>({
+    features: [],
+    technologies: ['React Native', 'Expo', 'TypeScript']
+  })
+  
   // UI state
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['app', 'components', 'assets']))
   const [selectedPlatforms, setSelectedPlatforms] = useState<Set<string>>(new Set(['android']))
@@ -254,6 +265,9 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
     e.preventDefault()
     if (!currentMessage.trim() || isGenerating) return
 
+    // Analyze and update project context before processing
+    analyzeAndUpdateContext(currentMessage.trim())
+
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
       type: 'user',
@@ -265,11 +279,15 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
     setCurrentMessage('')
     setIsGenerating(true)
 
-    // Add loading message
+    // Add loading message with context info
     const loadingMessage: ChatMessage = {
       id: (Date.now() + 1).toString(),
       type: 'assistant',
-      content: quickMode ? '⚡ Quick generating (base template only)...' : 'Generating your app...',
+      content: quickMode ? '⚡ Quick generating (base template only)...' : 
+        `🤖 Generating your ${projectContext.projectType || 'React Native'} app...
+        
+${projectContext.projectType ? `📱 **Project Type**: ${projectContext.projectType}` : ''}
+${projectContext.features.length > 0 ? `🎯 **Features**: ${projectContext.features.join(', ')}` : ''}`,
       timestamp: new Date(),
       isGenerating: true
     }
@@ -421,26 +439,81 @@ The base template is loaded and functional. Check your API key configuration in 
           messages: [
             {
               role: 'system',
-              content: `Generate React Native/Expo code files to enhance the existing base template based on the user's request. 
+              content: `You are a React Native/Expo expert. Generate ONLY React Native code files to enhance the existing base template based on the user's request.
 
-IMPORTANT: Format your response with clear file markers like this:
+CRITICAL: Your response MUST contain actual code files with this EXACT format:
+
 ===FILE: components/TodoList.tsx===
-// Your React Native component code here
+import React, { useState } from 'react';
+import { View, Text, TouchableOpacity, FlatList, StyleSheet } from 'react-native';
+
+export default function TodoList() {
+  const [todos, setTodos] = useState([
+    { id: 1, text: 'Sample todo', completed: false }
+  ]);
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Todo List</Text>
+      <FlatList
+        data={todos}
+        renderItem={({ item }) => (
+          <View style={styles.todoItem}>
+            <Text>{item.text}</Text>
+          </View>
+        )}
+      />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, padding: 20 },
+  title: { fontSize: 24, fontWeight: 'bold', marginBottom: 20 },
+  todoItem: { padding: 10, borderBottomWidth: 1, borderColor: '#ccc' }
+});
 ===END===
 
 ===FILE: app/(tabs)/todos.tsx===
-// Your screen code here  
+import React from 'react';
+import { SafeAreaView } from 'react-native';
+import TodoList from '../../components/TodoList';
+
+export default function TodosScreen() {
+  return (
+    <SafeAreaView style={{ flex: 1 }}>
+      <TodoList />
+    </SafeAreaView>
+  );
+}
 ===END===
 
-Only return NEW or MODIFIED files that add functionality. Use modern React Native patterns with TypeScript.`
+IMPORTANT RULES:
+1. Use the EXACT ===FILE: path=== and ===END=== markers
+2. Generate working React Native/TypeScript code
+3. Only create NEW files or replace existing ones
+4. Use proper imports and exports
+5. Include functional components, not just explanations
+
+${projectContext.projectType ? `
+PROJECT CONTEXT:
+- Project Type: ${projectContext.projectType}
+- Existing Features: ${projectContext.features.join(', ')}
+- Technologies: ${projectContext.technologies.join(', ')}
+- Main Concept: ${projectContext.mainPrompt || 'Not specified'}
+
+MAINTAIN CONSISTENCY: Keep building on the existing ${projectContext.projectType} concept. Don't switch to different app types unless explicitly requested.
+` : ''}`
             },
             {
               role: 'user',
-              content: prompt
+              content: `${prompt}
+
+Please generate React Native files that add this functionality to the base template. ${projectContext.projectType ? `Remember this is a ${projectContext.projectType} app with features: ${projectContext.features.join(', ')}.` : ''} Focus on creating components and screens that implement the requested features. Use the ===FILE: path=== format for each file.`
             }
           ],
-          temperature: 0.7,
-          max_tokens: 4000
+          temperature: 0.3,
+          max_tokens: 6000
         })
       })
       
@@ -464,7 +537,8 @@ The base template is loaded and functional. AI enhancement failed, but you can s
       }
       
       const aiData = await aiResponse.json()
-      console.log('🤖 AI Response received:', aiData.choices?.[0]?.message?.content?.substring(0, 200))
+      const fullResponse = aiData.choices?.[0]?.message?.content || ''
+      console.log('🤖 AI Response received:', fullResponse.substring(0, 300))
       
       // Step 4: Parse AI-generated files
       setChatMessages(prev => prev.map(msg => 
@@ -474,7 +548,12 @@ The base template is loaded and functional. AI enhancement failed, but you can s
               content: `🔄 Processing AI response and queueing merge...
 
 🐚 $ echo "Parsing AI response..."
-🐚 $ wc -c response.txt  # ${aiData.choices?.[0]?.message?.content?.length || 0} characters`
+🐚 $ wc -c response.txt  # ${fullResponse.length} characters
+
+🔍 **AI Response Preview**:
+\`\`\`
+${fullResponse.substring(0, 500)}${fullResponse.length > 500 ? '...' : ''}
+\`\`\``
             }
           : msg
       ))
@@ -482,16 +561,18 @@ The base template is loaded and functional. AI enhancement failed, but you can s
       const { parseCodeFromResponse } = await import('@/lib/utils/code-parser')
       
       // DEBUG: Log the full AI response for debugging
-      console.log('🔍 FULL AI RESPONSE:', aiData.choices?.[0]?.message?.content)
+      console.log('🔍 FULL AI RESPONSE:')
+      console.log(fullResponse)
+      console.log('🔍 Response length:', fullResponse.length)
       
-      const aiGeneratedFiles = parseCodeFromResponse(aiData.choices?.[0]?.message?.content || '')
+      const aiGeneratedFiles = parseCodeFromResponse(fullResponse)
       
       console.log(`🔄 Step 4: Parsed ${aiGeneratedFiles.length} AI-generated files`)
       console.log('🔍 DEBUG - Parsed files:', aiGeneratedFiles.map(f => ({ path: f.path, contentLength: f.content.length })))
       
       if (aiGeneratedFiles.length === 0) {
         console.warn('⚠️ WARNING: No AI files were parsed from the response!')
-        console.log('🔍 Response content preview:', aiData.choices?.[0]?.message?.content?.substring(0, 500))
+        console.log('🔍 Response content preview:', fullResponse.substring(0, 1000))
         
         // Show warning in chat but continue with base template
         setChatMessages(prev => prev.map(msg => 
@@ -502,12 +583,17 @@ The base template is loaded and functional. AI enhancement failed, but you can s
 
 ⚠️ **AI Generation Warning**: The AI provided a response, but no code files could be extracted from it.
 
-🔍 **Debug Info**: The response was received but the parser couldn't find recognizable file patterns. This might be because:
-- The AI response format was unexpected
+🔍 **AI Response Was**:
+\`\`\`
+${fullResponse.substring(0, 800)}${fullResponse.length > 800 ? '\n...(truncated)' : ''}
+\`\`\`
+
+**Possible Issues**:
+- The AI response format was unexpected (no ===FILE: markers)
 - The prompt needs to be more specific about generating files
 - The AI provided explanations instead of code
 
-You can still use the base template, or try a more specific prompt like "Generate a TodoList component for React Native with proper file markers".`,
+You can still use the base template, or try a more specific prompt like: "Generate a TodoList component for React Native with proper ===FILE: markers".`,
                 isGenerating: false 
               }
             : msg
@@ -662,8 +748,18 @@ The base template is still loaded and functional. You can:
       if (processedPaths.has(path)) return
       processedPaths.add(path)
       
-      const cleanPath = path.startsWith('/') ? path.slice(1) : path
+      // Clean the path properly - remove FILE: prefixes and normalize
+      let cleanPath = path
+        .replace(/^FILE:\s*/i, '') // Remove FILE: prefix
+        .replace(/^📁\s*FILE:\s*/i, '') // Remove folder emoji + FILE: prefix
+        .replace(/^📁\s*/i, '') // Remove folder emoji
+        .replace(/^\w+:\s*/i, '') // Remove any other prefixes
+        
+      cleanPath = cleanPath.startsWith('/') ? cleanPath.slice(1) : cleanPath
       const parts = cleanPath.split('/')
+      
+      // Skip if path is empty or invalid after cleaning
+      if (!cleanPath || parts.length === 0) return
       
       let folderName = ''
       
@@ -701,8 +797,12 @@ The base template is still loaded and functional. You can:
       } else if (parts[0] === 'scripts') {
         folderName = '⚡ scripts'
       } else {
-        // Other folders get a generic folder icon
-        folderName = `📁 ${parts[0]}`
+        // Other folders get a generic folder icon - but clean the name
+        const cleanFolderName = parts[0]
+          .replace(/^FILE:\s*/i, '')
+          .replace(/^📁\s*/i, '')
+          .replace(/^\w+:\s*/i, '')
+        folderName = `📁 ${cleanFolderName}`
       }
       
       if (!organized[folderName]) {
@@ -1048,6 +1148,82 @@ ${buildStatus.artifacts?.map((artifact: any) =>
     setTimeout(poll, 10000)
   }
 
+  // Analyze and update project context from user prompts
+  const analyzeAndUpdateContext = (userPrompt: string) => {
+    const prompt = userPrompt.toLowerCase()
+    
+    // Detect project type from keywords
+    let detectedType = projectContext.projectType
+    if (!detectedType) {
+      if (prompt.includes('ecommerce') || prompt.includes('e-commerce') || prompt.includes('shop') || prompt.includes('store') || prompt.includes('product') || prompt.includes('cart')) {
+        detectedType = 'eCommerce'
+      } else if (prompt.includes('todo') || prompt.includes('task') || prompt.includes('productivity')) {
+        detectedType = 'Todo/Productivity'
+      } else if (prompt.includes('social') || prompt.includes('chat') || prompt.includes('message') || prompt.includes('friend')) {
+        detectedType = 'Social/Messaging'
+      } else if (prompt.includes('weather') || prompt.includes('forecast')) {
+        detectedType = 'Weather'
+      } else if (prompt.includes('game') || prompt.includes('puzzle') || prompt.includes('score')) {
+        detectedType = 'Game'
+      } else if (prompt.includes('fitness') || prompt.includes('health') || prompt.includes('workout')) {
+        detectedType = 'Health/Fitness'
+      } else if (prompt.includes('news') || prompt.includes('article') || prompt.includes('blog')) {
+        detectedType = 'News/Content'
+      }
+    }
+    
+    // Extract features from prompt
+    const newFeatures: string[] = []
+    const featureKeywords = {
+      'cart': 'Shopping Cart',
+      'wishlist': 'Wishlist',
+      'checkout': 'Checkout',
+      'payment': 'Payment',
+      'product': 'Product Catalog',
+      'search': 'Search',
+      'filter': 'Filtering',
+      'category': 'Categories',
+      'review': 'Reviews',
+      'rating': 'Ratings',
+      'profile': 'User Profile',
+      'authentication': 'Authentication',
+      'login': 'User Login',
+      'signup': 'User Registration',
+      'notification': 'Notifications',
+      'push': 'Push Notifications',
+      'map': 'Maps',
+      'location': 'Location Services',
+      'camera': 'Camera',
+      'photo': 'Photo Gallery',
+      'chat': 'Chat/Messaging',
+      'social': 'Social Features',
+      'share': 'Social Sharing'
+    }
+    
+    Object.entries(featureKeywords).forEach(([keyword, feature]) => {
+      if (prompt.includes(keyword) && !projectContext.features.includes(feature)) {
+        newFeatures.push(feature)
+      }
+    })
+    
+    // Update context if changes detected
+    if (detectedType !== projectContext.projectType || newFeatures.length > 0) {
+      setProjectContext(prev => ({
+        ...prev,
+        projectType: detectedType || prev.projectType,
+        features: [...prev.features, ...newFeatures],
+        mainPrompt: prev.mainPrompt || userPrompt,
+        technologies: [...new Set([...prev.technologies, ...newFeatures.includes('Maps') ? ['React Native Maps'] : [], ...newFeatures.includes('Camera') ? ['Expo Camera'] : []])]
+      }))
+      
+      console.log('📝 Updated project context:', {
+        type: detectedType,
+        features: [...projectContext.features, ...newFeatures],
+        newFeatures
+      })
+    }
+  }
+
   return (
     <div className="h-screen bg-gray-950 text-white flex flex-col overflow-hidden">
       {/* Header */}
@@ -1060,7 +1236,12 @@ ${buildStatus.artifacts?.map((artifact: any) =>
               </div>
               <div>
                 <h1 className="text-xl font-bold">React Native Builder</h1>
-                <p className="text-sm text-gray-400">AI-powered app generator</p>
+                <p className="text-sm text-gray-400">
+                  {projectContext.projectType ? 
+                    `${projectContext.projectType} App${projectContext.features.length > 0 ? ` • ${projectContext.features.length} features` : ''}` : 
+                    'AI-powered app generator'
+                  }
+                </p>
               </div>
             </div>
           </div>
@@ -1182,6 +1363,23 @@ ${stateValidation.issues.length > 0 ? `⚠️ **Issues Found**:\n${stateValidati
             >
               <Settings className="w-4 h-4" />
               <span>Debug Tree</span>
+            </button>
+
+            {/* Test Generation Button */}
+            <button
+              onClick={async () => {
+                console.log('🧪 Quick AI test generation...')
+                setCurrentMessage('Create a simple TodoList component with add and delete functionality')
+                
+                // Trigger generation with specific test prompt
+                const testEvent = new Event('submit') as any
+                handleSendMessage(testEvent, false)
+              }}
+              disabled={isGenerating}
+              className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            >
+              <Zap className="w-4 h-4" />
+              <span>Test AI</span>
             </button>
           </div>
         </div>

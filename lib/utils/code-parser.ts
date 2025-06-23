@@ -215,6 +215,10 @@ function normalizeFilePath(path: string): string {
     .replace(/^["']|["']$/g, '') // Remove quotes
     .replace(/^\/+|\/+$/g, '') // Remove leading/trailing slashes
     .replace(/\/+/g, '/') // Normalize multiple slashes
+    .replace(/^FILE:\s*/i, '') // Remove FILE: prefix
+    .replace(/^📁\s*FILE:\s*/i, '') // Remove folder emoji + FILE: prefix
+    .replace(/^📁\s*/i, '') // Remove folder emoji
+    .replace(/^\w+:\s*/i, '') // Remove any other prefixes like "Path:", "File:", etc.
     .trim()
 }
 

@@ -139,11 +139,17 @@ class ClientMemFS {
     for (const [path, content] of Object.entries(aiFiles)) {
       const strategy = this.getMergeStrategy(path)
       console.log(`🔄 Processing ${path} → ${strategy.action} (${strategy.reason})`)
+      console.log(`   Content length: ${content.length} chars`)
+      console.log(`   File exists in base: ${this.baseFiles[path] !== undefined}`)
+      console.log(`   File exists in merged: ${this.mergedFiles[path] !== undefined}`)
       
       switch (strategy.action) {
         case 'replace':
           const wasExisting = this.mergedFiles[path] !== undefined
+          console.log(`   Before replace: mergedFiles has ${Object.keys(this.mergedFiles).length} files`)
           this.mergedFiles[path] = content
+          console.log(`   After replace: mergedFiles has ${Object.keys(this.mergedFiles).length} files`)
+          console.log(`   Successfully added "${path}" with ${content.length} chars`)
           
           if (wasExisting) {
             replacedCount++
@@ -249,13 +255,15 @@ class ClientMemFS {
     await this._simulateShellCommand(`mkdir -p /tmp/ai-files`)
     await this._simulateShellCommand(`cd /tmp/ai-files`)
     
-    // Convert AI files to FileSystem format
+    // Convert AI files to FileSystem format with path normalization
     const aiFiles: FileSystem = {}
     for (const file of aiGeneratedFiles) {
       if (file.path && file.content) {
-        // Ensure path starts with /
+        // Normalize path to match base template format (WITH leading slash)
         const normalizedPath = file.path.startsWith('/') ? file.path : `/${file.path}`
         aiFiles[normalizedPath] = file.content
+        
+        console.log(`📁 Normalizing AI file path: "${file.path}" → "${normalizedPath}"`)
         
         // Simulate creating AI file
         await this._simulateShellCommand(`touch ${normalizedPath}`, `AI file: ${normalizedPath} (${file.content.length} chars)`)
@@ -264,6 +272,8 @@ class ClientMemFS {
     
     this.aiFiles = aiFiles
     console.log('🔄 AI files to merge:', Object.keys(aiFiles))
+    console.log('🔍 Base files available:', Object.keys(this.baseFiles))
+    console.log('🔍 Merged files before AI merge:', Object.keys(this.mergedFiles))
     
     // Use safe merge instead of manual merge
     await this.safeMergeIntoVol(aiFiles)
