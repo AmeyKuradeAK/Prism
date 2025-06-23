@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
+import { exec } from 'child_process'
+import { promisify } from 'util'
+import fs from 'fs/promises'
+import path from 'path'
+
+const execAsync = promisify(exec)
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,83 +21,155 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Files data is required' }, { status: 400 })
     }
 
-    if (!platform || !['android', 'ios', 'all'].includes(platform)) {
-      return NextResponse.json({ error: 'Valid platform is required (android, ios, all)' }, { status: 400 })
+    if (!platform || !['android', 'ios', 'web'].includes(platform)) {
+      return NextResponse.json({ error: 'Valid platform is required (android, ios, web)' }, { status: 400 })
     }
 
-    // 🚀 React Native V0: EAS Build API Integration
-    console.log('🔨 Starting EAS Build...')
+    // Check for EXPO_TOKEN environment variable
+    const expoToken = process.env.EXPO_TOKEN
+    if (!expoToken) {
+      return NextResponse.json({ 
+        error: 'EXPO_TOKEN not configured. Please add your Expo access token to environment variables.',
+        setup: 'Visit https://expo.dev/accounts/[account]/settings/access-tokens to create a token'
+      }, { status: 500 })
+    }
+
+    console.log('🔨 Starting REAL EAS Build...')
     console.log(`📱 Project: ${projectName}`)
     console.log(`🎯 Platform: ${platform}`)
     console.log(`📄 Files: ${Object.keys(files).length}`)
 
-    // In a real implementation, this would:
-    // 1. Create a temporary Expo project
-    // 2. Write files to temp directory
-    // 3. Configure eas.json for build
-    // 4. Run `eas build --platform ${platform}` via EAS Build API
-    // 5. Return build ID and polling URL
+    // Create temporary directory for the project
+    const tempDir = path.join(process.cwd(), 'temp-builds', `${projectName}-${Date.now()}`)
+    await fs.mkdir(tempDir, { recursive: true })
 
-    // For demo purposes, we'll simulate the EAS Build process
-    const buildId = `build-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-    
-    // Mock EAS Build configuration
-    const easConfig = {
-      cli: {
-        version: ">= 7.8.0"
-      },
-      build: {
-        development: {
-          developmentClient: true,
-          distribution: "internal"
-        },
-        preview: {
-          distribution: "internal"
-        },
-        production: {}
-      },
-      submit: {
-        production: {}
+    try {
+      // Write all files to temporary directory
+      console.log('📝 Writing project files...')
+      for (const [filePath, content] of Object.entries(files)) {
+        const fullPath = path.join(tempDir, filePath.startsWith('/') ? filePath.slice(1) : filePath)
+        const dir = path.dirname(fullPath)
+        
+        // Create directory if it doesn't exist
+        await fs.mkdir(dir, { recursive: true })
+        
+        // Write file content
+        if (typeof content === 'string') {
+          await fs.writeFile(fullPath, content, 'utf-8')
+        }
       }
-    }
 
-    // Add eas.json to files if not present
-    if (!files['eas.json']) {
-      files['eas.json'] = JSON.stringify(easConfig, null, 2)
-    }
+      // Ensure eas.json exists with proper configuration
+      const easJsonPath = path.join(tempDir, 'eas.json')
+      const easConfig = {
+        cli: {
+          version: ">= 7.8.0"
+        },
+        build: {
+          development: {
+            developmentClient: true,
+            distribution: "internal"
+          },
+          preview: {
+            distribution: "internal",
+            android: {
+              buildType: "apk"
+            }
+          },
+          production: {
+            android: {
+              buildType: "apk"
+            }
+          }
+        }
+      }
 
-    // Extract dependencies for build validation
-    const packageJson = files['package.json']
-    const dependencies = packageJson ? JSON.parse(packageJson).dependencies : {}
-    
-    // Validate native modules for build
-    const nativeModules = extractNativeModules(dependencies)
-    
-    console.log(`🔧 Native modules detected: ${nativeModules.join(', ')}`)
-    console.log(`✅ Build queued: ${buildId}`)
+      await fs.writeFile(easJsonPath, JSON.stringify(easConfig, null, 2))
 
-    // Initialize build status for polling
-    const { initializeBuildStatus } = await import('@/lib/eas-build/build-status')
-    initializeBuildStatus(buildId, platform)
+      // Set environment variables for EAS CLI
+      const env = {
+        ...process.env,
+        EXPO_TOKEN: expoToken,
+        EAS_NO_VCS: '1', // Skip VCS checks
+        EAS_BUILD_AUTOCOMMIT: '1', // Auto-commit changes
+      }
 
-    return NextResponse.json({
-      success: true,
-      buildId,
-      buildUrl: `https://expo.dev/accounts/${userId}/projects/${projectName}/builds/${buildId}`,
-      platform,
-      status: 'in-queue',
-      nativeModules,
-      estimatedDuration: '5-10 minutes',
-      queuePosition: Math.floor(Math.random() * 5) + 1,
-      metadata: {
-        projectName,
+      console.log('🚀 Executing EAS Build command...')
+      
+      // Execute EAS build command
+      const buildProfile = 'preview' // Use preview profile for faster builds
+      const easCommand = `npx eas-cli build --platform ${platform} --profile ${buildProfile} --non-interactive --no-wait --json`
+      
+      console.log(`Running: ${easCommand}`)
+
+      const { stdout, stderr } = await execAsync(easCommand, {
+        cwd: tempDir,
+        env,
+        timeout: 60000 // 1 minute timeout
+      })
+
+      console.log('EAS Build stdout:', stdout)
+      if (stderr) {
+        console.log('EAS Build stderr:', stderr)
+      }
+
+      // Parse the JSON output from EAS CLI
+      let buildResult
+      try {
+        const jsonMatch = stdout.match(/\{[\s\S]*\}/)
+        if (jsonMatch) {
+          buildResult = JSON.parse(jsonMatch[0])
+        } else {
+          throw new Error('No JSON output from EAS CLI')
+        }
+      } catch (parseError) {
+        // Extract build ID from stdout if possible
+        const buildIdMatch = stdout.match(/Build ID: ([a-f0-9-]+)/i) || stdout.match(/([a-f0-9-]{36})/i)
+        if (buildIdMatch) {
+          buildResult = {
+            id: buildIdMatch[1],
+            status: 'in-queue',
+            platform: platform
+          }
+        } else {
+          throw new Error('Could not extract build information from EAS CLI output')
+        }
+      }
+
+      console.log('✅ Real EAS Build started:', buildResult)
+
+      const buildId = buildResult.id || `build-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+
+      return NextResponse.json({
+        success: true,
+        buildId,
+        buildUrl: `https://expo.dev/accounts/[account]/projects/${projectName}/builds/${buildId}`,
         platform,
-        userId,
-        createdAt: new Date().toISOString(),
-        expoSdkVersion: '53.0.0'
-      },
-      message: `EAS Build started for ${platform}`
-    })
+        status: buildResult.status || 'in-queue',
+        estimatedDuration: '5-15 minutes',
+        queuePosition: buildResult.queuePosition || 1,
+        metadata: {
+          projectName,
+          platform,
+          userId,
+          createdAt: new Date().toISOString(),
+          expoSdkVersion: '53.0.0'
+        },
+        message: `Real EAS Build started for ${platform}`,
+        easOutput: stdout
+      })
+
+    } finally {
+      // Clean up temporary directory
+      setTimeout(async () => {
+        try {
+          await fs.rmdir(tempDir, { recursive: true })
+          console.log(`🧹 Cleaned up temp directory: ${tempDir}`)
+        } catch (cleanupError) {
+          console.error('Failed to cleanup temp directory:', cleanupError)
+        }
+      }, 5000) // Wait 5 seconds before cleanup
+    }
 
   } catch (error) {
     console.error('❌ EAS Build failed:', error)

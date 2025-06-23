@@ -1,75 +1,100 @@
-# 🔑 Get Your Expo Access Token
+# 🔑 Expo Token Setup Guide
 
-## Step-by-Step Instructions
+## Real EAS Build Integration
 
-### 1. **Open Expo Dashboard**
-Visit: https://expo.dev/accounts/ameykuradeak/settings/access-tokens
+This project now uses **REAL EAS Build** instead of mock simulations. To enable building actual APK/IPA files, you need to configure your Expo access token.
 
-### 2. **Create New Token**
-- Click **"Create Token"** button
-- **Name**: `Prism App Builder`
-- **Expiration**: Choose your preference (recommend 90 days or No expiration)
-- **Permissions**: Select **"All permissions"** 
+## 📋 Quick Setup
 
-### 3. **Copy Token**
-- Click **"Create"**
-- **IMPORTANT**: Copy the token immediately (it won't be shown again)
-- It should look like: `expo_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
+1. **Get Your Expo Token**
+   - Visit: https://expo.dev/accounts/[your-account]/settings/access-tokens
+   - Click "Create Token"
+   - Give it a name like "React Native Builder"
+   - Copy the token (starts with `expo_`)
 
-### 4. **Add to Environment**
-- Open your `.env` file
-- Add this line: `EXPO_TOKEN=your_copied_token_here`
-- Save the file
+2. **Add to Environment Variables**
+   ```bash
+   # Add to .env.local
+   EXPO_TOKEN=expo_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+   ```
 
-### 5. **Restart Development Server**
+3. **Restart Your Development Server**
+   ```bash
+   npm run dev
+   ```
+
+## 🎯 What This Enables
+
+- **Real APK/IPA Generation**: Actual build files you can install on devices
+- **Expo Cloud Infrastructure**: Builds run on Expo's managed build servers
+- **Real Build Monitoring**: Live status updates from actual build processes
+- **Production Ready**: Same build system used by production React Native apps
+
+## 📱 Build Process
+
+When you click "Build" in the app:
+
+1. **Project Creation**: Your generated files are written to a temporary project
+2. **EAS Configuration**: Proper `eas.json` is generated with build profiles
+3. **Real EAS Build**: `eas build` command is executed with your token
+4. **Live Monitoring**: Real-time status updates from Expo's build servers
+5. **Download Links**: Direct links to APK/IPA files when complete
+
+## 🔧 EAS CLI Commands Used
+
 ```bash
-npm run dev
+# Start a build
+npx eas-cli build --platform android --profile preview --non-interactive --no-wait --json
+
+# Check build status
+npx eas-cli build:view [BUILD_ID] --json
 ```
 
-### 6. **Test Build**
-1. Generate an app in Prism
-2. Click "Build" 
-3. Select "Android APK"
-4. Monitor real-time build progress!
+## ⚡ Build Profiles
 
-## Alternative: Use Environment Variable Directly
+- **Preview**: Fast builds for testing (APK format for Android)
+- **Development**: Development client builds
+- **Production**: Production-ready builds
 
-If you prefer, you can also set the token as a system environment variable:
+## 🚨 Requirements
 
-**Windows:**
-```bash
-setx EXPO_TOKEN "your_token_here"
-```
+- **Expo Account**: Free Expo account required
+- **EXPO_TOKEN**: Valid access token in environment variables
+- **Build Credits**: Expo provides free build credits, then paid plans
 
-**macOS/Linux:**
-```bash
-export EXPO_TOKEN="your_token_here"
-```
+## 🆘 Troubleshooting
 
-## Troubleshooting
+### "EXPO_TOKEN not configured"
+- Make sure you added the token to `.env.local`
+- Restart your development server
+- Check the token starts with `expo_`
 
-### "EXPO_TOKEN required" Error
-- Ensure token is correctly added to `.env`
-- Restart the development server
-- Check for typos in variable name
+### "Authentication failed"
+- Your token might be expired or invalid
+- Generate a new token from Expo dashboard
+- Ensure the token has the correct permissions
 
-### "Failed to authenticate" Error  
-- Token may be expired - create a new one
-- Ensure token has correct permissions
-- Try logging out and back in: `eas logout && eas login`
+### "Build not found"
+- Build might have been canceled or failed
+- Check the Expo dashboard for build details
+- Build IDs are only valid for active builds
 
-### Token Not Working
-- Verify the token on Expo dashboard
-- Make sure it has "Build" permissions
-- Check if it's expired
+### "EAS CLI not found"
+- The system will automatically install EAS CLI
+- Make sure you have Node.js and npm installed
+- Check your network connection
 
-## What Happens Next?
+## 📖 Additional Resources
 
-Once your token is set up:
-- ✅ Real Android APK builds (5-15 minutes)
-- ✅ Real iOS IPA builds (10-20 minutes, requires Apple Developer)
-- ✅ Live build monitoring with logs
-- ✅ Direct download links for compiled apps
-- ✅ Production-ready mobile applications
+- [Expo EAS Build Documentation](https://docs.expo.dev/build/introduction/)
+- [Access Token Management](https://docs.expo.dev/accounts/programmatic-access/)
+- [Build Configuration](https://docs.expo.dev/build-reference/eas-json/)
+- [Expo Status Page](https://status.expo.dev/)
 
-Your apps will be built on Expo's cloud infrastructure and you'll get real, installable APK and IPA files! 
+## 🎉 Ready to Build!
+
+Once your token is configured, the "Build" tab will create real Android APK and iOS IPA files that you can download and install on devices. This is the same professional build system used by thousands of production React Native apps!
+
+---
+
+**Note**: The first build might take longer as dependencies are cached. Subsequent builds will be faster. 

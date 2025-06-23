@@ -185,8 +185,8 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
     if (chatRef.current) {
       // Add a small delay to ensure DOM has updated
       setTimeout(() => {
-        if (chatRef.current) {
-          chatRef.current.scrollTop = chatRef.current.scrollHeight
+    if (chatRef.current) {
+      chatRef.current.scrollTop = chatRef.current.scrollHeight
         }
       }, 100)
     }
@@ -378,8 +378,8 @@ ${projectContext.features.length > 0 ? `🎯 **Features**: ${projectContext.feat
           msg.isGenerating 
             ? { 
                 ...msg, 
-                content: `📦 Base template loaded with ${Object.keys(baseFiles).length} files!
-
+                content: `📦 Base template loaded with ${Object.keys(baseFiles).length} files! 
+                
 ⚠️ **AI Generation Disabled**: Missing encryption key in environment variables.
 
 The base template is loaded and functional. To enable AI enhancements, add the encryption keys to your \`.env.local\` file and restart the server.`,
@@ -931,7 +931,7 @@ The base template is still loaded and functional. You can:
       
       // Only add if not already in the array (prevent duplicates)
       if (!organized[folderName].includes(path)) {
-        organized[folderName].push(path)
+      organized[folderName].push(path)
       }
     })
     
@@ -1417,12 +1417,12 @@ ${buildStatus.artifacts?.map((artifact: any) =>
       {/* Header */}
       <div className="flex-shrink-0 px-6 py-4 border-b border-gray-800 bg-gray-900">
         <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-3">
               <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
                 <Code className="w-4 h-4 text-white" />
-              </div>
-              <div>
+            </div>
+            <div>
                 <h1 className="text-xl font-bold">React Native Builder</h1>
                 <p className="text-sm text-gray-400">
                   {projectContext.projectType ? 
@@ -1430,12 +1430,12 @@ ${buildStatus.artifacts?.map((artifact: any) =>
                     'AI-powered app generator'
                   }
                 </p>
-              </div>
             </div>
           </div>
-
+        </div>
+        
           {/* Action Buttons */}
-          <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-3">
             {/* Save Button */}
             <button
               onClick={saveProject}
@@ -1462,37 +1462,37 @@ ${buildStatus.artifacts?.map((artifact: any) =>
             </button>
 
             {/* Download Button */}
-            <button
-              onClick={downloadProject}
-              disabled={Object.keys(files).length === 0}
-              className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-            >
-              <Download className="w-4 h-4" />
-              <span>Download</span>
-            </button>
-
+          <button
+            onClick={downloadProject}
+            disabled={Object.keys(files).length === 0}
+            className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+          >
+            <Download className="w-4 h-4" />
+            <span>Download</span>
+          </button>
+          
             {/* Load Template Button */}
-            <button
+          <button
               onClick={handleLoadTemplate}
               disabled={isGenerating}
-              className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-lg hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-            >
+            className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-lg hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+          >
               <Package className="w-4 h-4" />
               <span>Load Template</span>
-            </button>
-
+          </button>
+          
             {/* Chat Toggle Button */}
-            <button
+          <button
               onClick={() => setIsChatCollapsed(!isChatCollapsed)}
               className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-all"
-            >
+          >
               <MessageSquare className="w-4 h-4" />
               <span>{isChatCollapsed ? 'Show Chat' : 'Hide Chat'}</span>
               {isChatCollapsed ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            </button>
-
+          </button>
+          
             {/* Debug File Tree Button */}
-            <button
+          <button
               onClick={async () => {
                 console.log('🔍 Debug: Showing current file tree state...')
                 
@@ -1564,20 +1564,20 @@ ${stateValidation.artifacts && stateValidation.artifacts.length > 0 ? `🚨 **FI
                 const testEvent = new Event('submit') as any
                 handleSendMessage(testEvent, false)
               }}
-              disabled={isGenerating}
+            disabled={isGenerating}
               className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-            >
+          >
               <Zap className="w-4 h-4" />
               <span>Test AI</span>
-            </button>
-
+          </button>
+          
             {/* Clean Files Button */}
-            <button
-              onClick={async () => {
+          <button
+            onClick={async () => {
                 console.log('🧹 Manually cleaning all files...')
                 
-                try {
-                  const clientMemFS = (await import('@/lib/utils/client-memfs')).default
+              try {
+                const clientMemFS = (await import('@/lib/utils/client-memfs')).default
                   
                   // Get current files and clean them
                   const currentFiles = clientMemFS.getAllFiles()
@@ -1611,8 +1611,8 @@ These paths contain FILE: prefixes or emoji artifacts that should be cleaned.` :
                   if (isChatCollapsed) {
                     setIsChatCollapsed(false)
                   }
-                  
-                } catch (error) {
+                
+              } catch (error) {
                   console.error('Clean failed:', error)
                   const errorMessage: ChatMessage = {
                     id: Date.now().toString(),
@@ -1628,7 +1628,7 @@ These paths contain FILE: prefixes or emoji artifacts that should be cleaned.` :
             >
               <RefreshCw className="w-4 h-4" />
               <span>Clean Files</span>
-            </button>
+          </button>
           </div>
         </div>
       </div>
@@ -1785,23 +1785,23 @@ These paths contain FILE: prefixes or emoji artifacts that should be cleaned.` :
             {/* Code Tab */}
             {activeTab === 'code' && (
               <>
-                {activeFile ? (
-                  <>
+            {activeFile ? (
+              <>
                     <div className="flex-shrink-0 p-4 border-b border-gray-800 flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <Eye className="w-4 h-4 text-gray-400" />
+                    <span className="text-sm font-medium text-gray-200">
+                      {activeFile}
+                    </span>
+                  </div>
                       <div className="flex items-center space-x-2">
-                        <Eye className="w-4 h-4 text-gray-400" />
-                        <span className="text-sm font-medium text-gray-200">
-                          {activeFile}
-                        </span>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <button
-                          onClick={() => copyToClipboard(files[activeFile] || '')}
-                          className="flex items-center space-x-1 px-3 py-1 text-xs bg-gray-800 hover:bg-gray-700 rounded border border-gray-700 transition-colors"
-                        >
-                          <Copy className="w-3 h-3" />
-                          <span>Copy</span>
-                        </button>
+                  <button
+                    onClick={() => copyToClipboard(files[activeFile] || '')}
+                    className="flex items-center space-x-1 px-3 py-1 text-xs bg-gray-800 hover:bg-gray-700 rounded border border-gray-700 transition-colors"
+                  >
+                    <Copy className="w-3 h-3" />
+                    <span>Copy</span>
+                  </button>
                         {/* Quick Chat Toggle in File Header */}
                         <button
                           onClick={() => setIsChatCollapsed(!isChatCollapsed)}
@@ -1810,24 +1810,24 @@ These paths contain FILE: prefixes or emoji artifacts that should be cleaned.` :
                           <MessageSquare className="w-3 h-3" />
                           <span>{isChatCollapsed ? 'Show' : 'Hide'}</span>
                         </button>
-                      </div>
+                </div>
                     </div>
                     {/* Scrollable Code Content */}
                     <div className="flex-1 overflow-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
-                      <div className="p-4">
+                  <div className="p-4">
                         <pre className="bg-black p-4 rounded-lg text-sm border border-gray-800 min-h-full">
                           <code className="text-gray-300 whitespace-pre-wrap">
-                            {progressFiles[activeFile]?.content || files[activeFile] || ''}
-                          </code>
-                        </pre>
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <div className="flex items-center justify-center h-full text-gray-500">
-                    <div className="text-center">
-                      <Code className="w-16 h-16 mx-auto mb-4 text-gray-700" />
-                      <p className="text-lg font-medium mb-2">Select a file to view</p>
+                        {progressFiles[activeFile]?.content || files[activeFile] || ''}
+                      </code>
+                    </pre>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center justify-center h-full text-gray-500">
+                <div className="text-center">
+                  <Code className="w-16 h-16 mx-auto mb-4 text-gray-700" />
+                  <p className="text-lg font-medium mb-2">Select a file to view</p>
                       <p className="text-sm text-gray-600 mb-4">Choose from the file explorer to see the code</p>
                       {/* Quick access to chat when no file selected */}
                       {isChatCollapsed && (
@@ -1839,9 +1839,9 @@ These paths contain FILE: prefixes or emoji artifacts that should be cleaned.` :
                           <span>Show AI Chat</span>
                         </button>
                       )}
-                    </div>
-                  </div>
-                )}
+                </div>
+              </div>
+            )}
               </>
             )}
 
@@ -1852,7 +1852,7 @@ These paths contain FILE: prefixes or emoji artifacts that should be cleaned.` :
                   <div className="mb-6">
                     <h2 className="text-2xl font-bold text-gray-200 mb-2">Live React Native Preview</h2>
                     <p className="text-gray-400">Real-time preview compiled with React Native Web</p>
-                  </div>
+          </div>
 
                   {Object.keys(files).length > 0 ? (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">

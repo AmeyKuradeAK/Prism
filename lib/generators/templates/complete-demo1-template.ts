@@ -46,114 +46,114 @@ export default function App() {
   // ✅ PACKAGE.JSON - Latest Expo SDK 53
   files['/package.json'] = JSON.stringify({
     "name": slug,
-    "main": "expo-router/entry",
-    "version": "1.0.0",
-    "scripts": {
-      "start": "expo start",
-      "reset-project": "node ./scripts/reset-project.js",
-      "android": "expo start --android",
-      "ios": "expo start --ios", 
-      "web": "expo start --web",
-      "lint": "expo lint"
-    },
-    "dependencies": {
-      "@expo/vector-icons": "^14.1.0",
-      "@react-navigation/bottom-tabs": "^7.3.10",
-      "@react-navigation/elements": "^2.3.8",
-      "@react-navigation/native": "^7.1.6",
-      "expo": "~53.0.12",
-      "expo-blur": "~14.1.5",
-      "expo-constants": "~17.1.6",
-      "expo-font": "~13.3.1",
-      "expo-haptics": "~14.1.4",
-      "expo-image": "~2.3.0",
-      "expo-linking": "~7.1.5",
-      "expo-router": "~5.1.0",
-      "expo-splash-screen": "~0.30.9",
-      "expo-status-bar": "~2.2.3",
-      "expo-symbols": "~0.4.5",
-      "expo-system-ui": "~5.0.9",
-      "expo-web-browser": "~14.2.0",
-      "react": "19.0.0",
-      "react-dom": "19.0.0",
-      "react-native": "0.79.4",
-      "react-native-gesture-handler": "~2.24.0",
-      "react-native-reanimated": "~3.17.4",
-      "react-native-safe-area-context": "5.4.0",
-      "react-native-screens": "~4.11.1",
-      "react-native-web": "~0.20.0",
-      "react-native-webview": "13.13.5"
-    },
-    "devDependencies": {
-      "@babel/core": "^7.25.2",
-      "@types/react": "~19.0.10",
-      "typescript": "~5.8.3",
-      "eslint": "^9.25.0",
-      "eslint-config-expo": "~9.2.0"
-    },
-    "private": true
+  "main": "expo-router/entry",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "expo start",
+    "reset-project": "node ./scripts/reset-project.js",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "lint": "expo lint"
+  },
+  "dependencies": {
+    "@expo/vector-icons": "^14.1.0",
+    "@react-navigation/bottom-tabs": "^7.3.10",
+    "@react-navigation/elements": "^2.3.8",
+    "@react-navigation/native": "^7.1.6",
+    "expo": "~53.0.12",
+    "expo-blur": "~14.1.5",
+    "expo-constants": "~17.1.6",
+    "expo-font": "~13.3.1",
+    "expo-haptics": "~14.1.4",
+    "expo-image": "~2.3.0",
+    "expo-linking": "~7.1.5",
+    "expo-router": "~5.1.0",
+    "expo-splash-screen": "~0.30.9",
+    "expo-status-bar": "~2.2.3",
+    "expo-symbols": "~0.4.5",
+    "expo-system-ui": "~5.0.9",
+    "expo-web-browser": "~14.2.0",
+    "react": "19.0.0",
+    "react-dom": "19.0.0",
+    "react-native": "0.79.4",
+    "react-native-gesture-handler": "~2.24.0",
+    "react-native-reanimated": "~3.17.4",
+    "react-native-safe-area-context": "5.4.0",
+    "react-native-screens": "~4.11.1",
+    "react-native-web": "~0.20.0",
+    "react-native-webview": "13.13.5"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.25.2",
+    "@types/react": "~19.0.10",
+    "typescript": "~5.8.3",
+    "eslint": "^9.25.0",
+    "eslint-config-expo": "~9.2.0"
+  },
+  "private": true
   }, null, 2)
 
   // ✅ APP.JSON - Complete Expo configuration
   files['/app.json'] = JSON.stringify({
-    "expo": {
+  "expo": {
       "name": appName,
       "slug": slug,
-      "version": "1.0.0",
-      "orientation": "portrait",
-      "icon": "./assets/images/icon.png",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
       "scheme": slug.replace(/-/g, ''),
-      "userInterfaceStyle": "automatic",
-      "newArchEnabled": true,
-      "ios": {
-        "supportsTablet": true
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
       },
-      "android": {
-        "adaptiveIcon": {
-          "foregroundImage": "./assets/images/adaptive-icon.png",
+      "edgeToEdgeEnabled": true
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
           "backgroundColor": "#ffffff"
-        },
-        "edgeToEdgeEnabled": true
-      },
-      "web": {
-        "bundler": "metro",
-        "output": "static",
-        "favicon": "./assets/images/favicon.png"
-      },
-      "plugins": [
-        "expo-router",
-        [
-          "expo-splash-screen",
-          {
-            "image": "./assets/images/splash-icon.png",
-            "imageWidth": 200,
-            "resizeMode": "contain",
-            "backgroundColor": "#ffffff"
-          }
-        ]
-      ],
-      "experiments": {
-        "typedRoutes": true
-      }
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
     }
+  }
   }, null, 2)
 
   // ✅ Configuration Files
   files['/tsconfig.json'] = JSON.stringify({
-    "extends": "expo/tsconfig.base",
-    "compilerOptions": {
-      "strict": true,
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
       "baseUrl": ".",
-      "paths": {
+    "paths": {
         "@/*": ["./*"]
-      }
-    },
-    "include": [
-      "**/*.ts",
-      "**/*.tsx",
-      ".expo/types/**/*.ts",
-      "expo-env.d.ts"
-    ]
+    }
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts"
+  ]
   }, null, 2)
 
   files['/babel.config.js'] = `module.exports = function(api) {
@@ -841,7 +841,7 @@ export default function TabTwoScreen() {
       <Collapsible title="Development Ready">
         <ThemedText>
           Start developing immediately with pre-configured TypeScript, ESLint, and modern React Native patterns. All assets and components are ready to use.
-        </ThemedText>
+          </ThemedText>
       </Collapsible>
     </ParallaxScrollView>
   );
@@ -861,7 +861,7 @@ const styles = StyleSheet.create({
 });`
 
   // ✅ COMPONENTS FOLDER
-  
+
   // components/Collapsible.tsx
   files['/components/Collapsible.tsx'] = `import { PropsWithChildren, useState } from 'react';
 import { StyleSheet, TouchableOpacity } from 'react-native';
@@ -1159,7 +1159,7 @@ export function ThemedView({ style, lightColor, darkColor, ...otherProps }: Them
 }`
 
   // ✅ UI COMPONENTS
-  
+
   // components/ui/IconSymbol.tsx
   files['/components/ui/IconSymbol.tsx'] = `// Fallback for using MaterialIcons on Android and web.
 
@@ -1267,7 +1267,7 @@ export function useBottomTabOverflow() {
 }`
 
   // ✅ HOOKS FOLDER
-  
+
   // hooks/useColorScheme.ts
   files['/hooks/useColorScheme.ts'] = `export { useColorScheme } from 'react-native';`
 
@@ -1318,7 +1318,7 @@ export function useThemeColor(
 }`
 
   // ✅ CONSTANTS FOLDER
-  
+
   // constants/Colors.ts
   files['/constants/Colors.ts'] = `/**
  * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
