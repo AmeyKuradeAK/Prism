@@ -1,9 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
-import { exec } from 'child_process'
-import { promisify } from 'util'
-
-const execAsync = promisify(exec)
 
 export async function GET(
   request: NextRequest,
@@ -25,42 +21,68 @@ export async function GET(
       }, { status: 500 })
     }
 
-    console.log(`🔍 Fetching real EAS Build status for: ${buildId}`)
+    console.log(`🔍 Fetching serverless EAS Build status for: ${buildId}`)
 
     try {
-      // Use EAS CLI to get real build status
-      const env = {
-        ...process.env,
-        EXPO_TOKEN: expoToken,
+      // Check if this is a demo build
+      if (buildId.startsWith('demo-')) {
+        // Simulate demo build progression
+        const createdTime = parseInt(buildId.split('-')[1])
+        const elapsed = Date.now() - createdTime
+        
+        let status = 'pending'
+        let artifacts: Array<{url: string, type: string}> = []
+        
+        if (elapsed > 30000) { // 30 seconds
+          status = 'building'
+        }
+        if (elapsed > 120000) { // 2 minutes
+          status = 'success'
+          artifacts = [{
+            url: `https://github.com/expo/expo/releases/download/sdk-53.0.0/expo-template-default.apk`,
+            type: 'application/vnd.android.package-archive'
+          }]
+        }
+        
+        return NextResponse.json({
+          id: buildId,
+          status,
+          platform: 'android',
+          createdAt: new Date(createdTime).toISOString(),
+          completedAt: status === 'success' ? new Date().toISOString() : undefined,
+          artifacts,
+          demo: true,
+          message: 'Demo build simulation'
+        })
       }
 
-      const easCommand = `npx eas-cli build:view ${buildId} --json`
-      console.log(`Running: ${easCommand}`)
-
-      const { stdout, stderr } = await execAsync(easCommand, {
-        env,
-        timeout: 30000 // 30 second timeout
+      // ✅ SERVERLESS APPROACH: Use EAS Build REST API
+      const easApiResponse = await fetch(`https://api.expo.dev/v2/builds/${buildId}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${expoToken}`,
+          'Content-Type': 'application/json'
+        }
       })
 
-      if (stderr) {
-        console.log('EAS CLI stderr:', stderr)
-      }
-
-      // Parse the JSON output from EAS CLI
-      let buildStatus
-      try {
-        const jsonMatch = stdout.match(/\{[\s\S]*\}/)
-        if (jsonMatch) {
-          buildStatus = JSON.parse(jsonMatch[0])
+      if (!easApiResponse.ok) {
+        if (easApiResponse.status === 404) {
+          return NextResponse.json({ 
+            error: 'Build not found. It may have been deleted or the build ID is invalid.',
+            buildId 
+          }, { status: 404 })
+        } else if (easApiResponse.status === 401) {
+          return NextResponse.json({ 
+            error: 'Authentication failed. Please check your EXPO_TOKEN.',
+          }, { status: 401 })
         } else {
-          throw new Error('No JSON output from EAS CLI')
+          const errorData = await easApiResponse.text()
+          throw new Error(`EAS API error (${easApiResponse.status}): ${errorData}`)
         }
-      } catch (parseError) {
-        console.error('Failed to parse EAS CLI output:', parseError)
-        throw new Error('Could not parse build status from EAS CLI')
       }
 
-      console.log('✅ Real EAS Build status fetched:', buildStatus)
+      const buildStatus = await easApiResponse.json()
+      console.log('✅ Serverless EAS Build status fetched:', buildStatus)
 
       // Transform EAS Build API response to our format
       const transformedStatus = {
@@ -74,44 +96,35 @@ export async function GET(
           url: artifact.url,
           type: artifact.type
         })) || [],
-        error: buildStatus.error
+        error: buildStatus.error,
+        serverless: true
       }
 
       return NextResponse.json(transformedStatus)
 
-    } catch (execError) {
-      console.error('EAS CLI execution error:', execError)
+    } catch (apiError) {
+      console.error('EAS REST API Error:', apiError)
+      const errorMessage = apiError instanceof Error ? apiError.message : 'Unknown error'
       
-      // If EAS CLI fails, provide helpful error messages
-      const errorMessage = execError instanceof Error ? execError.message : 'Unknown error'
-      
-      if (errorMessage.includes('not found') || errorMessage.includes('404')) {
-        return NextResponse.json({ 
-          error: 'Build not found. It may have been deleted or the build ID is invalid.',
-          buildId 
-        }, { status: 404 })
-      } else if (errorMessage.includes('authentication') || errorMessage.includes('401')) {
-        return NextResponse.json({ 
-          error: 'Authentication failed. Please check your EXPO_TOKEN.',
-        }, { status: 401 })
-      } else {
-        return NextResponse.json({ 
-          error: `Failed to fetch build status: ${errorMessage}`,
-          troubleshooting: {
-            docs: 'https://docs.expo.dev/build-reference/cli/',
-            status: 'https://status.expo.dev/'
-          }
-        }, { status: 500 })
-      }
+      return NextResponse.json({ 
+        error: `Serverless API Error: ${errorMessage}`,
+        serverless: true,
+        troubleshooting: {
+          docs: 'https://docs.expo.dev/build-reference/build-webhooks/',
+          status: 'https://status.expo.dev/',
+          deployment: 'Netlify serverless environment'
+        }
+      }, { status: 500 })
     }
 
   } catch (error) {
-    console.error('Error fetching real build status:', error)
+    console.error('Error fetching serverless build status:', error)
     const errorMessage = error instanceof Error ? error.message : 'Failed to fetch build status'
     
     return NextResponse.json({
-      error: errorMessage,
-      timestamp: new Date().toISOString()
+      error: `Serverless Error: ${errorMessage}`,
+      timestamp: new Date().toISOString(),
+      serverless: true
     }, { status: 500 })
   }
 }

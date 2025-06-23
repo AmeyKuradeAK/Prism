@@ -1125,13 +1125,16 @@ npx expo start
     const buildMessage: ChatMessage = {
       id: Date.now().toString(),
       type: 'system',
-      content: `🔨 Starting real EAS Build...
+      content: `🔨 Starting EAS Build...
 
 📱 **Platform**: ${platform.charAt(0).toUpperCase() + platform.slice(1)}
 📦 **Files**: ${Object.keys(files).length} files
+🌐 **Environment**: Netlify Serverless
 ⏱️ **Status**: Connecting to Expo Application Services...
 
-🔧 This will create a real ${platform === 'android' ? 'APK' : platform === 'ios' ? 'IPA' : 'web build'} file you can install on devices!`,
+🔧 This will attempt to create a real ${platform === 'android' ? 'APK' : platform === 'ios' ? 'IPA' : 'web build'} file using EAS Build REST API!
+
+**Note**: Running on serverless infrastructure - using EAS Build API instead of CLI.`,
       timestamp: new Date()
     }
     setChatMessages(prev => [...prev, buildMessage])
@@ -1809,7 +1812,7 @@ These paths contain FILE: prefixes or emoji artifacts that should be cleaned.` :
                         >
                           <MessageSquare className="w-3 h-3" />
                           <span>{isChatCollapsed ? 'Show' : 'Hide'}</span>
-                        </button>
+                  </button>
                 </div>
                     </div>
                     {/* Scrollable Code Content */}
