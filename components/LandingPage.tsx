@@ -695,7 +695,7 @@ function ProjectWorkspace3D() {
         onClick={() => setOpen((o) => !o)}
       >
         <boxGeometry args={[2.2, 0.3, 1.2]} />
-        <meshStandardMaterial color={hovered ? '#fff' : '#222'} metalness={0.7} roughness={0.2} />
+        <meshStandardMaterial color={hovered ? '#6EE7B7' : '#2563EB'} metalness={0.7} roughness={0.2} emissive="#60A5FA" emissiveIntensity={hovered ? 0.18 : 0.08} />
       </mesh>
       {/* Folder Lid (animated) */}
       <mesh
@@ -705,35 +705,41 @@ function ProjectWorkspace3D() {
         receiveShadow
       >
         <boxGeometry args={[2.2, 0.12, 1.2]} />
-        <meshStandardMaterial color="#444" metalness={0.8} roughness={0.15} />
+        <meshStandardMaterial color="#3B82F6" metalness={0.8} roughness={0.15} emissive="#60A5FA" emissiveIntensity={0.12} />
       </mesh>
       {/* Document inside folder */}
       <mesh position={[0, 0.18, 0]}>
         <boxGeometry args={[1.6, 0.04, 1]} />
-        <meshStandardMaterial color="#fff" emissive="#fff" emissiveIntensity={open ? 0.18 : 0.08} />
+        <meshStandardMaterial color="#F9FAFB" emissive="#FDE68A" emissiveIntensity={open ? 0.18 : 0.08} />
       </mesh>
       {/* Pencil */}
       <group position={[-1, -0.1, 0.7]} rotation={[0, 0, -0.2]}>
-        <cylinderGeometry args={[0.04, 0.04, 1.1, 16]} />
-        <meshStandardMaterial color="#bbb" />
+        <mesh>
+          <cylinderGeometry args={[0.04, 0.04, 1.1, 16]} />
+          <meshStandardMaterial color="#FBBF24" />
+        </mesh>
         <mesh position={[0, 0.55, 0]}>
           <coneGeometry args={[0.06, 0.18, 16]} />
-          <meshStandardMaterial color="#222" />
+          <meshStandardMaterial color="#374151" />
+        </mesh>
+        <mesh position={[0, -0.55, 0]}>
+          <cylinderGeometry args={[0.045, 0.045, 0.18, 16]} />
+          <meshStandardMaterial color="#F87171" />
         </mesh>
       </group>
       {/* App Icons (animated bounce) */}
       <group position={[0, iconY.get(), 0]}>
         <mesh position={[-0.7, 0.4, 0.5]}>
           <sphereGeometry args={[0.13, 16, 16]} />
-          <meshStandardMaterial color="#fff" emissive="#fff" emissiveIntensity={0.12} />
+          <meshStandardMaterial color="#F472B6" emissive="#F472B6" emissiveIntensity={0.18} />
         </mesh>
         <mesh position={[0.7, 0.4, 0.5]}>
           <boxGeometry args={[0.22, 0.22, 0.22]} />
-          <meshStandardMaterial color="#fff" emissive="#fff" emissiveIntensity={0.12} />
+          <meshStandardMaterial color="#34D399" emissive="#34D399" emissiveIntensity={0.18} />
         </mesh>
         <mesh position={[0, 0.4, -0.5]}>
           <cylinderGeometry args={[0.12, 0.12, 0.18, 24]} />
-          <meshStandardMaterial color="#fff" emissive="#fff" emissiveIntensity={0.12} />
+          <meshStandardMaterial color="#FBBF24" emissive="#FBBF24" emissiveIntensity={0.18} />
         </mesh>
       </group>
       {/* Soft Shadow */}
@@ -971,7 +977,7 @@ export default function LandingPage() {
                   <Suspense fallback={null}>
                     <ProjectWorkspace3D />
                   </Suspense>
-                  <OrbitControls enablePan={false} enableZoom={false} enableRotate={true} />
+                  <OrbitControls enablePan={false} enableZoom={true} enableRotate={true} minDistance={4} maxDistance={16} />
                 </Canvas>
               </div>
             </motion.div>
