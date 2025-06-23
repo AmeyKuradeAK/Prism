@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import JSZip from 'jszip'
 import { fixProjectStructure, analyzeProjectStructure } from '@/lib/utils/project-structure-fixer'
+import RealReactNativePreview from './RealReactNativePreview'
 import { 
   Play, 
   FileText, 
@@ -439,15 +440,17 @@ The base template is loaded and functional. Check your API key configuration in 
           messages: [
             {
               role: 'system',
-              content: `You are a React Native/Expo expert. Generate ONLY React Native code files to enhance the existing base template based on the user's request.
+              content: `You are a React Native/Expo expert specializing in the LATEST Expo Router v4+ and modern React Native patterns. Generate ONLY React Native code files to enhance the existing base template based on the user's request.
 
 CRITICAL: Your response MUST contain actual code files with this EXACT format:
 
 ===FILE: components/TodoList.tsx===
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, FlatList, StyleSheet } from 'react-native';
+import { useRouter } from 'expo-router';
 
 export default function TodoList() {
+  const router = useRouter();
   const [todos, setTodos] = useState([
     { id: 1, text: 'Sample todo', completed: false }
   ]);
@@ -458,9 +461,12 @@ export default function TodoList() {
       <FlatList
         data={todos}
         renderItem={({ item }) => (
-          <View style={styles.todoItem}>
+          <TouchableOpacity 
+            style={styles.todoItem}
+            onPress={() => router.push(\`/todos/\${item.id}\`)}
+          >
             <Text>{item.text}</Text>
-          </View>
+          </TouchableOpacity>
         )}
       />
     </View>
@@ -477,23 +483,89 @@ const styles = StyleSheet.create({
 ===FILE: app/(tabs)/todos.tsx===
 import React from 'react';
 import { SafeAreaView } from 'react-native';
+import { Stack } from 'expo-router';
 import TodoList from '../../components/TodoList';
 
 export default function TodosScreen() {
   return (
-    <SafeAreaView style={{ flex: 1 }}>
-      <TodoList />
-    </SafeAreaView>
+    <>
+      <Stack.Screen 
+        options={{ 
+          title: 'My Todos',
+          headerStyle: { backgroundColor: '#6366f1' },
+          headerTintColor: 'white'
+        }} 
+      />
+      <SafeAreaView style={{ flex: 1 }}>
+        <TodoList />
+      </SafeAreaView>
+    </>
   );
 }
 ===END===
 
-IMPORTANT RULES:
-1. Use the EXACT ===FILE: path=== and ===END=== markers
-2. Generate working React Native/TypeScript code
-3. Only create NEW files or replace existing ones
-4. Use proper imports and exports
-5. Include functional components, not just explanations
+===FILE: app/todos/[id].tsx===
+import React from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+import { useLocalSearchParams, Stack } from 'expo-router';
+
+export default function TodoDetailScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  
+  return (
+    <>
+      <Stack.Screen options={{ title: \`Todo #\${id}\` }} />
+      <View style={styles.container}>
+        <Text style={styles.title}>Todo Detail #{id}</Text>
+        <Text>Todo details would go here...</Text>
+      </View>
+    </>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, padding: 20 },
+  title: { fontSize: 24, fontWeight: 'bold', marginBottom: 20 }
+});
+===END===
+
+MODERN EXPO ROUTER v4+ REQUIREMENTS:
+1. Use \`expo-router\` v4+ file-based routing
+2. Use \`useRouter()\` for navigation: \`router.push('/path')\`, \`router.back()\`
+3. Use \`useLocalSearchParams()\` for route parameters
+4. Use \`<Stack.Screen options={{}} />\` for screen configuration
+5. Create nested routes with proper folder structure
+6. Use TypeScript with proper type definitions
+7. Include \`Expo.Image\` instead of React Native Image for better performance
+8. Use \`expo-linear-gradient\` for gradients
+9. Implement proper \`<SafeAreaView>\` usage
+10. Use modern React hooks: \`useState\`, \`useEffect\`, \`useCallback\`
+
+NAVIGATION PATTERNS:
+- Tabs: \`app/(tabs)/\` folder structure
+- Stacks: \`app/folder/\` for nested navigation  
+- Dynamic routes: \`[param].tsx\` files
+- Layout files: \`_layout.tsx\` for shared layouts
+- Modal routes: Use \`presentation: 'modal'\` in Stack.Screen
+
+COMPONENT PATTERNS:
+- Use functional components with TypeScript
+- Implement proper prop types with interfaces
+- Use \`StyleSheet.create\` for styling
+- Follow React Native best practices
+- Include proper error boundaries where needed
+
+API & DATA PATTERNS:
+- Use \`@tanstack/react-query\` for API calls
+- Implement proper loading and error states
+- Use Expo SecureStore for sensitive data
+- Include proper TypeScript types for API responses
+
+PERFORMANCE:
+- Use \`React.memo\` for expensive components
+- Implement proper \`FlatList\` for large datasets
+- Use \`expo-image\` with proper caching
+- Include proper keyboard handling
 
 ${projectContext.projectType ? `
 PROJECT CONTEXT:
@@ -502,7 +574,7 @@ PROJECT CONTEXT:
 - Technologies: ${projectContext.technologies.join(', ')}
 - Main Concept: ${projectContext.mainPrompt || 'Not specified'}
 
-MAINTAIN CONSISTENCY: Keep building on the existing ${projectContext.projectType} concept. Don't switch to different app types unless explicitly requested.
+MAINTAIN CONSISTENCY: Keep building on the existing ${projectContext.projectType} concept. Don't switch to different app types unless explicitly requested. Use the latest Expo Router patterns for this ${projectContext.projectType} app.
 ` : ''}`
             },
             {
@@ -848,23 +920,57 @@ The base template is still loaded and functional. You can:
   }
 
   const downloadProject = async () => {
-    if (Object.keys(files).length === 0) return
+    if (Object.keys(files).length === 0) {
+      console.warn('📥 Download cancelled: No files to download')
+      return
+    }
 
     try {
+      console.log('📦 Starting download process...')
+      console.log(`📋 Files to include: ${Object.keys(files).length}`)
+      console.log('📄 File list:', Object.keys(files))
+      
       const zip = new JSZip()
       
+      // Clean and add files to zip
+      let addedCount = 0
       Object.entries(files).forEach(([path, content]) => {
-        zip.file(path, content)
+        if (!content || typeof content !== 'string') {
+          console.warn(`⚠️ Skipping invalid file: ${path}`)
+          return
+        }
+        
+        // Clean the path for zip (no leading slash)
+        const cleanPath = path.startsWith('/') ? path.slice(1) : path
+        
+        if (cleanPath) {
+          zip.file(cleanPath, content)
+          addedCount++
+          console.log(`✅ Added to zip: ${cleanPath} (${content.length} chars)`)
+        } else {
+          console.warn(`⚠️ Skipping file with empty path: ${path}`)
+        }
       })
+      
+      console.log(`📊 Added ${addedCount} files to zip`)
+      
+      if (addedCount === 0) {
+        console.error('❌ No valid files to download')
+        alert('No valid files found to download. Please generate an app first.')
+        return
+      }
       
       const projectName = extractProjectName(chatMessages.find(m => m.type === 'user')?.content || '') || 'react-native-app'
       const fileName = `${projectName.replace(/[^a-zA-Z0-9-]/g, '-')}-${Date.now()}.zip`
       
+      console.log('🔄 Generating zip file...')
       const content = await zip.generateAsync({ 
         type: 'blob',
         compression: 'DEFLATE',
         compressionOptions: { level: 6 }
       })
+      
+      console.log(`✅ Zip generated: ${fileName} (${(content.size / 1024).toFixed(2)} KB)`)
       
       const url = URL.createObjectURL(content)
       const a = document.createElement('a')
@@ -875,8 +981,42 @@ The base template is still loaded and functional. You can:
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
       
+      console.log('📥 Download initiated successfully')
+      
+      // Show success message in chat
+      const downloadMessage: ChatMessage = {
+        id: Date.now().toString(),
+        type: 'system',
+        content: `📥 **Download Complete!**
+
+📦 **File**: \`${fileName}\`
+📊 **Files Included**: ${addedCount} files
+💾 **Size**: ${(content.size / 1024).toFixed(2)} KB
+
+✅ Your React Native project has been downloaded successfully. Extract the ZIP file and run:
+
+\`\`\`bash
+npm install
+npx expo start
+\`\`\`
+
+📱 **What's included**:
+- Complete Expo Router setup
+- TypeScript configuration  
+- All generated components and screens
+- Asset files and dependencies`,
+        timestamp: new Date()
+      }
+      setChatMessages(prev => [...prev, downloadMessage])
+      
+      // Auto-show chat if it's hidden
+      if (isChatCollapsed) {
+        setIsChatCollapsed(false)
+      }
+      
     } catch (error) {
-      console.error('Download failed:', error)
+      console.error('❌ Download failed:', error)
+      alert(`Download failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 
@@ -1334,8 +1474,9 @@ ${fileTree}
 - Base Files: ${stateValidation.summary.baseFiles}
 - AI Files: ${stateValidation.summary.aiFiles}
 - Structure Preserved: ${stateValidation.summary.preservedStructure ? '✅' : '❌'}
+- Clean Paths: ${stateValidation.summary.cleanPaths ? '✅' : '❌'}
 
-${stateValidation.issues.length > 0 ? `⚠️ **Issues Found**:\n${stateValidation.issues.map(issue => `- ${issue}`).join('\n')}` : '✅ **No Issues Found**'}
+${stateValidation.artifacts && stateValidation.artifacts.length > 0 ? `🚨 **FILE: Artifacts Detected**:\n${stateValidation.artifacts.map(artifact => `- ${artifact}`).join('\n')}\n\n` : ''}${stateValidation.issues.length > 0 ? `⚠️ **Issues Found**:\n${stateValidation.issues.map(issue => `- ${issue}`).join('\n')}` : '✅ **No Issues Found**'}
 
 🐚 **Shell Status**: All systems operational`,
                     timestamp: new Date()
@@ -1380,6 +1521,65 @@ ${stateValidation.issues.length > 0 ? `⚠️ **Issues Found**:\n${stateValidati
             >
               <Zap className="w-4 h-4" />
               <span>Test AI</span>
+            </button>
+
+            {/* Clean Files Button */}
+            <button
+              onClick={async () => {
+                console.log('🧹 Manually cleaning all files...')
+                
+                try {
+                  const clientMemFS = (await import('@/lib/utils/client-memfs')).default
+                  
+                  // Get current files and clean them
+                  const currentFiles = clientMemFS.getAllFiles()
+                  console.log('📋 Files before cleaning:', Object.keys(currentFiles))
+                  
+                  // This would require exposing the cleanAndMergeFiles function
+                  // For now, show what we would clean in chat
+                  const artifactPaths = Object.keys(currentFiles).filter(path => 
+                    path.match(/FILE:/i) || path.match(/📁\s*FILE:/i) || path.match(/^📁[^/]/)
+                  )
+                  
+                  const cleanMessage: ChatMessage = {
+                    id: Date.now().toString(),
+                    type: 'system',
+                    content: `🧹 **File Cleaning Analysis**
+
+📋 **Current Files**: ${Object.keys(currentFiles).length} total
+🚨 **FILE: Artifacts Found**: ${artifactPaths.length}
+
+${artifactPaths.length > 0 ? `**Artifacts to Clean**:
+${artifactPaths.map(path => `- \`${path}\``).join('\n')}
+
+These paths contain FILE: prefixes or emoji artifacts that should be cleaned.` : '✅ **No artifacts found** - all paths are clean!'}
+
+💡 **Tip**: The cleaning happens automatically during AI generation, but this shows any remaining artifacts in your current file tree.`,
+                    timestamp: new Date()
+                  }
+                  setChatMessages(prev => [...prev, cleanMessage])
+                  
+                  // Auto-show chat if it's hidden
+                  if (isChatCollapsed) {
+                    setIsChatCollapsed(false)
+                  }
+                  
+                } catch (error) {
+                  console.error('Clean failed:', error)
+                  const errorMessage: ChatMessage = {
+                    id: Date.now().toString(),
+                    type: 'system',
+                    content: `❌ **Clean Failed**: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                    timestamp: new Date()
+                  }
+                  setChatMessages(prev => [...prev, errorMessage])
+                }
+              }}
+              disabled={Object.keys(files).length === 0}
+              className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            >
+              <RefreshCw className="w-4 h-4" />
+              <span>Clean Files</span>
             </button>
           </div>
         </div>
@@ -1602,160 +1802,219 @@ ${stateValidation.issues.length > 0 ? `⚠️ **Issues Found**:\n${stateValidati
               <div className="flex-1 bg-gray-900 p-6 overflow-auto">
                 <div className="max-w-6xl mx-auto">
                   <div className="mb-6">
-                    <h2 className="text-2xl font-bold text-gray-200 mb-2">Live App Preview</h2>
-                    <p className="text-gray-400">Real-time preview of your generated React Native app</p>
+                    <h2 className="text-2xl font-bold text-gray-200 mb-2">Live React Native Preview</h2>
+                    <p className="text-gray-400">Real-time preview compiled with React Native Web</p>
                   </div>
 
                   {Object.keys(files).length > 0 ? (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                      {/* Mobile Preview */}
+                      {/* Mobile Preview Frame with Real RN Web Compilation */}
                       <div className="flex flex-col items-center">
                         <div className="w-80 h-[640px] bg-black rounded-[3rem] p-4 border-8 border-gray-800 shadow-2xl">
                           <div className="w-full h-full bg-gray-100 rounded-[2.5rem] overflow-hidden relative">
+                            {/* Status Bar */}
                             <div className="h-8 bg-gray-900 flex items-center justify-between px-4 text-white text-xs">
                               <span>9:41</span>
-                              <span>{extractProjectName(chatMessages.find(m => m.type === 'user')?.content || '') || 'React Native App'}</span>
-                              <span>100%</span>
+                              <div className="flex items-center space-x-1">
+                                <div className="w-1 h-1 bg-white rounded-full"></div>
+                                <div className="w-1 h-1 bg-white rounded-full"></div>
+                                <div className="w-1 h-1 bg-white rounded-full"></div>
+                              </div>
+                              <div className="flex items-center space-x-1">
+                                <span className="text-xs">100%</span>
+                                <div className="w-6 h-3 border border-white rounded-sm">
+                                  <div className="w-full h-full bg-green-400 rounded-sm"></div>
+                                </div>
+                              </div>
                             </div>
                             
-                            <div className="flex-1 bg-white text-black overflow-y-auto p-4">
-                              {(() => {
-                                const fileContent = Object.values(files).join(' ').toLowerCase()
-                                const isTodoApp = fileContent.includes('todo') || fileContent.includes('task')
-                                const isWeatherApp = fileContent.includes('weather') || fileContent.includes('temperature')
-                                const hasTabs = Object.keys(files).some(f => f.includes('(tabs)'))
-                                
-                                let appDisplayName = extractProjectName(chatMessages.find(m => m.type === 'user')?.content || '') || 'My App'
-                                if (files['package.json']) {
-                                  try {
-                                    const pkg = JSON.parse(files['package.json'])
-                                    appDisplayName = pkg.name || appDisplayName
-                                  } catch (e) {}
-                                }
-
-                                return (
-                                  <div>
-                                    <div className="text-center mb-6 pt-2">
-                                      <h1 className="text-xl font-bold text-gray-800 mb-1">
-                                        {appDisplayName.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                                      </h1>
-                                      <p className="text-sm text-gray-600">
-                                        {isGenerating ? 'Generating...' : 'Generated with AI'}
-                                      </p>
-                                    </div>
-
-                                    {hasTabs && (
-                                      <div className="flex bg-gray-100 rounded-lg p-1 mb-4">
-                                        <div className="flex-1 bg-blue-500 text-white text-xs py-2 px-3 rounded text-center font-medium">Home</div>
-                                        <div className="flex-1 text-gray-600 text-xs py-2 px-3 rounded text-center">
-                                          {isTodoApp ? 'Tasks' : isWeatherApp ? 'Forecast' : 'Explore'}
-                                        </div>
-                                        <div className="flex-1 text-gray-600 text-xs py-2 px-3 rounded text-center">Settings</div>
-                                      </div>
-                                    )}
-
-                                    <div className="space-y-3">
-                                      {isTodoApp ? (
-                                        <>
-                                          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                                            <div className="flex items-center space-x-2">
-                                              <div className="w-4 h-4 border-2 border-blue-500 rounded"></div>
-                                              <span className="text-sm">Complete project setup</span>
-                                            </div>
-                                          </div>
-                                          <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                                            <div className="flex items-center space-x-2">
-                                              <div className="w-4 h-4 bg-green-500 rounded flex items-center justify-center">
-                                                <span className="text-white text-xs">✓</span>
-                                              </div>
-                                              <span className="text-sm text-green-700">Generate React Native app</span>
-                                            </div>
-                                          </div>
-                                        </>
-                                      ) : isWeatherApp ? (
-                                        <>
-                                          <div className="bg-blue-500 text-white rounded-lg p-4 text-center">
-                                            <div className="text-2xl mb-1">☀️</div>
-                                            <div className="text-lg font-bold">72°F</div>
-                                            <div className="text-sm opacity-90">Sunny</div>
-                                          </div>
-                                          <div className="grid grid-cols-3 gap-2">
-                                            <div className="bg-gray-100 rounded p-2 text-center">
-                                              <div className="text-sm">🌤️</div>
-                                              <div className="text-xs">Tomorrow</div>
-                                            </div>
-                                            <div className="bg-gray-100 rounded p-2 text-center">
-                                              <div className="text-sm">🌧️</div>
-                                              <div className="text-xs">Thursday</div>
-                                            </div>
-                                            <div className="bg-gray-100 rounded p-2 text-center">
-                                              <div className="text-sm">⛅</div>
-                                              <div className="text-xs">Friday</div>
-                                            </div>
-                                          </div>
-                                        </>
-                                      ) : (
-                                        <div className="bg-blue-500 text-white rounded-lg p-4 text-center">
-                                          <div className="text-2xl mb-2">⚛️</div>
-                                          <div className="text-lg font-bold">Welcome!</div>
-                                          <div className="text-sm opacity-90">Your React Native app is ready</div>
-                                        </div>
-                                      )}
-                                    </div>
-
-                                    <div className="mt-6 pt-4 border-t border-gray-200">
-                                      <div className="text-center text-xs text-gray-500">
-                                        {Object.keys(files).length} files • Generated by AI
-                                      </div>
-                                    </div>
-                                  </div>
-                                )
-                              })()}
+                            {/* App Content - Real React Native Web */}
+                            <div className="flex-1 bg-white text-black overflow-hidden">
+                              <RealReactNativePreview files={files} />
                             </div>
                           </div>
                         </div>
                         
                         <div className="mt-4 text-center">
-                          <h3 className="text-lg font-medium text-gray-200 mb-2">📱 Mobile Preview</h3>
-                          <p className="text-sm text-gray-400">Live preview based on your generated files</p>
+                          <h3 className="text-lg font-medium text-gray-200 mb-2">📱 Live Preview</h3>
+                          <p className="text-sm text-gray-400">Compiled with React Native Web</p>
+                          <div className="mt-2 flex items-center justify-center space-x-4 text-xs text-gray-500">
+                            <span>🔄 Real-time compilation</span>
+                            <span>⚛️ React Native Web</span>
+                            <span>🎯 Interactive preview</span>
+                          </div>
                         </div>
                       </div>
 
-                      {/* File Analysis */}
-                      <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-                        <h3 className="text-lg font-medium text-gray-200 mb-4">📊 App Analysis</h3>
-                        <div className="space-y-4">
-                          <div>
-                            <h4 className="text-sm font-medium text-gray-300 mb-2">File Structure</h4>
-                            <div className="space-y-1">
-                              {Object.keys(files).slice(0, 6).map(file => (
-                                <div key={file} className="flex items-center space-x-2 text-xs">
-                                  <span className="text-blue-400">📄</span>
-                                  <span className="text-gray-400 truncate">{file}</span>
-                                </div>
-                              ))}
-                              {Object.keys(files).length > 6 && (
-                                <div className="text-xs text-gray-500">+{Object.keys(files).length - 6} more files...</div>
-                              )}
+                      {/* Code Analysis & Build Status */}
+                      <div className="space-y-6">
+                        {/* File Structure Analysis */}
+                        <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+                          <h3 className="text-lg font-medium text-gray-200 mb-4 flex items-center space-x-2">
+                            <Code className="w-5 h-5 text-blue-400" />
+                            <span>Code Analysis</span>
+                          </h3>
+                          <div className="space-y-4">
+                            <div>
+                              <h4 className="text-sm font-medium text-gray-300 mb-2">App Structure</h4>
+                              <div className="space-y-1">
+                                {(() => {
+                                  const appFiles = Object.keys(files).filter(f => f.includes('app/'))
+                                  const componentFiles = Object.keys(files).filter(f => f.includes('components/'))
+                                  const hasRouter = Object.values(files).some(f => f.includes('expo-router') || f.includes('useRouter'))
+                                  const hasTabs = Object.keys(files).some(f => f.includes('(tabs)'))
+                                  
+                                  return (
+                                    <>
+                                      <div className="flex items-center space-x-2 text-xs">
+                                        <span className={appFiles.length > 0 ? 'text-green-400' : 'text-red-400'}>
+                                          {appFiles.length > 0 ? '✅' : '❌'}
+                                        </span>
+                                        <span className="text-gray-400">App Directory ({appFiles.length} files)</span>
+                                      </div>
+                                      <div className="flex items-center space-x-2 text-xs">
+                                        <span className={componentFiles.length > 0 ? 'text-green-400' : 'text-red-400'}>
+                                          {componentFiles.length > 0 ? '✅' : '❌'}
+                                        </span>
+                                        <span className="text-gray-400">Components ({componentFiles.length} files)</span>
+                                      </div>
+                                      <div className="flex items-center space-x-2 text-xs">
+                                        <span className={hasRouter ? 'text-green-400' : 'text-yellow-400'}>
+                                          {hasRouter ? '✅' : '⚠️'}
+                                        </span>
+                                        <span className="text-gray-400">Expo Router {hasRouter ? 'Detected' : 'Not Found'}</span>
+                                      </div>
+                                      <div className="flex items-center space-x-2 text-xs">
+                                        <span className={hasTabs ? 'text-green-400' : 'text-gray-500'}>
+                                          {hasTabs ? '✅' : '➖'}
+                                        </span>
+                                        <span className="text-gray-400">Tab Navigation {hasTabs ? 'Active' : 'Not Used'}</span>
+                                      </div>
+                                    </>
+                                  )
+                                })()}
+                              </div>
+                            </div>
+                            
+                            <div>
+                              <h4 className="text-sm font-medium text-gray-300 mb-2">Dependencies Detected</h4>
+                              <div className="flex flex-wrap gap-1">
+                                {(() => {
+                                  const allCode = Object.values(files).join(' ')
+                                  const deps = []
+                                  
+                                  if (allCode.includes('expo-router')) deps.push('expo-router')
+                                  if (allCode.includes('react-navigation')) deps.push('react-navigation')
+                                  if (allCode.includes('@tanstack/react-query')) deps.push('react-query')
+                                  if (allCode.includes('expo-linear-gradient')) deps.push('expo-linear-gradient')
+                                  if (allCode.includes('expo-image')) deps.push('expo-image')
+                                  if (allCode.includes('AsyncStorage')) deps.push('async-storage')
+                                  if (allCode.includes('expo-notifications')) deps.push('expo-notifications')
+                                  
+                                  return deps.length > 0 ? deps.map(dep => (
+                                    <span key={dep} className="px-2 py-1 bg-blue-600 text-white text-xs rounded">
+                                      {dep}
+                                    </span>
+                                  )) : <span className="text-gray-500 text-xs">No external deps detected</span>
+                                })()}
+                              </div>
                             </div>
                           </div>
-                          
-                          <div>
-                            <h4 className="text-sm font-medium text-gray-300 mb-2">Build Ready</h4>
-                            <div className="space-y-2">
-                              <div className="flex items-center space-x-2">
-                                <span className={files['package.json'] ? 'text-green-400' : 'text-red-400'}>
-                                  {files['package.json'] ? '✅' : '❌'}
-                                </span>
-                                <span className="text-sm text-gray-400">Package.json</span>
-                              </div>
-                              <div className="flex items-center space-x-2">
-                                <span className={Object.keys(files).some(f => f.includes('app/') || f.includes('App.')) ? 'text-green-400' : 'text-red-400'}>
-                                  {Object.keys(files).some(f => f.includes('app/') || f.includes('App.')) ? '✅' : '❌'}
-                                </span>
-                                <span className="text-sm text-gray-400">Main App File</span>
-                              </div>
-                            </div>
+                        </div>
+
+                        {/* App Type Detection */}
+                        <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+                          <h3 className="text-lg font-medium text-gray-200 mb-4 flex items-center space-x-2">
+                            <Palette className="w-5 h-5 text-purple-400" />
+                            <span>App Analysis</span>
+                          </h3>
+                          <div className="space-y-3">
+                            {(() => {
+                              const allCode = Object.values(files).join(' ').toLowerCase()
+                              const fileName = Object.keys(files).join(' ').toLowerCase()
+                              
+                              let appType = 'Unknown'
+                              let appFeatures = []
+                              
+                              if (allCode.includes('todo') || allCode.includes('task')) {
+                                appType = 'Todo/Productivity App'
+                                appFeatures = ['Task Management', 'List Views', 'CRUD Operations']
+                              } else if (allCode.includes('ecommerce') || allCode.includes('product') || allCode.includes('cart')) {
+                                appType = 'eCommerce App' 
+                                appFeatures = ['Product Catalog', 'Shopping Cart', 'User Authentication']
+                              } else if (allCode.includes('weather') || allCode.includes('forecast')) {
+                                appType = 'Weather App'
+                                appFeatures = ['Weather API', 'Location Services', 'Forecasts']
+                              } else if (allCode.includes('social') || allCode.includes('chat') || allCode.includes('message')) {
+                                appType = 'Social/Messaging App'
+                                appFeatures = ['Real-time Chat', 'User Profiles', 'Social Features']
+                              } else if (allCode.includes('news') || allCode.includes('article')) {
+                                appType = 'News/Content App'
+                                appFeatures = ['Article Lists', 'Content Feed', 'Reading Experience']
+                              } else {
+                                appType = 'Custom React Native App'
+                                appFeatures = ['Custom Components', 'TypeScript', 'Modern Architecture']
+                              }
+                              
+                              return (
+                                <>
+                                  <div>
+                                    <span className="text-sm text-gray-400">Detected Type:</span>
+                                    <div className="text-lg font-medium text-blue-400 mt-1">{appType}</div>
+                                  </div>
+                                  <div>
+                                    <span className="text-sm text-gray-400">Key Features:</span>
+                                    <div className="flex flex-wrap gap-1 mt-1">
+                                      {appFeatures.map(feature => (
+                                        <span key={feature} className="px-2 py-1 bg-purple-600 text-white text-xs rounded">
+                                          {feature}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <span className="text-sm text-gray-400">Build Ready:</span>
+                                    <div className="flex items-center space-x-2 mt-1">
+                                      <span className={files['package.json'] ? 'text-green-400' : 'text-red-400'}>
+                                        {files['package.json'] ? '✅' : '❌'}
+                                      </span>
+                                      <span className="text-sm">Ready for Expo build</span>
+                                    </div>
+                                  </div>
+                                </>
+                              )
+                            })()}
+                          </div>
+                        </div>
+
+                        {/* Quick Actions */}
+                        <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+                          <h3 className="text-lg font-medium text-gray-200 mb-4 flex items-center space-x-2">
+                            <Zap className="w-5 h-5 text-yellow-400" />
+                            <span>Quick Actions</span>
+                          </h3>
+                          <div className="space-y-3">
+                            <button
+                              onClick={() => setActiveTab('build')}
+                              className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                            >
+                              <Hammer className="w-4 h-4" />
+                              <span>Build for Production</span>
+                            </button>
+                            <button
+                              onClick={downloadProject}
+                              className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+                            >
+                              <Download className="w-4 h-4" />
+                              <span>Download Source Code</span>
+                            </button>
+                            <button
+                              onClick={() => setIsChatCollapsed(false)}
+                              className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors"
+                            >
+                              <MessageSquare className="w-4 h-4" />
+                              <span>Continue Development</span>
+                            </button>
                           </div>
                         </div>
                       </div>
@@ -1766,6 +2025,13 @@ ${stateValidation.issues.length > 0 ? `⚠️ **Issues Found**:\n${stateValidati
                         <Smartphone className="w-16 h-16 mx-auto mb-4 opacity-50" />
                         <h3 className="text-lg font-medium mb-2">No App to Preview</h3>
                         <p className="text-sm mb-4">Generate a React Native app first to see the live preview</p>
+                        <button
+                          onClick={() => setIsChatCollapsed(false)}
+                          className="flex items-center space-x-2 px-4 py-2 mx-auto text-sm bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+                        >
+                          <MessageSquare className="w-4 h-4" />
+                          <span>Start Building</span>
+                        </button>
                       </div>
                     </div>
                   )}

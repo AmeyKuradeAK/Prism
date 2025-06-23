@@ -10,6 +10,72 @@ interface MergeStrategy {
   reason: string
 }
 
+/**
+ * Clean and normalize file paths from AI output
+ * Removes FILE: prefixes, emojis, and normalizes paths
+ */
+function cleanAndMergeFiles(files: { [key: string]: string }): { [key: string]: string } {
+  const cleaned: { [key: string]: string } = {}
+  const duplicateTracker: { [key: string]: number } = {}
+  
+  console.log('🧹 Starting comprehensive file cleaning...')
+  console.log('📋 Raw input files:', Object.keys(files))
+  
+  for (const [rawPath, content] of Object.entries(files)) {
+    if (!content || typeof content !== 'string') {
+      console.warn(`⚠️ Skipping invalid file: ${rawPath} (empty or invalid content)`)
+      continue
+    }
+    
+    let cleanPath = rawPath.trim()
+    
+    // Remove various FILE: prefixes and artifacts
+    cleanPath = cleanPath
+      .replace(/^📁?\s*FILE:\s*/gi, '') // Remove "📁 FILE:" or "FILE:"
+      .replace(/^📁\s*/gi, '') // Remove standalone emoji
+      .replace(/^Path:\s*/gi, '') // Remove "Path:"
+      .replace(/^File:\s*/gi, '') // Remove "File:"
+      .replace(/^[\w\s]*:\s*/gi, '') // Remove any other prefixes like "Component:", "Screen:", etc.
+      .replace(/^["']|["']$/g, '') // Remove quotes
+      .replace(/^\/+/, '') // Remove leading slashes
+      .replace(/\/{2,}/g, '/') // Fix double slashes
+      .replace(/\/$/, '') // Remove trailing slashes
+    
+    // Skip if path becomes empty after cleaning
+    if (!cleanPath) {
+      console.warn(`⚠️ Skipping file with empty path after cleaning: "${rawPath}"`)
+      continue
+    }
+    
+    // Validate path (no dangerous characters)
+    if (cleanPath.includes('..') || cleanPath.includes('<') || cleanPath.includes('>')) {
+      console.warn(`⚠️ Skipping unsafe path: ${cleanPath}`)
+      continue
+    }
+    
+    // Track duplicates
+    if (cleaned[cleanPath]) {
+      duplicateTracker[cleanPath] = (duplicateTracker[cleanPath] || 1) + 1
+      console.warn(`🔄 Duplicate file detected, overwriting: ${cleanPath} (instance #${duplicateTracker[cleanPath]})`)
+      console.log(`   Old content: ${cleaned[cleanPath].substring(0, 100)}...`)
+      console.log(`   New content: ${content.substring(0, 100)}...`)
+    }
+    
+    // Store cleaned file
+    cleaned[cleanPath] = content
+    console.log(`✅ Cleaned: "${rawPath}" → "${cleanPath}" (${content.length} chars)`)
+  }
+  
+  const duplicateCount = Object.keys(duplicateTracker).length
+  console.log(`🧹 File cleaning complete:`)
+  console.log(`   📥 Input: ${Object.keys(files).length} files`)
+  console.log(`   📤 Output: ${Object.keys(cleaned).length} files`)
+  console.log(`   🔄 Duplicates resolved: ${duplicateCount}`)
+  console.log(`📋 Final cleaned paths:`, Object.keys(cleaned).sort())
+  
+  return cleaned
+}
+
 class ClientMemFS {
   private baseFiles: FileSystem = {}
   private aiFiles: FileSystem = {}
@@ -68,7 +134,11 @@ class ClientMemFS {
       await this._simulateShellCommand(`mkdir -p /tmp/base-template`)
       await this._simulateShellCommand(`cd /tmp/base-template`)
       
-      this.baseFiles = generateCompleteDemo1Template(appName)
+      const rawBaseFiles = generateCompleteDemo1Template(appName)
+      
+      // Clean base template files too (in case they have any artifacts)
+      console.log('🧹 Cleaning base template files...')
+      this.baseFiles = cleanAndMergeFiles(rawBaseFiles)
       this.mergedFiles = { ...this.baseFiles }
       
       // Simulate creating files
@@ -76,7 +146,7 @@ class ClientMemFS {
         await this._simulateShellCommand(`touch ${path}`, `Created ${path} (${content.length} chars)`)
       }
       
-      console.log(`✅ Base template loaded: ${Object.keys(this.baseFiles).length} files`)
+      console.log(`✅ Base template loaded and cleaned: ${Object.keys(this.baseFiles).length} files`)
       console.log('📋 Base files:', Object.keys(this.baseFiles).sort())
       
       // Simulate file verification
@@ -246,7 +316,7 @@ class ClientMemFS {
   }
 
   /**
-   * Internal AI merge implementation - updated to use safe merge
+   * Internal AI merge implementation - updated to use comprehensive cleaning
    */
   private async _performAIMerge(aiGeneratedFiles: { path: string, content: string }[]): Promise<void> {
     console.log(`🤖 Merging ${aiGeneratedFiles.length} AI-generated files (base template confirmed loaded)...`)
@@ -255,19 +325,28 @@ class ClientMemFS {
     await this._simulateShellCommand(`mkdir -p /tmp/ai-files`)
     await this._simulateShellCommand(`cd /tmp/ai-files`)
     
-    // Convert AI files to FileSystem format with path normalization
-    const aiFiles: FileSystem = {}
+    // Convert AI files to raw format first
+    const rawAiFiles: { [key: string]: string } = {}
     for (const file of aiGeneratedFiles) {
       if (file.path && file.content) {
-        // Normalize path to match base template format (WITH leading slash)
-        const normalizedPath = file.path.startsWith('/') ? file.path : `/${file.path}`
-        aiFiles[normalizedPath] = file.content
-        
-        console.log(`📁 Normalizing AI file path: "${file.path}" → "${normalizedPath}"`)
-        
-        // Simulate creating AI file
-        await this._simulateShellCommand(`touch ${normalizedPath}`, `AI file: ${normalizedPath} (${file.content.length} chars)`)
+        rawAiFiles[file.path] = file.content
       }
+    }
+    
+    // Apply comprehensive cleaning to remove FILE: prefixes and handle duplicates
+    const cleanedAiFiles = cleanAndMergeFiles(rawAiFiles)
+    
+    // Convert cleaned files to proper FileSystem format
+    const aiFiles: FileSystem = {}
+    for (const [cleanPath, content] of Object.entries(cleanedAiFiles)) {
+      // Ensure path has leading slash for consistency with base template
+      const normalizedPath = cleanPath.startsWith('/') ? cleanPath : `/${cleanPath}`
+      aiFiles[normalizedPath] = content
+      
+      console.log(`📁 Final path normalization: "${cleanPath}" → "${normalizedPath}"`)
+      
+      // Simulate creating AI file
+      await this._simulateShellCommand(`touch ${normalizedPath}`, `AI file: ${normalizedPath} (${content.length} chars)`)
     }
     
     this.aiFiles = aiFiles
@@ -606,23 +685,38 @@ class ClientMemFS {
   }
 
   /**
-   * Debug method - validate current state
+   * Debug method - validate current state and check for FILE: artifacts
    */
   validateCurrentState(): {
     isValid: boolean
     issues: string[]
+    artifacts: string[]
     summary: {
       baseFiles: number
       aiFiles: number  
       totalFiles: number
       preservedStructure: boolean
+      cleanPaths: boolean
     }
   } {
     const issues: string[] = []
+    const artifacts: string[] = []
     
     // Check if base template is properly loaded
     if (!this.isBaseLoaded) {
       issues.push('Base template not loaded')
+    }
+    
+    // Check for FILE: artifacts in all file paths
+    const allPaths = [...Object.keys(this.baseFiles), ...Object.keys(this.aiFiles), ...Object.keys(this.mergedFiles)]
+    allPaths.forEach(path => {
+      if (path.match(/FILE:/i) || path.match(/📁\s*FILE:/i) || path.match(/^📁[^/]/)) {
+        artifacts.push(path)
+      }
+    })
+    
+    if (artifacts.length > 0) {
+      issues.push(`Found ${artifacts.length} FILE: artifacts that should be cleaned`)
     }
     
     // Check if we lost any base files
@@ -643,14 +737,32 @@ class ClientMemFS {
       }
     })
     
+    // Check for duplicate folders (real vs FILE: versions)
+    const folderNames = new Set<string>()
+    const duplicateFolders = new Set<string>()
+    
+    mergedPaths.forEach(path => {
+      const cleanPath = path.replace(/^\//, '')
+      const parts = cleanPath.split('/')
+      if (parts.length > 1) {
+        const folder = parts[0]
+        if (folderNames.has(folder)) {
+          duplicateFolders.add(folder)
+        }
+        folderNames.add(folder)
+      }
+    })
+    
     return {
       isValid: issues.length === 0,
       issues,
+      artifacts,
       summary: {
         baseFiles: Object.keys(this.baseFiles).length,
         aiFiles: Object.keys(this.aiFiles).length,
         totalFiles: Object.keys(this.mergedFiles).length,
-        preservedStructure: lostFiles.length === 0
+        preservedStructure: lostFiles.length === 0,
+        cleanPaths: artifacts.length === 0
       }
     }
   }
