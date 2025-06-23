@@ -160,9 +160,9 @@ export async function getUserUsageStats(userId: string): Promise<UsageStats> {
       resetDate
     }
   } catch (error) {
-    console.error('Error getting usage stats:', error)
-    // Return safe defaults
-    return {
+    console.error('Error getting usage stats for user:', userId, error)
+    // Return safe defaults with better debugging info
+    const defaultStats = {
       promptsUsed: 0,
       promptsLimit: 15, // Free tier default
       projectsCreated: 0,
@@ -171,6 +171,8 @@ export async function getUserUsageStats(userId: string): Promise<UsageStats> {
       canUseAI: true,
       resetDate: new Date()
     }
+    console.log('Returning default usage stats:', defaultStats)
+    return defaultStats
   }
 }
 

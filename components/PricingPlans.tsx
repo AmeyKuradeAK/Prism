@@ -6,6 +6,7 @@ import { Check, Zap, Star, Crown, Users, Building, X } from 'lucide-react'
 import { SUBSCRIPTION_PLANS, formatPrice, calculateYearlySavings } from '@/lib/utils/subscription-plans'
 import { useRouter } from 'next/navigation'
 import { useUser } from '@clerk/nextjs'
+import { PricingTable } from '@clerk/nextjs'
 
 export default function PricingPlans() {
   const [isYearly, setIsYearly] = useState(false)
@@ -48,7 +49,6 @@ export default function PricingPlans() {
 
   // Separate free and paid plans
   const freePlan = SUBSCRIPTION_PLANS.find(plan => plan.id === 'spark')
-  const paidPlans = SUBSCRIPTION_PLANS.filter(plan => plan.id !== 'spark')
 
   return (
     <div className="max-w-7xl mx-auto space-y-16">
@@ -90,7 +90,7 @@ export default function PricingPlans() {
               </div>
 
               <button 
-                onClick={() => handleUpgrade('spark')}
+                onClick={() => router.push('/sign-in')}
                 className="btn-glossy w-full py-4 text-lg font-bold"
               >
                 Get Started Free
@@ -100,159 +100,21 @@ export default function PricingPlans() {
         </motion.div>
       )}
 
-      {/* Paid Plans Section */}
-      <div>
-        <div className="text-center mb-12">
-          <h2 className="text-4xl font-bold text-white mb-4">Upgrade for More Power</h2>
-          <p className="text-light text-xl max-w-3xl mx-auto mb-12">
-            Unlock advanced features, higher limits, and premium support
-          </p>
-
-          {/* Billing Toggle */}
+      {/* Paid Plans Section - Use Clerk PricingTable */}
+      <div className="text-center mb-12">
+        <h2 className="text-4xl font-bold text-white mb-4">Upgrade for More Power</h2>
+        <p className="text-light text-xl max-w-3xl mx-auto mb-12">
+          Unlock advanced features, higher limits, and premium support
+        </p>
+        {isLoaded && isSignedIn ? (
           <div className="flex justify-center">
-            <div className="glass-dark rounded-professional p-1">
-              <div className="flex">
-                <button
-                  onClick={() => setIsYearly(false)}
-                  className={`px-8 py-3 rounded-professional font-medium transition-professional ${
-                    !isYearly 
-                      ? 'bg-white text-black shadow-professional' 
-                      : 'text-light hover:text-white'
-                  }`}
-                >
-                  Monthly
-                </button>
-                <button
-                  onClick={() => setIsYearly(true)}
-                  className={`px-8 py-3 rounded-professional font-medium transition-professional relative ${
-                    isYearly 
-                      ? 'bg-white text-black shadow-professional' 
-                      : 'text-light hover:text-white'
-                  }`}
-                >
-                  Yearly
-                  <span className="absolute -top-2 -right-2 bg-white text-black text-xs px-2 py-0.5 rounded-professional font-semibold">
-                    2 months free
-                  </span>
-                </button>
-              </div>
+            <div className="w-full max-w-3xl">
+              <PricingTable />
             </div>
           </div>
-        </div>
-
-        {/* Paid Plans Grid - Bigger and More Responsive */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-8">
-          {paidPlans.map((plan, index) => {
-            const price = isYearly ? plan.price.yearly : plan.price.monthly
-            const yearlyPrice = plan.price.yearly
-            const monthlyPrice = plan.price.monthly
-            const savings = calculateYearlySavings(monthlyPrice, yearlyPrice)
-            
-            return (
-              <motion.div
-                key={plan.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
-                className={`relative transition-professional ${
-                  plan.popular 
-                    ? 'card-glass shadow-glossy scale-105 border-2 border-white/30' 
-                    : 'card-glass hover:shadow-glossy border border-glass'
-                }`}
-              >
-                {/* Popular Badge */}
-                {plan.popular && (
-                  <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
-                    <div className="bg-white text-black text-sm font-bold px-6 py-2 rounded-professional shadow-professional">
-                      Most Popular
-                    </div>
-                  </div>
-                )}
-
-                <div className="p-8 lg:p-10">
-                  {/* Plan Icon & Name */}
-                  <div className="text-center mb-8">
-                    <div className="w-20 h-20 mx-auto mb-6 rounded-professional bg-gradient-glossy flex items-center justify-center text-white shadow-glossy">
-                      {getPlanIcon(plan.id)}
-                    </div>
-                    
-                    <h3 className="text-2xl lg:text-3xl font-bold text-white mb-3">{plan.name}</h3>
-                    <p className="text-light">{plan.tagline}</p>
-                  </div>
-
-                  {/* Pricing */}
-                  <div className="text-center mb-8">
-                    <div className="text-4xl lg:text-5xl font-bold text-white mb-3">
-                      {isYearly && plan.price.yearly > 0 ? (
-                        <>
-                          {formatPrice(Math.round(plan.price.yearly / 12))}
-                          <span className="text-lg font-normal text-light">/month</span>
-                        </>
-                      ) : (
-                        <>
-                          {formatPrice(price)}
-                          {price > 0 && (
-                            <span className="text-lg font-normal text-light">/month</span>
-                          )}
-                        </>
-                      )}
-                    </div>
-                    
-                    {isYearly && plan.price.yearly > 0 && (
-                      <div className="text-muted text-sm mb-2">
-                        Billed annually ({formatPrice(plan.price.yearly)}/year)
-                      </div>
-                    )}
-                    
-                    {isYearly && savings > 0 && (
-                      <div className="text-white text-sm font-medium bg-white/10 rounded-professional px-3 py-1 inline-block">
-                        Save {savings}% yearly
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Features */}
-                  <div className="space-y-4 mb-8">
-                    {plan.features.map((feature, featureIndex) => (
-                      <div key={featureIndex} className="flex items-start space-x-3">
-                        <Check className="w-5 h-5 text-white mt-0.5 flex-shrink-0" />
-                        <span className="text-light">{feature}</span>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* CTA Button */}
-                  <div className="mt-auto">
-                    {plan.id === 'enterprise' ? (
-                      <div className="space-y-3">
-                        <button 
-                          onClick={() => handleUpgrade('enterprise')}
-                          className="glass-dark w-full py-4 text-center font-bold text-white hover:bg-white/10 transition-professional rounded-professional"
-                        >
-                          Contact Sales
-                        </button>
-                        <p className="text-xs text-muted text-center">
-                          Custom pricing and features
-                        </p>
-                      </div>
-                    ) : (
-                      <button 
-                        onClick={() => handleUpgrade(plan.id)}
-                        className={`w-full py-4 text-center transition-professional font-bold ${
-                          plan.popular 
-                            ? 'btn-glossy' 
-                            : 'glass-dark text-white hover:bg-white/10 rounded-professional'
-                        }`}
-                      >
-                        Upgrade to {plan.name}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </motion.div>
-            )
-          })}
-        </div>
+        ) : (
+          <div className="text-light mt-8">Sign in to view and upgrade paid plans.</div>
+        )}
       </div>
 
       {/* Feature Comparison Table */}

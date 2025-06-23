@@ -150,19 +150,26 @@ export async function POST(request: NextRequest) {
 
     const savedProject = await project.save()
 
-    // Update user's project count
-    await User.findOneAndUpdate(
-      { clerkId: userId },
-      { 
-        $inc: { 
-          'usage.projectsThisMonth': 1,
-          'analytics.totalProjects': 1
-        },
-        $set: {
-          'analytics.lastActiveAt': new Date()
+    // Track project creation using the usage tracker
+    const { trackProjectCreation } = await import('@/lib/utils/usage-tracker')
+    const projectTracked = await trackProjectCreation(userId)
+    if (!projectTracked) {
+      console.log('⚠️ Failed to track project creation in projects API')
+      
+      // Fallback to direct database update if tracking fails
+      await User.findOneAndUpdate(
+        { clerkId: userId },
+        { 
+          $inc: { 
+            'usage.projectsThisMonth': 1,
+            'analytics.totalProjects': 1
+          },
+          $set: {
+            'analytics.lastActiveAt': new Date()
+          }
         }
-      }
-    )
+      )
+    }
 
     console.log(`✅ Project saved: "${projectName}" with ${filesArray.length} files`)
 

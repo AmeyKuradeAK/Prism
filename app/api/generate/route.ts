@@ -83,6 +83,13 @@ export async function POST(request: NextRequest) {
     // Quick mode fallback
     if (testMode || quickMode) {
       console.log('⚡ Quick mode - using COMPLETE demo-1 base template only')
+      
+      // Track prompt usage even in quick mode
+      const promptTracked = await trackPromptUsage(userId)
+      if (!promptTracked) {
+        console.log('⚠️ Quick mode: Failed to track prompt usage')
+      }
+      
       const { generateDemo1BaseTemplate } = await import('@/lib/generators/templates/complete-demo1-template')
       const { analyzePrompt } = await import('@/lib/generators/v0-pipeline')
       
@@ -97,7 +104,8 @@ export async function POST(request: NextRequest) {
           message: `Quick mode: Generated ${Object.keys(files).length} files`,
           fileCount: Object.keys(files).length,
           pipeline: 'quick-mode',
-          analysis: analysis
+          analysis: analysis,
+          usageTracked: promptTracked
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } }
       )
@@ -135,27 +143,40 @@ export async function POST(request: NextRequest) {
       // If parsing failed, create enhanced demo-1 base template
       if (Object.keys(files).length === 0) {
         console.log('⚠️ AI parsing failed, using COMPLETE demo-1 base template...')
+        
+        // Track prompt usage even when AI parsing fails
+        const promptTracked = await trackPromptUsage(userId)
+        if (!promptTracked) {
+          console.log('⚠️ Fallback: Failed to track prompt usage')
+        }
+        
         const { generateDemo1BaseTemplate } = await import('@/lib/generators/templates/complete-demo1-template')
         const { analyzePrompt } = await import('@/lib/generators/v0-pipeline')
         
         const analysis = analyzePrompt(prompt)
         const appName = `${analysis.type.charAt(0).toUpperCase() + analysis.type.slice(1)}App`
+        const templateFiles = generateDemo1BaseTemplate(appName)
+        
         return new Response(
           JSON.stringify({
             success: true,
-            files: generateDemo1BaseTemplate(appName),
-            message: `AI parsing failed, using base template (${Object.keys(generateDemo1BaseTemplate(appName)).length} files)`,
-            fileCount: Object.keys(generateDemo1BaseTemplate(appName)).length,
+            files: templateFiles,
+            message: `AI parsing failed, using base template (${Object.keys(templateFiles).length} files)`,
+            fileCount: Object.keys(templateFiles).length,
             pipeline: 'base-template-fallback',
             provider: aiResponse.provider,
-            cost: aiResponse.cost
+            cost: aiResponse.cost,
+            usageTracked: promptTracked
           }),
           { status: 200, headers: { 'Content-Type': 'application/json' } }
         )
       }
       
       // Track prompt usage
-      await trackPromptUsage(userId)
+      const promptTracked = await trackPromptUsage(userId)
+      if (!promptTracked) {
+        console.log('⚠️ Failed to track prompt usage for successful generation')
+      }
       
       // Auto-save project to database
       let projectId = null
@@ -377,19 +398,26 @@ async function saveProjectToDatabase(userId: string, prompt: string, files: { [k
 
   const savedProject = await project.save()
 
-  // Update user's project count
-  await User.findOneAndUpdate(
-    { clerkId: userId },
-    { 
-      $inc: { 
-        'usage.projectsThisMonth': 1,
-        'analytics.totalProjects': 1
-      },
-      $set: {
-        'analytics.lastActiveAt': new Date()
+  // Track project creation using the usage tracker
+  const { trackProjectCreation } = await import('@/lib/utils/usage-tracker')
+  const projectTracked = await trackProjectCreation(userId)
+  if (!projectTracked) {
+    console.log('⚠️ Failed to track project creation')
+    
+    // Fallback to direct database update if tracking fails
+    await User.findOneAndUpdate(
+      { clerkId: userId },
+      { 
+        $inc: { 
+          'usage.projectsThisMonth': 1,
+          'analytics.totalProjects': 1
+        },
+        $set: {
+          'analytics.lastActiveAt': new Date()
+        }
       }
-    }
-  )
+    )
+  }
 
   return {
     id: savedProject._id.toString(),

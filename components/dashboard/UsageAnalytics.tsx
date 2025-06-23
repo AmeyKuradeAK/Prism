@@ -39,15 +39,20 @@ export default function UsageAnalytics({ userId }: UsageAnalyticsProps) {
       
       const response = await fetch('/api/user/usage-stats')
       if (!response.ok) {
-        throw new Error('Failed to fetch usage data')
+        const errorText = await response.text()
+        console.error('Usage stats API error:', response.status, errorText)
+        throw new Error(`Failed to fetch usage data: ${response.status}`)
       }
       
       const data = await response.json()
+      console.log('Usage data received:', data)
+      
       setUsageData({
         ...data,
         resetDate: new Date(data.resetDate)
       })
     } catch (err) {
+      console.error('Error fetching usage data:', err)
       setError(err instanceof Error ? err.message : 'Failed to load usage data')
     } finally {
       setLoading(false)

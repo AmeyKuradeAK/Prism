@@ -3,7 +3,7 @@
 import { motion, useScroll, useTransform, useSpring } from 'framer-motion'
 import { useRef, useState, Suspense, useEffect } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
-import { OrbitControls, Float, MeshDistortMaterial, Sphere, Box, RoundedBox, Text } from '@react-three/drei'
+import { OrbitControls, Float, MeshDistortMaterial, Sphere, Box, RoundedBox, Text, Html } from '@react-three/drei'
 import * as THREE from 'three'
 import { 
   Smartphone, 
@@ -22,6 +22,7 @@ import {
   Wand2
 } from 'lucide-react'
 import Link from 'next/link'
+import { useSpring as useSpringSpring, animated } from '@react-spring/three'
 
 const features = [
   {
@@ -660,6 +661,90 @@ const Smooth3DCard = ({ children, className = "", delay = 0 }: { children: React
   )
 }
 
+// --- New ProjectWorkspace3D Component ---
+function ProjectWorkspace3D() {
+  const [open, setOpen] = useState(false)
+  const [hovered, setHovered] = useState(false)
+  // Folder lid animation
+  const { lidRotation } = useSpringSpring({
+    lidRotation: open ? -Math.PI / 2.2 : 0,
+    config: { mass: 1, tension: 120, friction: 18 }
+  })
+  // App icon bounce animation
+  const { iconY } = useSpringSpring({
+    iconY: open ? 0.5 : 0,
+    config: { mass: 1, tension: 180, friction: 12 }
+  })
+
+  const lidRef = useRef<THREE.Mesh>(null)
+  useFrame(() => {
+    if (lidRef.current) {
+      lidRef.current.rotation.x = lidRotation.get()
+    }
+  })
+
+  return (
+    <group position={[0, 0.5, 0]}>
+      {/* Folder Base */}
+      <mesh
+        position={[0, 0, 0]}
+        castShadow
+        receiveShadow
+        onPointerOver={() => setHovered(true)}
+        onPointerOut={() => setHovered(false)}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <boxGeometry args={[2.2, 0.3, 1.2]} />
+        <meshStandardMaterial color={hovered ? '#fff' : '#222'} metalness={0.7} roughness={0.2} />
+      </mesh>
+      {/* Folder Lid (animated) */}
+      <mesh
+        ref={lidRef}
+        position={[0, 0.18, -0.6]}
+        castShadow
+        receiveShadow
+      >
+        <boxGeometry args={[2.2, 0.12, 1.2]} />
+        <meshStandardMaterial color="#444" metalness={0.8} roughness={0.15} />
+      </mesh>
+      {/* Document inside folder */}
+      <mesh position={[0, 0.18, 0]}>
+        <boxGeometry args={[1.6, 0.04, 1]} />
+        <meshStandardMaterial color="#fff" emissive="#fff" emissiveIntensity={open ? 0.18 : 0.08} />
+      </mesh>
+      {/* Pencil */}
+      <group position={[-1, -0.1, 0.7]} rotation={[0, 0, -0.2]}>
+        <cylinderGeometry args={[0.04, 0.04, 1.1, 16]} />
+        <meshStandardMaterial color="#bbb" />
+        <mesh position={[0, 0.55, 0]}>
+          <coneGeometry args={[0.06, 0.18, 16]} />
+          <meshStandardMaterial color="#222" />
+        </mesh>
+      </group>
+      {/* App Icons (animated bounce) */}
+      <group position={[0, iconY.get(), 0]}>
+        <mesh position={[-0.7, 0.4, 0.5]}>
+          <sphereGeometry args={[0.13, 16, 16]} />
+          <meshStandardMaterial color="#fff" emissive="#fff" emissiveIntensity={0.12} />
+        </mesh>
+        <mesh position={[0.7, 0.4, 0.5]}>
+          <boxGeometry args={[0.22, 0.22, 0.22]} />
+          <meshStandardMaterial color="#fff" emissive="#fff" emissiveIntensity={0.12} />
+        </mesh>
+        <mesh position={[0, 0.4, -0.5]}>
+          <cylinderGeometry args={[0.12, 0.12, 0.18, 24]} />
+          <meshStandardMaterial color="#fff" emissive="#fff" emissiveIntensity={0.12} />
+        </mesh>
+      </group>
+      {/* Soft Shadow */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.18, 0]} receiveShadow>
+        <circleGeometry args={[1.5, 32]} />
+        <meshBasicMaterial color="#fff" opacity={0.08} transparent />
+      </mesh>
+    </group>
+  )
+}
+
 export default function LandingPage() {
   const containerRef = useRef<HTMLDivElement>(null)
   const { scrollYProgress } = useScroll({ target: containerRef })
@@ -866,38 +951,29 @@ export default function LandingPage() {
               </motion.div>
             </motion.div>
 
-            {/* Right Column - 3D Scene */}
+            {/* Right Column - 3D Project Workspace */}
             <motion.div
               initial={{ opacity: 0, x: 100 }}
               animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 1, delay: 1.2 }}
-              className="relative"
+              transition={{ duration: 1, delay: 1 }}
+              className="flex items-center justify-center"
             >
-              <div className="relative rounded-professional overflow-hidden glass-dark border border-glass">
-                <AppBuildingScene3D />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
+              <div className="w-full max-w-md h-96">
+                <Canvas
+                  camera={{ position: [0, 0, 7], fov: 50 }}
+                  shadows
+                  style={{ background: 'transparent' }}
+                  gl={{ preserveDrawingBuffer: true, antialias: true }}
+                  dpr={[1, 2]}
+                >
+                  <ambientLight intensity={0.7} />
+                  <directionalLight position={[5, 5, 5]} intensity={0.7} />
+                  <Suspense fallback={null}>
+                    <ProjectWorkspace3D />
+                  </Suspense>
+                  <OrbitControls enablePan={false} enableZoom={false} enableRotate={true} />
+                </Canvas>
               </div>
-              
-              {/* Floating Stats */}
-              <motion.div 
-                className="card-glass absolute -bottom-8 -left-8 p-6 text-center"
-                initial={{ opacity: 0, scale: 0 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 2 }}
-              >
-                <div className="text-3xl font-bold text-white">∞</div>
-                <div className="text-sm text-light">Projects</div>
-              </motion.div>
-              
-              <motion.div 
-                className="card-glass absolute -top-8 -right-8 p-6 text-center"
-                initial={{ opacity: 0, scale: 0 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 2.2 }}
-              >
-                <div className="text-3xl font-bold text-white">24/7</div>
-                <div className="text-sm text-light">AI Available</div>
-              </motion.div>
             </motion.div>
           </div>
         </div>

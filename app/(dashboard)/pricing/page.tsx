@@ -1,6 +1,6 @@
 import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
-import PricingPlans from '@/components/PricingPlans'
+import { PricingTable } from '@clerk/nextjs'
 
 export default async function PricingPage() {
   const { userId } = await auth()
@@ -23,8 +23,12 @@ export default async function PricingPage() {
           </p>
         </div>
 
-        {/* Custom Pricing Plans */}
-        <PricingPlans />
+        {/* Clerk Pricing Table */}
+        <div className="flex justify-center">
+          <div className="w-full max-w-3xl">
+            <PricingTable />
+          </div>
+        </div>
       </div>
     </div>
   )

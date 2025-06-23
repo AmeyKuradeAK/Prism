@@ -5,8 +5,24 @@ import { motion } from 'framer-motion'
 import { Bell, Search, Settings, HelpCircle, Wand2, Sparkles, Zap } from 'lucide-react'
 import Link from 'next/link'
 
+declare global {
+  interface Window {
+    Clerk?: {
+      openBillingPortal?: () => void
+    }
+  }
+}
+
 export default function DashboardHeader() {
   const { user } = useUser()
+
+  const handleBilling = () => {
+    if (typeof window !== 'undefined' && window.Clerk && typeof window.Clerk.openBillingPortal === 'function') {
+      window.Clerk.openBillingPortal()
+    } else {
+      alert('Billing portal is not available. Please contact support.')
+    }
+  }
 
   return (
     <header className="nav-dark sticky top-0 z-50">
@@ -104,8 +120,15 @@ export default function DashboardHeader() {
               </motion.div>
             </div>
 
-            {/* User Profile */}
-            <div className="ml-4">
+            {/* User Profile and Billing */}
+            <div className="ml-4 flex items-center space-x-2">
+              <button
+                onClick={handleBilling}
+                className="px-4 py-2 bg-gradient-glossy text-white rounded-professional font-semibold shadow-professional hover:bg-white/20 transition-professional"
+                type="button"
+              >
+                Manage Billing
+              </button>
               <UserButton
                 appearance={{
                   elements: {
