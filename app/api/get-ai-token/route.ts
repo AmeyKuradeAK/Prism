@@ -8,7 +8,9 @@ const ENCRYPTION_IV_LENGTH = 16
 
 function encryptApiKey(apiKey: string): { encryptedKey: string, iv: string } {
   const iv = crypto.randomBytes(ENCRYPTION_IV_LENGTH)
-  const key = crypto.scryptSync(ENCRYPTION_KEY, 'salt', 32) // Derive 32-byte key
+  
+  // Use PBKDF2 to match client-side Web Crypto API
+  const key = crypto.pbkdf2Sync(ENCRYPTION_KEY, 'salt', 1, 32, 'sha256')
   const cipher = crypto.createCipheriv('aes-256-cbc', key, iv)
   
   let encrypted = cipher.update(apiKey, 'utf8', 'hex')
