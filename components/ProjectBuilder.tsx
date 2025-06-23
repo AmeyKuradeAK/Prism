@@ -81,8 +81,8 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
   // Chat and conversation state
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
     {
-      id: '1',
-      type: 'system',
+      id: 'welcome',
+      type: 'assistant',
       content: 'Welcome! I\'ll help you build your React Native app. Describe what you want to create, and I\'ll generate a complete project for you.',
       timestamp: new Date()
     }
@@ -92,13 +92,13 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
   
   // Project state
   const [files, setFiles] = useState<{ [key: string]: string }>({})
-  const [activeFile, setActiveFile] = useState<string | null>(null)
+  const [activeFile, setActiveFile] = useState<string>('')
   const [progressFiles, setProgressFiles] = useState<{ [key: string]: FileProgress }>({})
   const [project, setProject] = useState<any>(null)
   const [autoSaveStatus, setAutoSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved')
   
   // UI state
-  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['root']))
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['app', 'components', 'assets']))
   const [selectedPlatforms, setSelectedPlatforms] = useState<Set<string>>(new Set(['android']))
   const [buildStatuses, setBuildStatuses] = useState<BuildStatus[]>([])
   const [isBuilding, setIsBuilding] = useState(false)
@@ -164,7 +164,21 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
   // Auto-scroll chat to bottom
   useEffect(() => {
     if (chatRef.current) {
-      chatRef.current.scrollTop = chatRef.current.scrollHeight
+      // Add a small delay to ensure DOM has updated
+      setTimeout(() => {
+        if (chatRef.current) {
+          chatRef.current.scrollTop = chatRef.current.scrollHeight
+        }
+      }, 100)
+    }
+  }, [chatMessages])
+
+  // Debug: Log when chat messages change
+  useEffect(() => {
+    console.log('📨 Chat messages updated:', chatMessages.length, 'messages')
+    if (chatMessages.length > 0) {
+      const lastMessage = chatMessages[chatMessages.length - 1]
+      console.log('📨 Last message:', lastMessage.type, lastMessage.content.substring(0, 100))
     }
   }, [chatMessages])
 
@@ -1068,12 +1082,13 @@ This indicates a serious configuration issue.`,
           </div>
 
           {/* Chat Interface - ChatGPT Style */}
-          <div className="h-80 border-t border-gray-800 bg-black flex flex-col">
+          <div className="h-80 border-t border-gray-800 bg-black flex flex-col min-h-[320px]">
             {/* Chat Header */}
             <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <MessageSquare className="w-4 h-4 text-blue-400" />
                 <span className="text-sm font-medium text-gray-200">AI Assistant</span>
+                <span className="text-xs text-gray-400">({chatMessages.length} messages)</span>
               </div>
               <div className="flex items-center space-x-2">
                 {isGenerating && (
@@ -1090,7 +1105,7 @@ This indicates a serious configuration issue.`,
               ref={chatRef}
               className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-gray-800 p-4 space-y-4"
             >
-              {chatMessages.map((message) => (
+              {chatMessages.length > 0 ? chatMessages.map((message) => (
                 <motion.div
                   key={message.id}
                   initial={{ opacity: 0, y: 10 }}
@@ -1139,7 +1154,15 @@ This indicates a serious configuration issue.`,
                     </p>
                   </div>
                 </motion.div>
-              ))}
+              )) : (
+                <div className="flex items-center justify-center h-full text-gray-500">
+                  <div className="text-center">
+                    <MessageSquare className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">No messages yet</p>
+                    <p className="text-xs text-gray-600 mt-1">Start a conversation to generate your app</p>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Chat Input */}
