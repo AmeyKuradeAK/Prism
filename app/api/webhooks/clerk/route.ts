@@ -18,6 +18,15 @@ type ClerkWebhookEvent = {
     username?: string
     created_at?: number
     updated_at?: number
+    // Billing-specific data
+    user_id?: string
+    plan_id?: string
+    subscription_id?: string
+    status?: string
+    current_period_start?: number
+    current_period_end?: number
+    cancel_at_period_end?: boolean
+    metadata?: any
   }
 }
 
@@ -84,6 +93,19 @@ export async function POST(request: NextRequest) {
       case 'user.deleted':
         await handleUserDeleted(event.data)
         break
+      // Billing webhook events
+      case 'subscription.created':
+        await handleSubscriptionCreated(event.data)
+        break
+      case 'subscription.updated':
+        await handleSubscriptionUpdated(event.data)
+        break
+      case 'subscription.cancelled':
+        await handleSubscriptionCancelled(event.data)
+        break
+      case 'subscription.renewed':
+        await handleSubscriptionRenewed(event.data)
+        break
       default:
         console.log(`Unhandled webhook event type: ${event.type}`)
     }
@@ -108,8 +130,8 @@ async function handleUserCreated(userData: ClerkWebhookEvent['data']) {
       firstName: userData.first_name,
       lastName: userData.last_name,
       avatar: userData.image_url,
-      plan: 'free',
-      credits: 999999, // Unlimited for free users
+      plan: 'spark', // Free plan
+      credits: 10, // Free plan gets 10 generations per month
       preferences: {
         expoVersion: '53.0.0',
         codeStyle: 'typescript',
@@ -169,6 +191,122 @@ async function handleUserDeleted(userData: ClerkWebhookEvent['data']) {
     console.log('✅ Deleted user from MongoDB:', userData.id)
   } catch (error) {
     console.error('Error deleting user:', error)
+    throw error
+  }
+}
+
+// Billing webhook handlers
+async function handleSubscriptionCreated(data: ClerkWebhookEvent['data']) {
+  try {
+    console.log('💳 Subscription created:', data.subscription_id)
+    
+    const userId = data.user_id || data.id
+    if (!userId) {
+      console.error('No user ID in subscription created event')
+      return
+    }
+
+    await User.findOneAndUpdate(
+      { clerkId: userId },
+      {
+        plan: data.plan_id || 'spark',
+        'subscription.planId': data.plan_id,
+        'subscription.status': 'active',
+        'subscription.stripeSubscriptionId': data.subscription_id,
+        'subscription.currentPeriodEnd': data.current_period_end ? new Date(data.current_period_end * 1000) : null,
+        'subscription.cancelAtPeriodEnd': false,
+        updatedAt: new Date()
+      },
+      { upsert: true }
+    )
+
+    console.log(`✅ Updated user subscription: ${userId} -> ${data.plan_id}`)
+  } catch (error) {
+    console.error('Error handling subscription created:', error)
+    throw error
+  }
+}
+
+async function handleSubscriptionUpdated(data: ClerkWebhookEvent['data']) {
+  try {
+    console.log('💳 Subscription updated:', data.subscription_id)
+    
+    const userId = data.user_id || data.id
+    if (!userId) {
+      console.error('No user ID in subscription updated event')
+      return
+    }
+
+    await User.findOneAndUpdate(
+      { clerkId: userId },
+      {
+        plan: data.plan_id || 'spark',
+        'subscription.planId': data.plan_id,
+        'subscription.status': data.status || 'active',
+        'subscription.stripeSubscriptionId': data.subscription_id,
+        'subscription.currentPeriodEnd': data.current_period_end ? new Date(data.current_period_end * 1000) : null,
+        'subscription.cancelAtPeriodEnd': data.cancel_at_period_end || false,
+        updatedAt: new Date()
+      }
+    )
+
+    console.log(`✅ Updated user subscription: ${userId} -> ${data.plan_id} (${data.status})`)
+  } catch (error) {
+    console.error('Error handling subscription updated:', error)
+    throw error
+  }
+}
+
+async function handleSubscriptionCancelled(data: ClerkWebhookEvent['data']) {
+  try {
+    console.log('💳 Subscription cancelled:', data.subscription_id)
+    
+    const userId = data.user_id || data.id
+    if (!userId) {
+      console.error('No user ID in subscription cancelled event')
+      return
+    }
+
+    await User.findOneAndUpdate(
+      { clerkId: userId },
+      {
+        plan: 'spark', // Revert to free plan
+        'subscription.status': 'canceled',
+        'subscription.cancelAtPeriodEnd': true,
+        updatedAt: new Date()
+      }
+    )
+
+    console.log(`✅ Cancelled user subscription: ${userId}`)
+  } catch (error) {
+    console.error('Error handling subscription cancelled:', error)
+    throw error
+  }
+}
+
+async function handleSubscriptionRenewed(data: ClerkWebhookEvent['data']) {
+  try {
+    console.log('💳 Subscription renewed:', data.subscription_id)
+    
+    const userId = data.user_id || data.id
+    if (!userId) {
+      console.error('No user ID in subscription renewed event')
+      return
+    }
+
+    await User.findOneAndUpdate(
+      { clerkId: userId },
+      {
+        'subscription.status': 'active',
+        'subscription.currentPeriodEnd': data.current_period_end ? new Date(data.current_period_end * 1000) : null,
+        'subscription.cancelAtPeriodEnd': false,
+        updatedAt: new Date()
+      }
+    )
+
+    console.log(`✅ Renewed user subscription: ${userId}`)
+  } catch (error) {
+    console.error('Error handling subscription renewed:', error)
     throw error
   }
 } 

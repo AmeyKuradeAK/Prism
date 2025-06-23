@@ -8,6 +8,10 @@ import Link from 'next/link'
 import dynamic from 'next/dynamic'
 
 // Lazy load heavy components
+const ProjectsList = dynamic(() => import('./ProjectsList'), {
+  loading: () => <div className="bg-white/5 rounded-3xl p-6 animate-pulse h-64" />
+})
+
 const ProjectsGrid = dynamic(() => import('./dashboard/ProjectsGrid'), {
   loading: () => <div className="bg-white/5 rounded-3xl p-6 animate-pulse h-64" />
 })
@@ -265,7 +269,9 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Left Column - Projects */}
           <div className="lg:col-span-2 space-y-8">
-            <ProjectsGrid projects={projects} isLoading={isLoading} onRefresh={fetchUserData} />
+            <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-6">
+              <ProjectsList />
+            </div>
           </div>
 
           {/* Right Column - Sidebar */}

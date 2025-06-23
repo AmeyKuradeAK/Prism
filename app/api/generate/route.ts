@@ -1,6 +1,9 @@
 import { NextRequest } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { checkGenerationLimit, incrementGenerationCount, createUsageLimitResponse } from '@/lib/utils/plan-protection'
+import connectToDatabase from '@/lib/database/mongodb'
+import Project from '@/lib/database/models/Project'
+import User from '@/lib/database/models/User'
 
 // Helper function to create optimized prompts
 function createOptimizedPrompt(prompt: string): string {
@@ -145,6 +148,17 @@ export async function POST(request: NextRequest) {
       // Track usage for paid users
       await incrementGenerationCount()
       
+      // Auto-save project to database
+      let projectId = null
+      try {
+        const savedProject = await saveProjectToDatabase(userId, prompt, files, aiResponse.provider, aiResponse.model)
+        projectId = savedProject.id
+        console.log(`💾 Project auto-saved: ${savedProject.name} (ID: ${projectId})`)
+      } catch (saveError) {
+        console.warn('⚠️ Failed to auto-save project:', saveError)
+        // Continue without failing the generation
+      }
+      
       console.log(`✅ AI generation success: ${Object.keys(files).length} files`)
       return new Response(
         JSON.stringify({
@@ -157,7 +171,8 @@ export async function POST(request: NextRequest) {
           model: aiResponse.model,
           cost: aiResponse.cost,
           tokensUsed: aiResponse.tokensUsed,
-          remaining: remaining === -1 ? -1 : remaining - 1
+          remaining: remaining === -1 ? -1 : remaining - 1,
+          projectId: projectId // Include project ID in response
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } }
       )
@@ -287,6 +302,91 @@ FAST response needed!`
   
   console.log(`✅ FREE Mistral generated ${Object.keys(files).length} files`)
   return files
+}
+
+// Helper function to save generated project to database
+async function saveProjectToDatabase(userId: string, prompt: string, files: { [key: string]: string }, provider?: string, model?: string) {
+  await connectToDatabase()
+
+  // Transform files object to array format expected by the model
+  const filesArray = Object.entries(files).map(([path, content]) => {
+    const extension = path.split('.').pop()?.toLowerCase() || 'txt'
+    
+    let fileType = 'txt'
+    if (['tsx', 'ts', 'js', 'jsx', 'json', 'md'].includes(extension)) {
+      fileType = extension
+    }
+
+    return {
+      path,
+      content: content as string,
+      type: fileType
+    }
+  })
+
+  // Generate project name from prompt
+  const words = prompt.split(' ').slice(0, 4).join(' ')
+  const projectName = words.length > 0 ? words : 'Generated App'
+  
+  // Extract dependencies from package.json if it exists
+  const packageJsonFile = filesArray.find(file => file.path.includes('package.json'))
+  let dependencies: string[] = []
+  
+  if (packageJsonFile) {
+    try {
+      const packageJson = JSON.parse(packageJsonFile.content)
+      const deps = Object.keys(packageJson.dependencies || {})
+      const devDeps = Object.keys(packageJson.devDependencies || {})
+      dependencies = [...deps, ...devDeps]
+    } catch {
+      // Ignore JSON parse errors
+    }
+  }
+
+  // Create new project
+  const project = new Project({
+    name: projectName,
+    description: `Generated from: ${prompt}`,
+    prompt,
+    userId,
+    files: filesArray,
+    status: 'completed',
+    metadata: {
+      version: '1.0.0',
+      expoVersion: '50.0.0',
+      dependencies,
+      size: filesArray.length
+    },
+    analytics: {
+      views: 0,
+      downloads: 0,
+      likes: 0,
+      shares: 0
+    },
+    tags: ['react-native', 'expo', 'ai-generated']
+  })
+
+  const savedProject = await project.save()
+
+  // Update user's project count
+  await User.findOneAndUpdate(
+    { clerkId: userId },
+    { 
+      $inc: { 
+        'usage.projectsThisMonth': 1,
+        'analytics.totalProjects': 1
+      },
+      $set: {
+        'analytics.lastActiveAt': new Date()
+      }
+    }
+  )
+
+  return {
+    id: savedProject._id.toString(),
+    name: savedProject.name,
+    fileCount: filesArray.length
+  }
 }
 
 // Old functions removed - now using complete v0-pipeline.ts with proper:

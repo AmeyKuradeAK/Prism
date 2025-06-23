@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import connectToDatabase from '@/lib/database/mongodb'
 import Project from '@/lib/database/models/Project'
+import User from '@/lib/database/models/User'
 
 // Development mode helpers
 const isDevelopment = process.env.NODE_ENV === 'development'
@@ -42,6 +43,7 @@ async function getDevProjects(userId: string) {
   return devProjects.filter(p => p.userId === userId)
 }
 
+// GET - Fetch all projects for the authenticated user
 export async function GET() {
   try {
     const { userId } = await auth()
@@ -50,39 +52,27 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Try MongoDB first, fall back to dev storage
-    try {
-      await connectToDatabase()
-      
-      const projects = await Project.find({ userId })
-        .sort({ updatedAt: -1 })
-        .select('name description status createdAt updatedAt files analytics')
-        .lean()
-        .limit(50)
+    await connectToDatabase()
+    
+    // Fetch user's projects sorted by most recent
+    const projects = await Project.find({ userId })
+      .sort({ updatedAt: -1 })
+      .select('_id name description prompt status createdAt updatedAt analytics metadata tags')
+      .lean()
+    
+    // Transform to include file count and size info
+    const projectsWithStats = projects.map(project => ({
+      ...project,
+      fileCount: project.metadata?.size || 0,
+      lastModified: project.updatedAt,
+      id: project._id.toString()
+    }))
 
-      const formattedProjects = projects.map(project => ({
-        ...project,
-        description: project.description || 'No description',
-        files: project.files || [],
-        analytics: project.analytics || {
-          views: 0,
-          downloads: 0,
-          likes: 0,
-          shares: 0
-        }
-      }))
-
-      return NextResponse.json(formattedProjects)
-    } catch (dbError) {
-      console.log('📦 Using development storage - MongoDB unavailable')
-      
-      if (isDevelopment) {
-        const devProjectsList = await getDevProjects(userId)
-        return NextResponse.json(devProjectsList)
-      }
-      
-      throw dbError
-    }
+    return NextResponse.json({
+      success: true,
+      projects: projectsWithStats,
+      count: projects.length
+    })
   } catch (error) {
     console.error('Error fetching projects:', error)
     return NextResponse.json(
@@ -92,6 +82,7 @@ export async function GET() {
   }
 }
 
+// POST - Save a new project with generated files
 export async function POST(request: NextRequest) {
   try {
     const { userId } = await auth()
@@ -100,63 +91,143 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const body = await request.json()
-    const { name, description, prompt, files } = body
+    const { name, description, prompt, files, provider, model } = await request.json()
 
-    const projectData = {
-      name,
-      description,
+    if (!name || !prompt || !files) {
+      return NextResponse.json(
+        { error: 'Name, prompt, and files are required' },
+        { status: 400 }
+      )
+    }
+
+    await connectToDatabase()
+
+    // Transform files object to array format expected by the model
+    const filesArray = Object.entries(files).map(([path, content]) => {
+      const extension = path.split('.').pop()?.toLowerCase() || 'txt'
+      
+      let fileType = 'txt'
+      if (['tsx', 'ts', 'js', 'jsx', 'json', 'md'].includes(extension)) {
+        fileType = extension
+      }
+
+      return {
+        path,
+        content: content as string,
+        type: fileType
+      }
+    })
+
+    // Generate project name if not provided
+    const projectName = name || `${prompt.slice(0, 30)}...`
+    
+    // Calculate project metadata
+    const totalSize = filesArray.reduce((sum, file) => sum + file.content.length, 0)
+    const dependencies = extractDependencies(filesArray)
+
+    // Create new project
+    const project = new Project({
+      name: projectName,
+      description: description || `Generated from: ${prompt}`,
       prompt,
       userId,
-      files: files || [],
-      status: files?.length > 0 ? 'completed' : 'draft',
+      files: filesArray,
+      status: 'completed',
+      metadata: {
+        version: '1.0.0',
+        expoVersion: '50.0.0',
+        dependencies,
+        size: filesArray.length
+      },
       analytics: {
         views: 0,
         downloads: 0,
         likes: 0,
         shares: 0
       },
-      metadata: {
-        version: '1.0.0',
-        expoVersion: '53.0.0',
-        dependencies: [],
-        size: 0
-      },
-      isPublic: false,
-      tags: [],
-      createdAt: new Date(),
-      updatedAt: new Date()
-    }
+      tags: extractTags(prompt)
+    })
 
-    // Try MongoDB first, fall back to dev storage
-    try {
-      await connectToDatabase()
-      const project = new Project(projectData)
-      await project.save()
-      return NextResponse.json(project, { status: 201 })
-    } catch (dbError) {
-      console.log('📦 Saving to development storage - MongoDB unavailable')
-      
-      if (isDevelopment) {
-        const newProject = {
-          ...projectData,
-          _id: `dev-project-${Date.now()}`,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
+    const savedProject = await project.save()
+
+    // Update user's project count
+    await User.findOneAndUpdate(
+      { clerkId: userId },
+      { 
+        $inc: { 
+          'usage.projectsThisMonth': 1,
+          'analytics.totalProjects': 1
+        },
+        $set: {
+          'analytics.lastActiveAt': new Date()
         }
-        devProjects.push(newProject)
-        return NextResponse.json(newProject, { status: 201 })
       }
-      
-      throw dbError
-    }
+    )
+
+    console.log(`✅ Project saved: "${projectName}" with ${filesArray.length} files`)
+
+    return NextResponse.json({
+      success: true,
+      project: {
+        id: savedProject._id.toString(),
+        name: savedProject.name,
+        description: savedProject.description,
+        fileCount: filesArray.length,
+        createdAt: savedProject.createdAt
+      },
+      message: `Project "${projectName}" saved successfully with ${filesArray.length} files`
+    }, { status: 201 })
+
   } catch (error) {
-    console.error('Error creating project:', error)
+    console.error('Error saving project:', error)
     return NextResponse.json(
-      { error: 'Failed to create project' },
+      { error: 'Failed to save project' },
       { status: 500 }
     )
   }
+}
+
+// Helper function to extract dependencies from package.json
+function extractDependencies(files: Array<{ path: string; content: string; type: string }>): string[] {
+  const packageJsonFile = files.find(file => file.path.includes('package.json'))
+  
+  if (!packageJsonFile) return []
+  
+  try {
+    const packageJson = JSON.parse(packageJsonFile.content)
+    const dependencies = Object.keys(packageJson.dependencies || {})
+    const devDependencies = Object.keys(packageJson.devDependencies || {})
+    return [...dependencies, ...devDependencies]
+  } catch {
+    return []
+  }
+}
+
+// Helper function to extract tags from prompt
+function extractTags(prompt: string): string[] {
+  const commonTags = ['react-native', 'expo', 'mobile', 'app']
+  const promptWords = prompt.toLowerCase().split(' ')
+  
+  const additionalTags = []
+  
+  // Add tags based on keywords in prompt
+  if (promptWords.some(word => ['todo', 'task', 'list'].includes(word))) {
+    additionalTags.push('productivity')
+  }
+  if (promptWords.some(word => ['game', 'play', 'puzzle'].includes(word))) {
+    additionalTags.push('games')
+  }
+  if (promptWords.some(word => ['shop', 'store', 'buy', 'commerce'].includes(word))) {
+    additionalTags.push('e-commerce')
+  }
+  if (promptWords.some(word => ['social', 'chat', 'message'].includes(word))) {
+    additionalTags.push('social')
+  }
+  if (promptWords.some(word => ['weather', 'news', 'api'].includes(word))) {
+    additionalTags.push('utilities')
+  }
+  
+  return [...commonTags, ...additionalTags]
 }
 
 export async function PUT(request: NextRequest) {

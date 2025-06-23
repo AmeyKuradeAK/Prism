@@ -4,9 +4,36 @@ import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Check, Zap, Star, Crown, Users, Building } from 'lucide-react'
 import { SUBSCRIPTION_PLANS, formatPrice, calculateYearlySavings } from '@/lib/utils/subscription-plans'
+import { useRouter } from 'next/navigation'
+import { useUser } from '@clerk/nextjs'
 
 export default function PricingPlans() {
   const [isYearly, setIsYearly] = useState(false)
+  const router = useRouter()
+  const { isLoaded, isSignedIn, user } = useUser()
+
+  const handleUpgrade = (planId: string) => {
+    if (!isLoaded || !isSignedIn) {
+      router.push('/sign-in')
+      return
+    }
+
+    if (planId === 'spark') {
+      router.push('/dashboard')
+      return
+    }
+
+    if (planId === 'enterprise') {
+      // Handle enterprise contact
+      window.location.href = 'mailto:sales@yourapp.com?subject=Enterprise Plan Inquiry'
+      return
+    }
+
+    // For paid plans, redirect to Clerk billing
+    const billingInterval = isYearly ? 'year' : 'month'
+    const checkoutUrl = `/api/checkout?plan=${planId}&interval=${billingInterval}`
+    window.location.href = checkoutUrl
+  }
 
   const getPlanIcon = (planId: string) => {
     switch (planId) {
@@ -64,9 +91,10 @@ export default function PricingPlans() {
       </div>
 
       {/* Plans Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
         {SUBSCRIPTION_PLANS.map((plan, index) => {
-          const price = isYearly ? plan.price.yearly : plan.price.monthly
+          // For free plan, always show free pricing regardless of toggle
+          const price = plan.id === 'spark' ? 0 : (isYearly ? plan.price.yearly : plan.price.monthly)
           const yearlyPrice = plan.price.yearly
           const monthlyPrice = plan.price.monthly
           const savings = calculateYearlySavings(monthlyPrice, yearlyPrice)
@@ -102,38 +130,49 @@ export default function PricingPlans() {
 
               {/* Pricing */}
               <div className="text-center mb-8">
-                <div className="text-4xl font-bold text-gray-900 mb-2">
-                  {isYearly && plan.price.yearly > 0 ? (
-                    <>
-                      {formatPrice(Math.round(plan.price.yearly / 12))}
-                      <span className="text-lg font-normal text-gray-600">/month</span>
-                    </>
-                  ) : (
-                    <>
-                      {formatPrice(price)}
-                      {price > 0 && (
-                        <span className="text-lg font-normal text-gray-600">/month</span>
+                {plan.id === 'spark' ? (
+                  /* Free Plan - Always Free */
+                  <div className="text-4xl font-bold text-gray-900 mb-2">
+                    Free
+                    <div className="text-lg font-normal text-gray-600">Forever</div>
+                  </div>
+                ) : (
+                  /* Paid Plans - Show pricing based on toggle */
+                  <>
+                    <div className="text-4xl font-bold text-gray-900 mb-2">
+                      {isYearly && plan.price.yearly > 0 ? (
+                        <>
+                          {formatPrice(Math.round(plan.price.yearly / 12))}
+                          <span className="text-lg font-normal text-gray-600">/month</span>
+                        </>
+                      ) : (
+                        <>
+                          {formatPrice(price)}
+                          {price > 0 && (
+                            <span className="text-lg font-normal text-gray-600">/month</span>
+                          )}
+                        </>
                       )}
-                    </>
-                  )}
-                </div>
-                
-                {isYearly && plan.price.yearly > 0 && (
-                  <div className="text-gray-500 text-sm">
-                    Billed annually ({formatPrice(plan.price.yearly)}/year)
-                  </div>
-                )}
-                
-                {isYearly && savings > 0 && (
-                  <div className="text-gray-900 text-sm font-medium">
-                    Save {savings}% with yearly billing
-                  </div>
-                )}
-                
-                {!isYearly && plan.price.yearly > 0 && (
-                  <div className="text-gray-500 text-sm">
-                    or {formatPrice(Math.round(plan.price.yearly / 12))}/month billed yearly
-                  </div>
+                    </div>
+                    
+                    {isYearly && plan.price.yearly > 0 && (
+                      <div className="text-gray-500 text-sm">
+                        Billed annually ({formatPrice(plan.price.yearly)}/year)
+                      </div>
+                    )}
+                    
+                    {isYearly && savings > 0 && (
+                      <div className="text-gray-900 text-sm font-medium">
+                        Save {savings}% with yearly billing
+                      </div>
+                    )}
+                    
+                    {!isYearly && plan.price.yearly > 0 && (
+                      <div className="text-gray-500 text-sm">
+                        or {formatPrice(Math.round(plan.price.yearly / 12))}/month billed yearly
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
 
@@ -150,25 +189,37 @@ export default function PricingPlans() {
               {/* CTA Button */}
               <div className="mt-auto">
                 {plan.id === 'spark' ? (
-                  <button className="w-full bg-gray-100 border border-gray-300 text-gray-900 py-3 rounded-xl font-medium hover:bg-gray-200 transition-colors">
+                  <button 
+                    onClick={() => handleUpgrade('spark')}
+                    className="w-full bg-gray-100 border border-gray-300 text-gray-900 py-3 rounded-xl font-medium hover:bg-gray-200 transition-colors"
+                  >
                     Get Started Free
                   </button>
                 ) : plan.id === 'enterprise' ? (
                   <div className="space-y-3">
-                    <button className="w-full bg-black text-white py-3 rounded-xl font-medium hover:bg-gray-800 transition-colors">
-                      Start Enterprise
+                    <button 
+                      onClick={() => handleUpgrade('enterprise')}
+                      className="w-full bg-black text-white py-3 rounded-xl font-medium hover:bg-gray-800 transition-colors"
+                    >
+                      Contact Sales
                     </button>
-                    <button className="w-full bg-gray-100 border border-gray-300 text-gray-900 py-2 rounded-xl text-sm hover:bg-gray-200 transition-colors">
-                      Contact for Custom Pricing
+                    <button 
+                      onClick={() => window.location.href = 'mailto:sales@yourapp.com?subject=Custom Pricing Request'}
+                      className="w-full bg-gray-100 border border-gray-300 text-gray-900 py-2 rounded-xl text-sm hover:bg-gray-200 transition-colors"
+                    >
+                      Custom Pricing
                     </button>
                   </div>
                 ) : (
-                  <button className={`w-full text-white py-3 rounded-xl font-medium transition-colors ${
-                    plan.popular 
-                      ? 'bg-black hover:bg-gray-800' 
-                      : 'bg-gray-800 hover:bg-gray-700'
-                  }`}>
-                    Upgrade to {plan.name.split(' ')[1]}
+                  <button 
+                    onClick={() => handleUpgrade(plan.id)}
+                    className={`w-full text-white py-3 rounded-xl font-medium transition-colors ${
+                      plan.popular 
+                        ? 'bg-black hover:bg-gray-800' 
+                        : 'bg-gray-800 hover:bg-gray-700'
+                    }`}
+                  >
+                    {!isSignedIn ? 'Sign Up' : `Upgrade to ${plan.name.split(' ')[1]}`}
                   </button>
                 )}
               </div>
