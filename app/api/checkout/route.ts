@@ -32,24 +32,15 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(contactUrl)
     }
 
-    // Build Clerk billing URL
-    const clerkDomain = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY?.includes('_test_') 
-      ? 'clerk.accountsapi.com' 
-      : 'clerk.com'
-    
-    const applicationId = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY?.split('_')[2]
-    
-    // Construct the billing URL for Clerk's hosted checkout
-    const billingUrl = `https://${applicationId}.clerk.accounts.dev/user/billing`
-    
-    // Alternative: Use Clerk's direct subscription URL format
-    const subscriptionUrl = `https://billing.clerk.com/subscribe?plan=${planId}&interval=${interval}&application_id=${applicationId}&redirect_url=${encodeURIComponent(new URL('/dashboard', request.url).toString())}`
-    
-    // Log the checkout attempt
+    // For development/testing, redirect to dashboard with a message
+    // In production, you would set up proper Clerk billing integration
     console.log(`🛒 Checkout initiated: User ${userId} -> Plan ${planId} (${interval})`)
     
-    // Redirect to Clerk billing
-    return NextResponse.redirect(subscriptionUrl)
+    // Redirect to dashboard with upgrade info
+    const dashboardUrl = new URL('/dashboard', request.url)
+    dashboardUrl.searchParams.set('upgrade', planId)
+    dashboardUrl.searchParams.set('interval', interval)
+    return NextResponse.redirect(dashboardUrl)
 
   } catch (error) {
     console.error('Error processing checkout:', error)
@@ -91,17 +82,15 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // Build checkout URL
-    const applicationId = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY?.split('_')[2]
-    const checkoutUrl = `https://billing.clerk.com/subscribe?plan=${planId}&interval=${interval}&application_id=${applicationId}`
-    
     console.log(`🛒 API Checkout: User ${userId} -> Plan ${planId} (${interval})`)
     
+    // For development, return success with mock checkout
     return NextResponse.json({
-      action: 'redirect',
-      checkoutUrl: checkoutUrl,
+      action: 'success',
+      message: 'Upgrade initiated successfully',
       planId: planId,
-      interval: interval
+      interval: interval,
+      redirectUrl: '/dashboard'
     })
 
   } catch (error) {

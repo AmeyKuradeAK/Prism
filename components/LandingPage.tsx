@@ -673,11 +673,11 @@ export default function LandingPage() {
   const smoothHeroOpacity = useSpring(heroOpacity, { stiffness: 100, damping: 30 })
 
   return (
-    <div ref={containerRef} className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 relative overflow-hidden">
-      {/* Dynamic Background */}
+    <div ref={containerRef} className="min-h-screen bg-black relative overflow-hidden">
+      {/* Professional Background Effects */}
       <div className="fixed inset-0 z-0">
         <motion.div
-          className="absolute top-1/4 left-1/4 w-96 h-96 bg-gradient-to-r from-blue-500/10 to-purple-500/10 rounded-full blur-3xl"
+          className="absolute top-1/4 left-1/4 w-96 h-96 bg-white/5 rounded-full blur-3xl"
           animate={{
             scale: [1, 1.2, 1],
             rotate: [0, 180, 360]
@@ -689,7 +689,7 @@ export default function LandingPage() {
           }}
         />
         <motion.div
-          className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-gradient-to-r from-cyan-500/10 to-pink-500/10 rounded-full blur-3xl"
+          className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-white/3 rounded-full blur-3xl"
           animate={{
             scale: [1.2, 1, 1.2],
             rotate: [360, 180, 0]
@@ -720,7 +720,7 @@ export default function LandingPage() {
                 whileHover={{ rotate: 360 }}
                 transition={{ duration: 0.5 }}
               >
-                <div className="w-12 h-12 bg-gradient-primary rounded-xl-professional flex items-center justify-center shadow-professional">
+                <div className="w-12 h-12 bg-gradient-primary rounded-professional flex items-center justify-center shadow-professional">
                   <Wand2 className="w-6 h-6 text-white" />
                 </div>
                 <Sparkles className="w-4 h-4 text-white absolute -top-1 -right-1 animate-pulse" />
@@ -782,7 +782,7 @@ export default function LandingPage() {
                 initial={{ opacity: 0, scale: 0.5 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: 1.2 }}
-                className="glass inline-flex items-center space-x-2 rounded-xl-professional px-6 py-3"
+                className="glass-dark inline-flex items-center space-x-2 rounded-professional px-6 py-3"
               >
                 <Wand2 className="w-4 h-4 text-white" />
                 <span className="text-white text-sm font-medium">Professional • Fast • Reliable</span>
@@ -826,7 +826,7 @@ export default function LandingPage() {
                 <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                   <Link 
                     href="/builder"
-                    className="btn-primary group px-8 py-4 text-lg font-bold flex items-center space-x-3"
+                    className="btn-glossy group px-8 py-4 text-lg font-bold flex items-center space-x-3"
                   >
                     <Wand2 className="w-5 h-5 group-hover:rotate-12 transition-transform" />
                     <span>Start Building</span>
@@ -837,7 +837,7 @@ export default function LandingPage() {
                 <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                   <Link
                     href="/docs"
-                    className="btn-ghost group px-8 py-4 text-lg font-bold flex items-center space-x-3"
+                    className="glass-dark group px-8 py-4 text-lg font-bold flex items-center space-x-3 text-white hover:bg-white/10 transition-professional rounded-professional"
                   >
                     <BookOpen className="w-5 h-5 group-hover:rotate-12 transition-transform" />
                     <span>View Docs</span>
@@ -873,14 +873,14 @@ export default function LandingPage() {
               transition={{ duration: 1, delay: 1.2 }}
               className="relative"
             >
-              <div className="relative rounded-3xl overflow-hidden bg-gradient-to-br from-purple-900/20 to-pink-900/20 border border-white/10 backdrop-blur-sm">
+              <div className="relative rounded-professional overflow-hidden glass-dark border border-glass">
                 <AppBuildingScene3D />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
               </div>
               
               {/* Floating Stats */}
               <motion.div 
-                className="glass-dark absolute -bottom-8 -left-8 rounded-lg-professional p-6 text-center"
+                className="card-glass absolute -bottom-8 -left-8 p-6 text-center"
                 initial={{ opacity: 0, scale: 0 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: 2 }}
@@ -890,7 +890,7 @@ export default function LandingPage() {
               </motion.div>
               
               <motion.div 
-                className="glass-dark absolute -top-8 -right-8 rounded-lg-professional p-6 text-center"
+                className="card-glass absolute -top-8 -right-8 p-6 text-center"
                 initial={{ opacity: 0, scale: 0 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: 2.2 }}
@@ -911,13 +911,13 @@ export default function LandingPage() {
         viewport={{ once: true }}
         transition={{ duration: 1 }}
       >
-        <div className="container mx-auto px-6">
+        <div className="container-professional">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             {stats.map((stat, index) => (
               <Smooth3DCard key={index} delay={index * 0.1}>
-                <div className="text-center p-8 bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-sm border border-white/10 rounded-3xl">
+                <div className="text-center p-8 card-glass">
                   <motion.div 
-                    className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent mb-2"
+                    className="text-4xl md:text-5xl font-bold text-white mb-2"
                     initial={{ scale: 0 }}
                     whileInView={{ scale: 1 }}
                     viewport={{ once: true }}
@@ -925,7 +925,7 @@ export default function LandingPage() {
                   >
                     {stat.value}
                   </motion.div>
-                  <div className="text-white/70 font-medium">{stat.label}</div>
+                  <div className="text-light font-medium">{stat.label}</div>
                 </div>
               </Smooth3DCard>
             ))}
@@ -941,7 +941,7 @@ export default function LandingPage() {
         viewport={{ once: true }}
         transition={{ duration: 1 }}
       >
-        <div className="container mx-auto px-6">
+        <div className="container-professional">
           <motion.div 
             className="text-center mb-20"
             initial={{ opacity: 0, y: 30 }}
@@ -949,12 +949,10 @@ export default function LandingPage() {
             viewport={{ once: true }}
             transition={{ duration: 0.8 }}
           >
-            <h2 className="text-5xl md:text-6xl font-bold mb-6">
-              <span className="bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent">
-                Crystal Clear Features
-              </span>
+            <h2 className="text-5xl md:text-6xl font-bold mb-6 text-white">
+              Crystal Clear Features
             </h2>
-            <p className="text-xl text-white/70 max-w-3xl mx-auto">
+            <p className="text-xl text-light max-w-3xl mx-auto">
               Every tool you need to transform ideas into production-ready apps, 
               polished to perfection with the clarity of a prism.
             </p>
@@ -963,11 +961,9 @@ export default function LandingPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {features.map((feature, index) => (
               <Smooth3DCard key={index} delay={index * 0.1}>
-                <div className={`relative p-8 rounded-3xl bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-sm border border-white/10 overflow-hidden group hover:scale-105 transition-transform duration-300`}>
-                  <div className={`absolute inset-0 bg-gradient-to-br ${feature.color} opacity-0 group-hover:opacity-10 transition-opacity duration-300`} />
-                  
+                <div className="relative p-8 card-glass hover:shadow-glossy transition-professional group">
                   <motion.div 
-                    className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${feature.color} flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300`}
+                    className="w-16 h-16 rounded-professional bg-gradient-glossy flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300"
                     whileHover={{ rotate: 360 }}
                     transition={{ duration: 0.5 }}
                   >
@@ -976,11 +972,11 @@ export default function LandingPage() {
                     </div>
                   </motion.div>
                   
-                  <h3 className="text-2xl font-bold text-white mb-4 group-hover:text-purple-200 transition-colors duration-300">
+                  <h3 className="text-2xl font-bold text-white mb-4">
                     {feature.title}
                   </h3>
                   
-                  <p className="text-white/70 leading-relaxed group-hover:text-white/80 transition-colors duration-300">
+                  <p className="text-light leading-relaxed">
                     {feature.description}
                   </p>
                 </div>
@@ -998,11 +994,9 @@ export default function LandingPage() {
         viewport={{ once: true }}
         transition={{ duration: 1 }}
       >
-        <div className="container mx-auto px-6">
+        <div className="container-professional">
           <Smooth3DCard>
-            <div className="relative text-center p-16 rounded-3xl bg-gradient-to-br from-purple-500/20 to-pink-500/20 backdrop-blur-sm border border-white/20 overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-pink-500/10" />
-              
+            <div className="relative text-center p-16 card-glass">
               <motion.div
                 initial={{ opacity: 0, y: 30 }}
                 whileInView={{ opacity: 1, y: 0 }}
@@ -1014,22 +1008,18 @@ export default function LandingPage() {
                   className="inline-flex items-center space-x-3 mb-8"
                   whileHover={{ scale: 1.1 }}
                 >
-                  <Wand2 className="w-8 h-8 text-purple-400" />
-                  <Sparkles className="w-6 h-6 text-yellow-400 animate-pulse" />
-                  <Brain className="w-8 h-8 text-pink-400" />
+                  <Wand2 className="w-8 h-8 text-white" />
+                  <Sparkles className="w-6 h-6 text-white animate-pulse" />
+                  <Brain className="w-8 h-8 text-white" />
                 </motion.div>
                 
-                <h2 className="text-5xl md:text-6xl font-bold mb-6">
-                  <span className="bg-gradient-to-r from-white via-purple-200 to-pink-200 bg-clip-text text-transparent">
-                    Ready to Transform
-                  </span>
+                <h2 className="text-5xl md:text-6xl font-bold mb-6 text-white">
+                  Ready to Transform
                   <br />
-                  <span className="bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-400 bg-clip-text text-transparent">
-                    Ideas into Apps?
-                  </span>
+                  Ideas into Apps?
                 </h2>
                 
-                <p className="text-xl text-white/70 mb-12 max-w-2xl mx-auto">
+                <p className="text-xl text-light mb-12 max-w-2xl mx-auto">
                   Join thousands of developers using Prism to build the next generation of mobile apps. 
                   Start creating with crystal clarity today.
                 </p>
@@ -1037,7 +1027,7 @@ export default function LandingPage() {
                 <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                   <Link 
                     href="/builder"
-                    className="group inline-flex items-center space-x-4 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white px-12 py-6 rounded-2xl text-xl font-bold transition-all shadow-2xl hover:shadow-purple-500/50"
+                    className="btn-glossy group inline-flex items-center space-x-4 px-12 py-6 text-xl font-bold"
                   >
                     <Wand2 className="w-6 h-6 group-hover:rotate-12 transition-transform" />
                     <span>Create Your First App</span>
@@ -1046,7 +1036,7 @@ export default function LandingPage() {
                 </motion.div>
                 
                 <motion.p 
-                  className="text-white/50 text-sm mt-6"
+                  className="text-muted text-sm mt-6"
                   initial={{ opacity: 0 }}
                   whileInView={{ opacity: 1 }}
                   viewport={{ once: true }}
@@ -1061,42 +1051,42 @@ export default function LandingPage() {
       </motion.section>
 
       {/* Footer */}
-      <footer className="relative z-10 py-16 border-t border-white/10">
-        <div className="container mx-auto px-6">
+      <footer className="relative z-10 py-16 border-t border-glass">
+        <div className="container-professional">
           <div className="flex flex-col md:flex-row items-center justify-between">
             <motion.div 
               className="flex items-center space-x-3 mb-8 md:mb-0"
               whileHover={{ scale: 1.05 }}
             >
-              <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl flex items-center justify-center">
+              <div className="w-12 h-12 bg-gradient-primary rounded-professional flex items-center justify-center shadow-professional">
                 <Wand2 className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h3 className="text-2xl font-bold bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent">
+                <h3 className="text-2xl font-bold text-white">
                   Prism
                 </h3>
-                <p className="text-xs text-purple-300">AI-Powered App Builder</p>
+                <p className="text-xs text-light">AI-Powered App Builder</p>
               </div>
             </motion.div>
             
             <div className="flex items-center space-x-8">
-              <Link href="/docs" className="text-white/70 hover:text-white transition-colors">
+              <Link href="/docs" className="text-light hover:text-white transition-professional">
                 Documentation
               </Link>
-              <Link href="/support" className="text-white/70 hover:text-white transition-colors">
+              <Link href="/support" className="text-light hover:text-white transition-professional">
                 Support
               </Link>
               <div className="flex items-center space-x-4">
                 <motion.a 
                   href="https://github.com" 
-                  className="text-white/70 hover:text-white transition-colors"
+                  className="text-light hover:text-white transition-professional"
                   whileHover={{ scale: 1.1 }}
                 >
                   <Github className="w-5 h-5" />
                 </motion.a>
                 <motion.a 
                   href="https://twitter.com" 
-                  className="text-white/70 hover:text-white transition-colors"
+                  className="text-light hover:text-white transition-professional"
                   whileHover={{ scale: 1.1 }}
                 >
                   <Twitter className="w-5 h-5" />
@@ -1105,7 +1095,7 @@ export default function LandingPage() {
             </div>
           </div>
           
-          <div className="mt-8 pt-8 border-t border-white/10 text-center text-white/50">
+          <div className="mt-8 pt-8 border-t border-glass text-center text-muted">
             <p>&copy; 2024 Prism. All rights reserved. Built with crystal clarity.</p>
           </div>
         </div>
