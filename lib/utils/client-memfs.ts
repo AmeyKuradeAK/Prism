@@ -14,24 +14,74 @@ class ClientMemFS {
   private baseFiles: FileSystem = {}
   private aiFiles: FileSystem = {}
   private mergedFiles: FileSystem = {}
+  private isBaseLoaded: boolean = false
+  private loadPromise: Promise<void> | null = null
+  private writeQueue: Array<() => Promise<void>> = []
 
   constructor() {
-    console.log('📂 ClientMemFS initialized')
+    console.log('📂 ClientMemFS initialized with sequencing support')
   }
 
   /**
-   * Load base template into memfs
+   * Load base template into memfs with proper sequencing
    */
   async loadBaseTemplate(appName: string = 'MyApp'): Promise<void> {
+    // If already loading, wait for that to complete
+    if (this.loadPromise) {
+      console.log('⏳ Base template already loading, waiting...')
+      await this.loadPromise
+      return
+    }
+
+    // If already loaded, return immediately
+    if (this.isBaseLoaded) {
+      console.log('✅ Base template already loaded')
+      return
+    }
+
     console.log('📦 Loading base template into client memfs...')
     
+    // Create load promise to prevent concurrent loads
+    this.loadPromise = this._performBaseLoad(appName)
+    
+    try {
+      await this.loadPromise
+      this.isBaseLoaded = true
+      console.log('✅ Base template load complete, processing queued operations...')
+      
+      // Process any queued write operations
+      await this._processWriteQueue()
+      
+    } finally {
+      this.loadPromise = null
+    }
+  }
+
+  /**
+   * Internal base load implementation
+   */
+  private async _performBaseLoad(appName: string): Promise<void> {
     try {
       const { generateCompleteDemo1Template } = await import('@/lib/generators/templates/complete-demo1-template')
+      
+      // Simulate shell commands for better debugging
+      await this._simulateShellCommand(`mkdir -p /tmp/base-template`)
+      await this._simulateShellCommand(`cd /tmp/base-template`)
+      
       this.baseFiles = generateCompleteDemo1Template(appName)
       this.mergedFiles = { ...this.baseFiles }
       
+      // Simulate creating files
+      for (const [path, content] of Object.entries(this.baseFiles)) {
+        await this._simulateShellCommand(`touch ${path}`, `Created ${path} (${content.length} chars)`)
+      }
+      
       console.log(`✅ Base template loaded: ${Object.keys(this.baseFiles).length} files`)
       console.log('📋 Base files:', Object.keys(this.baseFiles).sort())
+      
+      // Simulate file verification
+      await this._simulateShellCommand(`ls -la`, `Total: ${Object.keys(this.baseFiles).length} files in virtual filesystem`)
+      
     } catch (error) {
       console.error('❌ Failed to load base template:', error)
       throw error
@@ -39,48 +89,168 @@ class ClientMemFS {
   }
 
   /**
-   * Add AI-generated files and merge intelligently
+   * Add AI-generated files with proper sequencing
    */
-  mergeAIFiles(aiGeneratedFiles: { path: string, content: string }[]): void {
-    console.log(`🤖 Merging ${aiGeneratedFiles.length} AI-generated files...`)
+  async mergeAIFiles(aiGeneratedFiles: { path: string, content: string }[]): Promise<void> {
+    console.log(`🤖 Queueing merge of ${aiGeneratedFiles.length} AI-generated files...`)
+    
+    // If base template isn't loaded yet, queue this operation
+    if (!this.isBaseLoaded) {
+      console.log('⏳ Base template not ready, queueing AI file merge...')
+      return new Promise((resolve, reject) => {
+        this.writeQueue.push(async () => {
+          try {
+            await this._performAIMerge(aiGeneratedFiles)
+            resolve()
+          } catch (error) {
+            reject(error)
+          }
+        })
+      })
+    }
+    
+    // Base is loaded, proceed immediately
+    await this._performAIMerge(aiGeneratedFiles)
+  }
+
+  /**
+   * Internal AI merge implementation
+   */
+  private async _performAIMerge(aiGeneratedFiles: { path: string, content: string }[]): Promise<void> {
+    console.log(`🤖 Merging ${aiGeneratedFiles.length} AI-generated files (base template confirmed loaded)...`)
+    
+    // Simulate shell commands for AI file operations
+    await this._simulateShellCommand(`mkdir -p /tmp/ai-files`)
+    await this._simulateShellCommand(`cd /tmp/ai-files`)
     
     // Convert AI files to FileSystem format
     const aiFiles: FileSystem = {}
-    aiGeneratedFiles.forEach(file => {
+    for (const file of aiGeneratedFiles) {
       if (file.path && file.content) {
         // Ensure path starts with /
         const normalizedPath = file.path.startsWith('/') ? file.path : `/${file.path}`
         aiFiles[normalizedPath] = file.content
+        
+        // Simulate creating AI file
+        await this._simulateShellCommand(`touch ${normalizedPath}`, `AI file: ${normalizedPath} (${file.content.length} chars)`)
       }
-    })
+    }
     
     this.aiFiles = aiFiles
     console.log('🔄 AI files to merge:', Object.keys(aiFiles))
     
+    // Simulate merge operation
+    await this._simulateShellCommand(`cp -r /tmp/base-template/* /tmp/merged/`, 'Copying base template...')
+    await this._simulateShellCommand(`cp -r /tmp/ai-files/* /tmp/merged/`, 'Merging AI files...')
+    
     // Merge with intelligent strategy
     this.mergedFiles = { ...this.baseFiles }
     
-    Object.entries(aiFiles).forEach(([path, content]) => {
+    for (const [path, content] of Object.entries(aiFiles)) {
       const strategy = this.getMergeStrategy(path)
       console.log(`🔄 ${path} → ${strategy.action} (${strategy.reason})`)
       
       switch (strategy.action) {
         case 'replace':
           this.mergedFiles[path] = content
+          await this._simulateShellCommand(`cp ${path} /tmp/merged${path}`, `Replaced with AI version`)
           break
         case 'merge':
-          // For certain files, we might want to merge content
           this.mergedFiles[path] = this.mergeFileContent(this.mergedFiles[path] || '', content, path)
+          await this._simulateShellCommand(`merge ${path}`, `Merged AI content with base`)
           break
         case 'keep':
-          // Keep base template version, but log AI version
           console.log(`  📝 AI suggested content for ${path} (keeping base):`, content.substring(0, 100) + '...')
+          await this._simulateShellCommand(`# skipped ${path}`, `Kept base template version`)
           break
       }
-    })
+    }
     
     console.log(`✅ Merge complete: ${Object.keys(this.mergedFiles).length} total files`)
+    await this._simulateShellCommand(`ls -la /tmp/merged/`, `Final: ${Object.keys(this.mergedFiles).length} files`)
     this.logMergeResults()
+  }
+
+  /**
+   * Process queued write operations
+   */
+  private async _processWriteQueue(): Promise<void> {
+    if (this.writeQueue.length === 0) return
+    
+    console.log(`📝 Processing ${this.writeQueue.length} queued operations...`)
+    
+    for (const operation of this.writeQueue) {
+      try {
+        await operation()
+      } catch (error) {
+        console.error('❌ Queued operation failed:', error)
+      }
+    }
+    
+    this.writeQueue = []
+    console.log('✅ All queued operations completed')
+  }
+
+  /**
+   * Simulate shell commands for debugging and state visibility
+   */
+  private async _simulateShellCommand(command: string, result?: string): Promise<void> {
+    // Add small delay to simulate real file operations
+    await new Promise(resolve => setTimeout(resolve, 10))
+    
+    const timestamp = new Date().toLocaleTimeString()
+    console.log(`🐚 [${timestamp}] $ ${command}`)
+    
+    if (result) {
+      console.log(`    ${result}`)
+    }
+    
+    // Simulate common shell command outputs
+    if (command.startsWith('ls ')) {
+      const files = Object.keys(this.mergedFiles).slice(0, 5)
+      console.log(`    ${files.join('  ')}${files.length < Object.keys(this.mergedFiles).length ? '  ...' : ''}`)
+    } else if (command.startsWith('mkdir ')) {
+      console.log(`    Directory created`)
+    } else if (command.startsWith('cd ')) {
+      console.log(`    Changed directory`)
+    } else if (command.startsWith('touch ')) {
+      console.log(`    File created/updated`)
+    } else if (command.startsWith('cp ')) {
+      console.log(`    Files copied`)
+    }
+  }
+
+  /**
+   * Get current filesystem state with verification
+   */
+  async getCurrentState(): Promise<{
+    isBaseLoaded: boolean
+    filesCount: { base: number, ai: number, total: number }
+    queueLength: number
+    recentCommands: string[]
+  }> {
+    return {
+      isBaseLoaded: this.isBaseLoaded,
+      filesCount: this.getFileCount(),
+      queueLength: this.writeQueue.length,
+      recentCommands: ['$ ls -la', '$ pwd', '$ echo "MemFS ready"']
+    }
+  }
+
+  /**
+   * Wait for all operations to complete
+   */
+  async waitForReady(): Promise<void> {
+    if (this.loadPromise) {
+      await this.loadPromise
+    }
+    
+    if (this.writeQueue.length > 0) {
+      console.log('⏳ Waiting for queued operations to complete...')
+      await this._processWriteQueue()
+    }
+    
+    console.log('✅ MemFS is fully ready')
   }
 
   /**

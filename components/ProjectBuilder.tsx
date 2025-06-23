@@ -289,22 +289,44 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
 
   const generateApp = async (prompt: string, testMode: boolean = false, quickMode: boolean = false) => {
     try {
-      console.log('🚀 Starting client-side memfs AI generation...')
+      console.log('🚀 Starting sequenced client-side memfs AI generation...')
       console.log('📝 Prompt:', prompt)
       console.log('🧪 Test mode:', testMode, 'Quick mode:', quickMode)
       
-      // Step 1: Load base template into client memfs
-      console.log('📦 Step 1: Loading base template into client memfs...')
+      // Step 1: Ensure base template is fully loaded with proper sequencing
+      console.log('📦 Step 1: Loading base template with sequencing...')
       const clientMemFS = (await import('@/lib/utils/client-memfs')).default
       
+      // Wait for base template to be completely loaded
       await clientMemFS.loadBaseTemplate('MyApp')
-      const baseFiles = clientMemFS.getAllFiles()
       
-      console.log(`✅ Base template loaded: ${Object.keys(baseFiles).length} files`)
+      // Verify base template is ready
+      const initialState = await clientMemFS.getCurrentState()
+      console.log('🔍 Base template state:', initialState)
+      
+      if (!initialState.isBaseLoaded) {
+        throw new Error('Base template failed to load properly')
+      }
+      
+      const baseFiles = clientMemFS.getAllFiles()
+      console.log(`✅ Base template confirmed loaded: ${Object.keys(baseFiles).length} files`)
       
       // Set base files immediately so user sees progress
       setFiles(baseFiles)
       setActiveFile(Object.keys(baseFiles)[0])
+      
+      // Update chat with base template status
+      setChatMessages(prev => prev.map(msg => 
+        msg.isGenerating 
+          ? { 
+              ...msg, 
+              content: `📦 Base template loaded with ${Object.keys(baseFiles).length} files!
+              
+🔍 **Status**: Base filesystem ready, ${initialState.queueLength} operations queued
+🐚 **Shell**: Virtual filesystem initialized with ${Object.keys(baseFiles).length} files`
+            }
+          : msg
+      ))
       
       // Quick mode: Just return base template
       if (quickMode) {
@@ -380,7 +402,8 @@ The base template is loaded and functional. Check your API key configuration in 
               ...msg, 
               content: `🤖 Calling AI to enhance your app...
 
-Base template loaded (${Object.keys(baseFiles).length} files). Now generating AI enhancements...`
+📦 Base template confirmed loaded (${Object.keys(baseFiles).length} files)
+🔄 Now generating AI enhancements with proper sequencing...`
             }
           : msg
       ))
@@ -396,7 +419,18 @@ Base template loaded (${Object.keys(baseFiles).length} files). Now generating AI
           messages: [
             {
               role: 'system',
-              content: `Generate React Native/Expo code files to enhance the existing base template based on the user's request. Only return NEW or MODIFIED files that add functionality. Format as JSON array with {path, content} objects. Use modern React Native patterns.`
+              content: `Generate React Native/Expo code files to enhance the existing base template based on the user's request. 
+
+IMPORTANT: Format your response with clear file markers like this:
+===FILE: components/TodoList.tsx===
+// Your React Native component code here
+===END===
+
+===FILE: app/(tabs)/todos.tsx===
+// Your screen code here  
+===END===
+
+Only return NEW or MODIFIED files that add functionality. Use modern React Native patterns with TypeScript.`
             },
             {
               role: 'user',
@@ -435,7 +469,10 @@ The base template is loaded and functional. AI enhancement failed, but you can s
         msg.isGenerating 
           ? { 
               ...msg, 
-              content: `🔄 Processing AI response and merging files...`
+              content: `🔄 Processing AI response and queueing merge...
+
+🐚 $ echo "Parsing AI response..."
+🐚 $ wc -c response.txt  # ${aiData.choices?.[0]?.message?.content?.length || 0} characters`
             }
           : msg
       ))
@@ -468,7 +505,7 @@ The base template is loaded and functional. AI enhancement failed, but you can s
 - The prompt needs to be more specific about generating files
 - The AI provided explanations instead of code
 
-You can still use the base template, or try a more specific prompt like "Generate a TodoList component for React Native".`,
+You can still use the base template, or try a more specific prompt like "Generate a TodoList component for React Native with proper file markers".`,
                 isGenerating: false 
               }
             : msg
@@ -476,15 +513,33 @@ You can still use the base template, or try a more specific prompt like "Generat
         return
       }
       
-      // Step 5: Merge AI files into base template using intelligent client memfs
-      console.log('🔄 Step 5: Intelligent merging with client memfs...')
-      clientMemFS.mergeAIFiles(aiGeneratedFiles)
+      // Step 5: Merge AI files with proper sequencing
+      console.log('🔄 Step 5: Sequenced merging with client memfs...')
+      setChatMessages(prev => prev.map(msg => 
+        msg.isGenerating 
+          ? { 
+              ...msg, 
+              content: `🔄 Merging AI files with proper sequencing...
+
+🐚 $ echo "Base template ready: ${Object.keys(baseFiles).length} files"
+🐚 $ echo "AI files parsed: ${aiGeneratedFiles.length} files"
+🐚 $ echo "Starting intelligent merge..."`
+            }
+          : msg
+      ))
       
+      // Wait for any pending operations and merge AI files
+      await clientMemFS.waitForReady()
+      await clientMemFS.mergeAIFiles(aiGeneratedFiles)
+      
+      // Get final state
+      const finalState = await clientMemFS.getCurrentState()
       const mergedFiles = clientMemFS.getAllFiles()
       const counts = clientMemFS.getFileCount()
       
-      console.log(`✅ Step 5: Intelligent merge complete`)
+      console.log(`✅ Step 5: Sequenced merge complete`)
       console.log(`📊 Final result: ${counts.base} base + ${counts.ai} AI = ${counts.total} total files`)
+      console.log('🔍 Final state:', finalState)
       
       // Set all merged files in state
       setFiles(mergedFiles)
@@ -503,7 +558,7 @@ You can still use the base template, or try a more specific prompt like "Generat
         }
       })
       
-      // Update success message
+      // Update success message with shell simulation
       setChatMessages(prev => prev.map(msg => 
         msg.isGenerating 
           ? { 
@@ -512,7 +567,17 @@ You can still use the base template, or try a more specific prompt like "Generat
 
 📊 **Final Result**: ${counts.base} base files + ${counts.ai} AI enhancements = **${counts.total} total files**
 
-🎉 Your enhanced React Native app is ready! The AI has added custom functionality to your base template. You can now:
+🐚 **Shell Operations**:
+\`\`\`
+$ ls -la /virtual-fs/
+  total ${counts.total} files
+$ echo "Base template: ${counts.base} files"
+$ echo "AI generated: ${counts.ai} files"  
+$ echo "Merge strategy: intelligent replacement"
+$ echo "Status: Ready for development"
+\`\`\`
+
+🎉 Your enhanced React Native app is ready! The AI has added custom functionality to your base template with proper sequencing. You can now:
 - 📁 Browse the file explorer to see all generated files
 - 👀 Click on any file to view the code
 - 📱 Use the build system to create APK/IPA files
@@ -526,19 +591,24 @@ You can still use the base template, or try a more specific prompt like "Generat
       triggerAutoSave()
 
     } catch (error) {
-      console.error('❌ Hybrid generation error:', {
+      console.error('❌ Sequenced generation error:', {
         error: error instanceof Error ? error.message : 'Unknown error',
         stack: error instanceof Error ? error.stack : undefined
       })
       
-      // Better error handling - don't fallback to different files, just show error
+      // Better error handling with shell simulation
       setChatMessages(prev => prev.map(msg => 
         msg.isGenerating 
           ? { 
               ...msg, 
               content: `❌ **Generation Error**
 
-Something went wrong during AI generation: ${error instanceof Error ? error.message : 'Unknown error'}
+🐚 **Error Log**:
+\`\`\`
+$ echo "Generation failed: ${error instanceof Error ? error.message : 'Unknown error'}"
+$ echo "Stack trace available in browser console"
+$ echo "Base template status: ${Object.keys(files).length > 0 ? 'loaded' : 'missing'}"
+\`\`\`
 
 The base template is still loaded and functional. You can:
 - Try generating again with a different prompt
