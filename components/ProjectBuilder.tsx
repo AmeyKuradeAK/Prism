@@ -11,6 +11,7 @@ import {
   FolderOpen, 
   Download, 
   Save, 
+  Check,
   CheckCircle,
   AlertCircle,
   Loader2,
@@ -40,7 +41,8 @@ import {
   MessageSquare,
   Search,
   Filter,
-  MoreVertical
+  MoreVertical,
+  ChevronUp
 } from 'lucide-react'
 
 interface FileProgress {
@@ -103,6 +105,9 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
   const [buildStatuses, setBuildStatuses] = useState<BuildStatus[]>([])
   const [isBuilding, setIsBuilding] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [builds, setBuilds] = useState<BuildStatus[]>([])
+  const [currentBuild, setCurrentBuild] = useState<BuildStatus | null>(null)
+  const [isChatCollapsed, setIsChatCollapsed] = useState(false)
   
   // Refs
   const chatRef = useRef<HTMLDivElement>(null)
@@ -436,10 +441,41 @@ The base template is loaded and functional. AI enhancement failed, but you can s
       ))
       
       const { parseCodeFromResponse } = await import('@/lib/utils/code-parser')
+      
+      // DEBUG: Log the full AI response for debugging
+      console.log('🔍 FULL AI RESPONSE:', aiData.choices?.[0]?.message?.content)
+      
       const aiGeneratedFiles = parseCodeFromResponse(aiData.choices?.[0]?.message?.content || '')
       
       console.log(`🔄 Step 4: Parsed ${aiGeneratedFiles.length} AI-generated files`)
-       
+      console.log('🔍 DEBUG - Parsed files:', aiGeneratedFiles.map(f => ({ path: f.path, contentLength: f.content.length })))
+      
+      if (aiGeneratedFiles.length === 0) {
+        console.warn('⚠️ WARNING: No AI files were parsed from the response!')
+        console.log('🔍 Response content preview:', aiData.choices?.[0]?.message?.content?.substring(0, 500))
+        
+        // Show warning in chat but continue with base template
+        setChatMessages(prev => prev.map(msg => 
+          msg.isGenerating 
+            ? { 
+                ...msg, 
+                content: `📦 Base template loaded with ${Object.keys(baseFiles).length} files!
+
+⚠️ **AI Generation Warning**: The AI provided a response, but no code files could be extracted from it.
+
+🔍 **Debug Info**: The response was received but the parser couldn't find recognizable file patterns. This might be because:
+- The AI response format was unexpected
+- The prompt needs to be more specific about generating files
+- The AI provided explanations instead of code
+
+You can still use the base template, or try a more specific prompt like "Generate a TodoList component for React Native".`,
+                isGenerating: false 
+              }
+            : msg
+        ))
+        return
+      }
+      
       // Step 5: Merge AI files into base template using intelligent client memfs
       console.log('🔄 Step 5: Intelligent merging with client memfs...')
       clientMemFS.mergeAIFiles(aiGeneratedFiles)
@@ -687,244 +723,78 @@ The base template is still loaded and functional. You can:
   }
 
   return (
-    <div className="h-screen flex flex-col bg-black text-gray-100">
+    <div className="h-screen bg-gray-950 text-white flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="bg-gray-900 border-b border-gray-800 px-6 py-3 flex items-center justify-between">
-        <div className="flex items-center space-x-4">
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-              <Smartphone className="w-4 h-4 text-white" />
-            </div>
-            <div>
-              <h1 className="text-lg font-semibold text-gray-100">
-                {project?.name || extractProjectName(chatMessages.find(m => m.type === 'user')?.content || '') || 'React Native Project'}
-              </h1>
-              <div className="flex items-center space-x-3 text-sm text-gray-400">
-                <span className="flex items-center space-x-1">
-                  <Package className="w-3 h-3" />
-                  <span>Expo SDK 53</span>
-                </span>
-                <span>•</span>
-                <span className="flex items-center space-x-1">
-                  {autoSaveStatus === 'saving' && <Loader2 className="w-3 h-3 animate-spin text-blue-400" />}
-                  {autoSaveStatus === 'saved' && <CheckCircle className="w-3 h-3 text-green-400" />}
-                  {autoSaveStatus === 'error' && <AlertCircle className="w-3 h-3 text-red-400" />}
-                  <span>
-                    {autoSaveStatus === 'saving' ? 'Saving...' : 
-                     autoSaveStatus === 'saved' ? 'Saved' : 'Save failed'}
-                  </span>
-                </span>
+      <div className="flex-shrink-0 px-6 py-4 border-b border-gray-800 bg-gray-900">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-3">
+              <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+                <Code className="w-4 h-4 text-white" />
+              </div>
+              <div>
+                <h1 className="text-xl font-bold">React Native Builder</h1>
+                <p className="text-sm text-gray-400">AI-powered app generator</p>
               </div>
             </div>
           </div>
-        </div>
-        
-        <div className="flex items-center space-x-3">
-          <button
-            onClick={downloadProject}
-            disabled={Object.keys(files).length === 0}
-            className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-          >
-            <Download className="w-4 h-4" />
-            <span>Download</span>
-            {Object.keys(files).length > 0 && (
-              <span className="text-xs bg-white/20 px-1.5 py-0.5 rounded-full">
-                {Object.keys(files).length}
+
+          {/* Action Buttons */}
+          <div className="flex items-center space-x-3">
+            {/* Save Button */}
+            <button
+              onClick={saveProject}
+              disabled={isGenerating}
+              className={`flex items-center space-x-2 px-4 py-2 text-sm font-medium rounded-lg transition-all ${
+                autoSaveStatus === 'saving' 
+                  ? 'bg-yellow-600 text-white' 
+                  : autoSaveStatus === 'saved' 
+                    ? 'bg-green-600 text-white' 
+                    : 'bg-gray-600 text-gray-300 hover:bg-gray-700'
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
+            >
+              {autoSaveStatus === 'saving' ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : autoSaveStatus === 'saved' ? (
+                <Check className="w-4 h-4" />
+              ) : (
+                <Save className="w-4 h-4" />
+              )}
+              <span>
+                {autoSaveStatus === 'saving' ? 'Saving...' : 
+                 autoSaveStatus === 'saved' ? 'Saved' : 'Save'}
               </span>
-            )}
-          </button>
-          
-          {/* Quick Mode Button */}
-          <button
-            onClick={(e) => {
-              if (currentMessage.trim()) {
-                handleSendMessage(e as any, true) // Quick mode
-              }
-            }}
-            disabled={isGenerating || !currentMessage.trim()}
-            className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-lg hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-          >
-            <Zap className="w-4 h-4" />
-            <span>Quick Gen</span>
-          </button>
-          
-          {/* Debug Test Button */}
-          <button
-            onClick={testGeneration}
-            disabled={isGenerating}
-            className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-          >
-            <Zap className="w-4 h-4" />
-            <span>Test Gen</span>
-          </button>
-          
-          {/* Load Template Button */}
-          <button
-            onClick={handleLoadTemplate}
-            disabled={isGenerating}
-            className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-          >
-            <Folder className="w-4 h-4" />
-            <span>📂 Load Template</span>
-          </button>
-          
-          {/* Test Client MemFS Button */}
-          <button
-            onClick={async () => {
-              console.log('🧪 Testing Client MemFS...')
-              
-              // Add a chat message to explain what's happening
-              const testMessage: ChatMessage = {
-                id: Date.now().toString(),
-                type: 'system',
-                content: '🧪 Testing MemFS functionality...',
-                timestamp: new Date()
-              }
-              setChatMessages(prev => [...prev, testMessage])
-              
-              try {
-                const clientMemFS = (await import('@/lib/utils/client-memfs')).default
-                await clientMemFS.loadBaseTemplate('TestApp')
-                const baseFiles = clientMemFS.getAllFiles()
-                console.log(`✅ Base: ${Object.keys(baseFiles).length} files`)
-                
-                // Mock AI files
-                const mockAI = [
-                  { path: '/components/TestButton.tsx', content: 'export default function TestButton() { return <Text>Test Button Component</Text>; }' },
-                  { path: '/lib/utils.ts', content: 'export const test = true;\nexport const mockData = { message: "MemFS test successful!" };' }
-                ]
-                clientMemFS.mergeAIFiles(mockAI)
-                
-                const merged = clientMemFS.getAllFiles()
-                const counts = clientMemFS.getFileCount()
-                console.log(`🔄 Merged: ${counts.base} base + ${counts.ai} AI = ${counts.total} total`)
-                
-                const organized = clientMemFS.getOrganizedFiles()
-                console.log('📊 Folders:', Object.keys(organized))
-                
-                // Update UI to show test results
-                setFiles(merged)
-                setActiveFile('/components/TestButton.tsx')
-                
-                // Add success message to chat
-                const successMessage: ChatMessage = {
-                  id: (Date.now() + 1).toString(),
-                  type: 'system',
-                  content: `✅ **MemFS Test Successful!**
+            </button>
 
-📊 **Results**: ${counts.base} base files + ${counts.ai} mock AI files = **${counts.total} total files**
+            {/* Download Button */}
+            <button
+              onClick={downloadProject}
+              disabled={Object.keys(files).length === 0}
+              className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            >
+              <Download className="w-4 h-4" />
+              <span>Download</span>
+            </button>
 
-🧪 **What happened**: 
-- Loaded base React Native template
-- Added 2 mock AI-generated files
-- Merged everything using client-side MemFS
-- Files are now visible in the explorer
-
-This confirms that the MemFS system is working correctly. The issue with your prompts is likely related to API key configuration or AI generation, not the file system.`,
-                  timestamp: new Date()
-                }
-                setChatMessages(prev => [...prev, successMessage])
-                
-              } catch (error) {
-                console.error('❌ Test failed:', error)
-                
-                // Add error message to chat
-                const errorMessage: ChatMessage = {
-                  id: (Date.now() + 2).toString(),
-                  type: 'system',
-                  content: `❌ **MemFS Test Failed**
-
-Error: ${error instanceof Error ? error.message : 'Unknown error'}
-
-This indicates there's an issue with the file system or template loading.`,
-                  timestamp: new Date()
-                }
-                setChatMessages(prev => [...prev, errorMessage])
-              }
-            }}
-            disabled={isGenerating}
-            className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-          >
-            <span>🧪</span>
-            <span>Test MemFS</span>
-          </button>
-          
-          {/* Debug Environment Button */}
-          <button
-            onClick={async () => {
-              console.log('🔍 Environment Debug Check...')
-              
-              const debugMessage: ChatMessage = {
-                id: Date.now().toString(),
-                type: 'system',
-                content: '🔍 Checking environment configuration...',
-                timestamp: new Date()
-              }
-              setChatMessages(prev => [...prev, debugMessage])
-              
-              try {
-                // Check environment variables
-                const hasEncryptionKey = !!process.env.NEXT_PUBLIC_ENCRYPTION_KEY
-                const encryptionKeyLength = process.env.NEXT_PUBLIC_ENCRYPTION_KEY?.length || 0
-                
-                let apiKeyStatus = 'Unknown'
-                let apiKeyError = ''
-                
-                try {
-                  const { getCachedDecryptedApiKey } = await import('@/lib/utils/crypto-client')
-                  const apiKey = await getCachedDecryptedApiKey()
-                  apiKeyStatus = apiKey ? `✅ Valid (${apiKey.length} chars)` : '❌ Empty'
-                } catch (keyError) {
-                  apiKeyStatus = '❌ Failed to decrypt'
-                  apiKeyError = keyError instanceof Error ? keyError.message : 'Unknown error'
-                }
-                
-                const debugResults: ChatMessage = {
-                  id: (Date.now() + 1).toString(),
-                  type: 'system',
-                  content: `🔍 **Environment Debug Results**
-
-**Environment Variables:**
-- \`NEXT_PUBLIC_ENCRYPTION_KEY\`: ${hasEncryptionKey ? `✅ Present (${encryptionKeyLength} chars)` : '❌ Missing'}
-
-**API Key Status:**
-- Decryption: ${apiKeyStatus}
-${apiKeyError ? `- Error: ${apiKeyError}` : ''}
-
-**Next Steps:**
-${!hasEncryptionKey ? '- Add NEXT_PUBLIC_ENCRYPTION_KEY to .env.local\n' : ''}${apiKeyStatus.includes('Failed') ? '- Check MISTRAL_API_KEY in .env.local\n- Verify ENCRYPTION_KEY matches NEXT_PUBLIC_ENCRYPTION_KEY\n' : ''}${apiKeyStatus.includes('Valid') ? '- ✅ Environment is properly configured!\n- Try generating an app with a simple prompt like "Create a todo app"' : ''}`,
-                  timestamp: new Date()
-                }
-                setChatMessages(prev => [...prev, debugResults])
-                
-              } catch (error) {
-                const errorMessage: ChatMessage = {
-                  id: (Date.now() + 2).toString(),
-                  type: 'system',
-                  content: `❌ **Debug Check Failed**
-
-Error: ${error instanceof Error ? error.message : 'Unknown error'}
-
-This indicates a serious configuration issue.`,
-                  timestamp: new Date()
-                }
-                setChatMessages(prev => [...prev, errorMessage])
-              }
-            }}
-            disabled={isGenerating}
-            className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-white bg-yellow-600 rounded-lg hover:bg-yellow-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-          >
-            <span>🔍</span>
-            <span>Debug Env</span>
-          </button>
+            {/* Chat Toggle Button */}
+            <button
+              onClick={() => setIsChatCollapsed(!isChatCollapsed)}
+              className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-all"
+            >
+              <MessageSquare className="w-4 h-4" />
+              <span>{isChatCollapsed ? 'Show Chat' : 'Hide Chat'}</span>
+              {isChatCollapsed ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
+          </div>
         </div>
       </div>
 
+      {/* Main Content Area - Scrollable */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left Sidebar - VS Code style file explorer */}
         <div className="w-80 border-r border-gray-800 bg-gray-900 flex flex-col">
           {/* Explorer Header */}
-          <div className="p-4 border-b border-gray-800">
+          <div className="flex-shrink-0 p-4 border-b border-gray-800">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-medium text-gray-200 flex items-center space-x-2">
                 <Folder className="w-4 h-4 text-blue-400" />
@@ -1082,7 +952,7 @@ This indicates a serious configuration issue.`,
           </div>
 
           {/* Chat Interface - ChatGPT Style */}
-          <div className="h-80 border-t border-gray-800 bg-black flex flex-col min-h-[320px]">
+          <div className={`h-80 border-t border-gray-800 bg-black flex flex-col min-h-[320px] ${isChatCollapsed ? 'hidden' : ''}`}>
             {/* Chat Header */}
             <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between">
               <div className="flex items-center space-x-2">
