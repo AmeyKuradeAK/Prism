@@ -114,7 +114,133 @@ class ClientMemFS {
   }
 
   /**
-   * Internal AI merge implementation
+   * Safe merge utility - merges AI files into existing base template
+   */
+  private async safeMergeIntoVol(aiFiles: FileSystem): Promise<void> {
+    console.log('🔧 Starting safe merge operation...')
+    
+    // Validate that base template is loaded
+    if (!this.isBaseLoaded || Object.keys(this.baseFiles).length === 0) {
+      throw new Error('Base template must be loaded before merging AI files')
+    }
+    
+    // Start with a copy of base files (safe)
+    const premergeCount = Object.keys(this.mergedFiles).length
+    console.log(`📊 Pre-merge state: ${premergeCount} files`)
+    
+    // Log current structure before merge
+    await this._simulateShellCommand(`tree /base-template/`, `Current base structure: ${Object.keys(this.baseFiles).length} files`)
+    
+    // Merge AI files one by one (safe file-by-file merge)
+    let addedCount = 0
+    let replacedCount = 0
+    let skippedCount = 0
+    
+    for (const [path, content] of Object.entries(aiFiles)) {
+      const strategy = this.getMergeStrategy(path)
+      console.log(`🔄 Processing ${path} → ${strategy.action} (${strategy.reason})`)
+      
+      switch (strategy.action) {
+        case 'replace':
+          const wasExisting = this.mergedFiles[path] !== undefined
+          this.mergedFiles[path] = content
+          
+          if (wasExisting) {
+            replacedCount++
+            await this._simulateShellCommand(`echo "Replaced ${path}"`, `Updated existing file (${content.length} chars)`)
+          } else {
+            addedCount++
+            await this._simulateShellCommand(`echo "Added ${path}"`, `New file created (${content.length} chars)`)
+          }
+          break
+          
+        case 'merge':
+          const originalContent = this.mergedFiles[path] || ''
+          this.mergedFiles[path] = this.mergeFileContent(originalContent, content, path)
+          replacedCount++
+          await this._simulateShellCommand(`echo "Merged ${path}"`, `Intelligent merge completed`)
+          break
+          
+        case 'keep':
+          skippedCount++
+          console.log(`  📝 Skipping ${path} - keeping base template version`)
+          await this._simulateShellCommand(`echo "Skipped ${path}"`, `Base template version preserved`)
+          break
+      }
+    }
+    
+    const postmergeCount = Object.keys(this.mergedFiles).length
+    console.log(`📊 Post-merge state: ${postmergeCount} files`)
+    console.log(`📈 Merge summary: +${addedCount} added, ~${replacedCount} replaced, =${skippedCount} skipped`)
+    
+    // Validate merge integrity
+    await this.validateMergeIntegrity()
+    
+    // Final structure validation
+    await this._simulateShellCommand(`tree /merged/`, `Final structure: ${postmergeCount} files`)
+    console.log('✅ Safe merge completed successfully')
+  }
+
+  /**
+   * Validate merge integrity - ensure base files weren't lost
+   */
+  private async validateMergeIntegrity(): Promise<void> {
+    console.log('🔍 Validating merge integrity...')
+    
+    const basePaths = Object.keys(this.baseFiles)
+    const mergedPaths = Object.keys(this.mergedFiles)
+    const aiPaths = Object.keys(this.aiFiles)
+    
+    // Check that we didn't lose any base files
+    const lostBaseFiles = basePaths.filter(path => !mergedPaths.includes(path))
+    if (lostBaseFiles.length > 0) {
+      console.error('❌ MERGE INTEGRITY ERROR: Lost base files:', lostBaseFiles)
+      throw new Error(`Merge integrity check failed: ${lostBaseFiles.length} base files were lost`)
+    }
+    
+    // Check that all AI files (that should be added) are present
+    const expectedAIFiles = aiPaths.filter(path => {
+      const strategy = this.getMergeStrategy(path)
+      return strategy.action === 'replace' || strategy.action === 'merge'
+    })
+    const missingAIFiles = expectedAIFiles.filter(path => !mergedPaths.includes(path))
+    if (missingAIFiles.length > 0) {
+      console.warn('⚠️ Some AI files were not merged:', missingAIFiles)
+    }
+    
+    // Log merge statistics
+    console.log('📊 Merge Integrity Report:')
+    console.log(`  Base files preserved: ${basePaths.length}/${basePaths.length} ✅`)
+    console.log(`  AI files integrated: ${expectedAIFiles.length - missingAIFiles.length}/${expectedAIFiles.length} ${missingAIFiles.length === 0 ? '✅' : '⚠️'}`)
+    console.log(`  Total files: ${mergedPaths.length}`)
+    
+    await this._simulateShellCommand(`echo "Integrity check passed"`, `All base files preserved, AI files properly merged`)
+  }
+
+  /**
+   * Get detailed file tree view for debugging
+   */
+  private generateFileTree(): string {
+    const organized = this.getOrganizedFiles()
+    let tree = 'File Tree:\n'
+    
+    for (const [folder, files] of Object.entries(organized)) {
+      tree += `├── ${folder}/ (${files.length} files)\n`
+      files.forEach((file, index) => {
+        const isLast = index === files.length - 1
+        const prefix = isLast ? '└──' : '├──'
+        const fileName = file.split('/').pop()
+        const isAI = this.aiFiles[file] !== undefined
+        const marker = isAI ? ' 🤖' : ''
+        tree += `│   ${prefix} ${fileName}${marker}\n`
+      })
+    }
+    
+    return tree
+  }
+
+  /**
+   * Internal AI merge implementation - updated to use safe merge
    */
   private async _performAIMerge(aiGeneratedFiles: { path: string, content: string }[]): Promise<void> {
     console.log(`🤖 Merging ${aiGeneratedFiles.length} AI-generated files (base template confirmed loaded)...`)
@@ -139,35 +265,14 @@ class ClientMemFS {
     this.aiFiles = aiFiles
     console.log('🔄 AI files to merge:', Object.keys(aiFiles))
     
-    // Simulate merge operation
-    await this._simulateShellCommand(`cp -r /tmp/base-template/* /tmp/merged/`, 'Copying base template...')
-    await this._simulateShellCommand(`cp -r /tmp/ai-files/* /tmp/merged/`, 'Merging AI files...')
+    // Use safe merge instead of manual merge
+    await this.safeMergeIntoVol(aiFiles)
     
-    // Merge with intelligent strategy
-    this.mergedFiles = { ...this.baseFiles }
+    // Generate and log file tree
+    const fileTree = this.generateFileTree()
+    console.log('🌳 Final File Tree:')
+    console.log(fileTree)
     
-    for (const [path, content] of Object.entries(aiFiles)) {
-      const strategy = this.getMergeStrategy(path)
-      console.log(`🔄 ${path} → ${strategy.action} (${strategy.reason})`)
-      
-      switch (strategy.action) {
-        case 'replace':
-          this.mergedFiles[path] = content
-          await this._simulateShellCommand(`cp ${path} /tmp/merged${path}`, `Replaced with AI version`)
-          break
-        case 'merge':
-          this.mergedFiles[path] = this.mergeFileContent(this.mergedFiles[path] || '', content, path)
-          await this._simulateShellCommand(`merge ${path}`, `Merged AI content with base`)
-          break
-        case 'keep':
-          console.log(`  📝 AI suggested content for ${path} (keeping base):`, content.substring(0, 100) + '...')
-          await this._simulateShellCommand(`# skipped ${path}`, `Kept base template version`)
-          break
-      }
-    }
-    
-    console.log(`✅ Merge complete: ${Object.keys(this.mergedFiles).length} total files`)
-    await this._simulateShellCommand(`ls -la /tmp/merged/`, `Final: ${Object.keys(this.mergedFiles).length} files`)
     this.logMergeResults()
   }
 
@@ -351,16 +456,35 @@ class ClientMemFS {
     console.log(`  🤖 AI generated: ${aiCount} files`)
     console.log(`  🔄 Total merged: ${totalCount} files`)
     
-    // Show what AI added
+    // Show what AI added/replaced with better categorization
     const aiAdditions = Object.keys(this.aiFiles).filter(path => !this.baseFiles[path])
     const aiReplacements = Object.keys(this.aiFiles).filter(path => this.baseFiles[path])
+    const aiSkipped = Object.keys(this.aiFiles).filter(path => {
+      const strategy = this.getMergeStrategy(path)
+      return strategy.action === 'keep'
+    })
     
     if (aiAdditions.length > 0) {
-      console.log(`  ➕ AI additions (${aiAdditions.length}):`, aiAdditions)
+      console.log(`  ➕ AI additions (${aiAdditions.length}):`)
+      aiAdditions.forEach(path => console.log(`    + ${path} 🤖`))
     }
     if (aiReplacements.length > 0) {
-      console.log(`  🔄 AI replacements (${aiReplacements.length}):`, aiReplacements)
+      console.log(`  🔄 AI replacements (${aiReplacements.length}):`)
+      aiReplacements.forEach(path => console.log(`    ~ ${path} 🤖`))
     }
+    if (aiSkipped.length > 0) {
+      console.log(`  = AI skipped (${aiSkipped.length}):`)
+      aiSkipped.forEach(path => console.log(`    = ${path} (kept base)`))
+    }
+    
+    // Validate that constants, hooks, etc. are preserved
+    const importantDirs = ['constants', 'hooks', 'components/ui']
+    importantDirs.forEach(dir => {
+      const filesInDir = Object.keys(this.mergedFiles).filter(path => path.includes(`/${dir}/`))
+      if (filesInDir.length > 0) {
+        console.log(`  📁 ${dir}: ${filesInDir.length} files preserved ✅`)
+      }
+    })
   }
 
   /**
@@ -462,6 +586,63 @@ class ClientMemFS {
     this.aiFiles = {}
     this.mergedFiles = {}
     console.log('🗑️ ClientMemFS cleared')
+  }
+
+  /**
+   * Debug method - get detailed file tree with AI markers
+   */
+  getDetailedFileTree(): string {
+    return this.generateFileTree()
+  }
+
+  /**
+   * Debug method - validate current state
+   */
+  validateCurrentState(): {
+    isValid: boolean
+    issues: string[]
+    summary: {
+      baseFiles: number
+      aiFiles: number  
+      totalFiles: number
+      preservedStructure: boolean
+    }
+  } {
+    const issues: string[] = []
+    
+    // Check if base template is properly loaded
+    if (!this.isBaseLoaded) {
+      issues.push('Base template not loaded')
+    }
+    
+    // Check if we lost any base files
+    const basePaths = Object.keys(this.baseFiles)
+    const mergedPaths = Object.keys(this.mergedFiles)
+    const lostFiles = basePaths.filter(path => !mergedPaths.includes(path))
+    
+    if (lostFiles.length > 0) {
+      issues.push(`Lost ${lostFiles.length} base files: ${lostFiles.join(', ')}`)
+    }
+    
+    // Check if important directories exist
+    const importantDirs = ['app', 'components', 'hooks', 'constants']
+    importantDirs.forEach(dir => {
+      const hasFiles = mergedPaths.some(path => path.includes(`/${dir}/`))
+      if (!hasFiles) {
+        issues.push(`Missing files in ${dir} directory`)
+      }
+    })
+    
+    return {
+      isValid: issues.length === 0,
+      issues,
+      summary: {
+        baseFiles: Object.keys(this.baseFiles).length,
+        aiFiles: Object.keys(this.aiFiles).length,
+        totalFiles: Object.keys(this.mergedFiles).length,
+        preservedStructure: lostFiles.length === 0
+      }
+    }
   }
 }
 

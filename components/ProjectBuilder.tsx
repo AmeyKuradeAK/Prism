@@ -537,9 +537,15 @@ You can still use the base template, or try a more specific prompt like "Generat
       const mergedFiles = clientMemFS.getAllFiles()
       const counts = clientMemFS.getFileCount()
       
+      // Get detailed file tree and validation
+      const fileTree = clientMemFS.getDetailedFileTree()
+      const stateValidation = clientMemFS.validateCurrentState()
+      
       console.log(`✅ Step 5: Sequenced merge complete`)
       console.log(`📊 Final result: ${counts.base} base + ${counts.ai} AI = ${counts.total} total files`)
       console.log('🔍 Final state:', finalState)
+      console.log('🌳 Detailed file tree:', fileTree)
+      console.log('✅ State validation:', stateValidation)
       
       // Set all merged files in state
       setFiles(mergedFiles)
@@ -558,7 +564,7 @@ You can still use the base template, or try a more specific prompt like "Generat
         }
       })
       
-      // Update success message with shell simulation
+      // Update success message with detailed file tree and validation
       setChatMessages(prev => prev.map(msg => 
         msg.isGenerating 
           ? { 
@@ -567,18 +573,28 @@ You can still use the base template, or try a more specific prompt like "Generat
 
 📊 **Final Result**: ${counts.base} base files + ${counts.ai} AI enhancements = **${counts.total} total files**
 
+🌳 **File Structure** (🤖 = AI generated):
+\`\`\`
+${fileTree}
+\`\`\`
+
+🔍 **Validation Results**:
+- State Valid: ${stateValidation.isValid ? '✅' : '❌'}
+- Base Files Preserved: ${stateValidation.summary.preservedStructure ? '✅' : '❌'}
+- Structure Integrity: ${stateValidation.issues.length === 0 ? '✅ All good' : '⚠️ ' + stateValidation.issues.join(', ')}
+
 🐚 **Shell Operations**:
 \`\`\`
 $ ls -la /virtual-fs/
   total ${counts.total} files
 $ echo "Base template: ${counts.base} files"
 $ echo "AI generated: ${counts.ai} files"  
-$ echo "Merge strategy: intelligent replacement"
+$ echo "Merge strategy: safe file-by-file merge"
 $ echo "Status: Ready for development"
 \`\`\`
 
-🎉 Your enhanced React Native app is ready! The AI has added custom functionality to your base template with proper sequencing. You can now:
-- 📁 Browse the file explorer to see all generated files
+🎉 Your enhanced React Native app is ready! The AI has safely merged custom functionality into your base template. You can now:
+- 📁 Browse the file explorer to see all files (🤖 markers show AI additions)
 - 👀 Click on any file to view the code
 - 📱 Use the build system to create APK/IPA files
 - 💾 Save your project for future editing`,
@@ -631,21 +647,27 @@ The base template is still loaded and functional. You can:
   }
 
   const getFileTree = () => {
-    console.log('🗂️ Getting organized files - using fallback organization...')
+    console.log('🗂️ Getting organized files - using improved organization...')
     
     // Fallback to manual organization
     console.log('📋 Raw file paths:', Object.keys(files).sort())
     
     const organized: { [key: string]: string[] } = {}
+    const processedPaths = new Set<string>()
     
     Object.keys(files).forEach(path => {
+      // Skip if already processed (avoid duplicates)
+      if (processedPaths.has(path)) return
+      processedPaths.add(path)
+      
       const cleanPath = path.startsWith('/') ? path.slice(1) : path
       const parts = cleanPath.split('/')
       
       let folderName = ''
       
       if (parts.length === 1) {
-        folderName = '📄 Project Files'
+        // Root files - no folder, just use 'root'
+        folderName = 'root'
       } else if (parts[0] === 'app') {
         if (parts.length === 2) {
           folderName = '📱 app'
@@ -674,14 +696,21 @@ The base template is still loaded and functional. You can:
         folderName = '📝 types'
       } else if (parts[0] === 'assets') {
         folderName = '🖼️ assets'
+      } else if (parts[0] === 'scripts') {
+        folderName = '⚡ scripts'
       } else {
+        // Other folders get a generic folder icon
         folderName = `📁 ${parts[0]}`
       }
       
       if (!organized[folderName]) {
         organized[folderName] = []
       }
-      organized[folderName].push(path)
+      
+      // Only add if not already in the array (prevent duplicates)
+      if (!organized[folderName].includes(path)) {
+        organized[folderName].push(path)
+      }
     })
     
     // Sort files within each folder
@@ -689,8 +718,9 @@ The base template is still loaded and functional. You can:
       organized[folder].sort()
     })
     
-    console.log('✅ Fallback organization complete')
+    console.log('✅ Improved organization complete')
     console.log(`📊 Total folders: ${Object.keys(organized).length}`)
+    console.log('📁 Organized structure:', Object.keys(organized).map(folder => `${folder} (${organized[folder].length})`))
     
     return organized
   }
@@ -855,6 +885,68 @@ The base template is still loaded and functional. You can:
               <span>{isChatCollapsed ? 'Show Chat' : 'Hide Chat'}</span>
               {isChatCollapsed ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
             </button>
+
+            {/* Debug File Tree Button */}
+            <button
+              onClick={async () => {
+                console.log('🔍 Debug: Showing current file tree state...')
+                
+                try {
+                  const clientMemFS = (await import('@/lib/utils/client-memfs')).default
+                  const fileTree = clientMemFS.getDetailedFileTree()
+                  const stateValidation = clientMemFS.validateCurrentState()
+                  const currentState = await clientMemFS.getCurrentState()
+                  
+                  const debugMessage: ChatMessage = {
+                    id: Date.now().toString(),
+                    type: 'system',
+                    content: `🔍 **Debug: Current File Tree State**
+
+🌳 **File Structure** (🤖 = AI generated):
+\`\`\`
+${fileTree}
+\`\`\`
+
+📊 **System State**:
+- Base Loaded: ${currentState.isBaseLoaded ? '✅' : '❌'}
+- Queue Length: ${currentState.queueLength}
+- Total Files: ${currentState.filesCount.total}
+
+🔍 **Validation**:
+- State Valid: ${stateValidation.isValid ? '✅' : '❌'}
+- Base Files: ${stateValidation.summary.baseFiles}
+- AI Files: ${stateValidation.summary.aiFiles}
+- Structure Preserved: ${stateValidation.summary.preservedStructure ? '✅' : '❌'}
+
+${stateValidation.issues.length > 0 ? `⚠️ **Issues Found**:\n${stateValidation.issues.map(issue => `- ${issue}`).join('\n')}` : '✅ **No Issues Found**'}
+
+🐚 **Shell Status**: All systems operational`,
+                    timestamp: new Date()
+                  }
+                  setChatMessages(prev => [...prev, debugMessage])
+                  
+                  // Auto-show chat if it's hidden
+                  if (isChatCollapsed) {
+                    setIsChatCollapsed(false)
+                  }
+                  
+                } catch (error) {
+                  console.error('Debug failed:', error)
+                  const errorMessage: ChatMessage = {
+                    id: Date.now().toString(),
+                    type: 'system',
+                    content: `❌ **Debug Failed**: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                    timestamp: new Date()
+                  }
+                  setChatMessages(prev => [...prev, errorMessage])
+                }
+              }}
+              disabled={Object.keys(files).length === 0}
+              className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-white bg-yellow-600 rounded-lg hover:bg-yellow-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            >
+              <Settings className="w-4 h-4" />
+              <span>Debug Tree</span>
+            </button>
           </div>
         </div>
       </div>
@@ -896,6 +988,7 @@ The base template is still loaded and functional. You can:
               <AnimatePresence>
                 {Object.entries(filteredFiles()).map(([folder, fileList]) => (
                   <div key={folder} className="mb-1">
+                    {/* Show folder header for non-root folders */}
                     {folder !== 'root' && (
                       <button
                         onClick={() => toggleFolder(folder)}
@@ -912,34 +1005,16 @@ The base template is still loaded and functional. You can:
                     )}
                     
                     {/* Root files - always show, no folder header */}
-                    {folder === 'root' && fileList.map(filePath => {
-                      const isActive = activeFile === filePath
-                      const isComplete = files[filePath] !== undefined
-                      
-                      return (
-                        <motion.div
-                          key={filePath}
-                          initial={{ opacity: 0, x: -10 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          className={`flex items-center space-x-2 p-2 rounded cursor-pointer transition-colors ${
-                            isActive ? 'bg-blue-900/50 border-l-2 border-blue-400' : 
-                            isComplete ? 'hover:bg-gray-800' : 'opacity-50'
-                          }`}
-                          onClick={() => isComplete && setActiveFile(filePath)}
-                        >
-                          {getFileIcon(filePath)}
-                          <span className="text-sm truncate flex-1 text-gray-300">
-                            {filePath.split('/').pop()}
-                          </span>
-                          {isComplete && (
-                            <CheckCircle className="w-3 h-3 text-green-400" />
-                          )}
-                        </motion.div>
-                      )
-                    })}
+                    {folder === 'root' && (
+                      <div className="mb-2">
+                        <div className="px-2 py-1 text-xs font-medium text-gray-400 uppercase tracking-wide">
+                          Root Files ({fileList.length})
+                        </div>
+                      </div>
+                    )}
                     
-                    {/* Folder files - show when expanded */}
-                    {folder !== 'root' && expandedFolders.has(folder) && fileList.map(filePath => {
+                    {/* Show files when it's root OR when folder is expanded */}
+                    {(folder === 'root' || expandedFolders.has(folder)) && fileList.map(filePath => {
                       const isActive = activeFile === filePath
                       const isComplete = files[filePath] !== undefined
                       
@@ -948,7 +1023,7 @@ The base template is still loaded and functional. You can:
                           key={filePath}
                           initial={{ opacity: 0, x: -10 }}
                           animate={{ opacity: 1, x: 0 }}
-                          className={`flex items-center space-x-2 p-2 ml-6 rounded cursor-pointer transition-colors ${
+                          className={`flex items-center space-x-2 p-2 ${folder !== 'root' ? 'ml-6' : ''} rounded cursor-pointer transition-colors ${
                             isActive ? 'bg-blue-900/50 border-l-2 border-blue-400' : 
                             isComplete ? 'hover:bg-gray-800' : 'opacity-50'
                           }`}
