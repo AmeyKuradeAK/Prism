@@ -1,3 +1,4 @@
+import { vol } from 'memfs'
 // Client-side memfs manager for React Native app generation
 // Handles base template + AI file merging in browser memory
 
@@ -770,4 +771,20 @@ class ClientMemFS {
 
 // Export singleton instance
 export const clientMemFS = new ClientMemFS()
-export default clientMemFS 
+export default clientMemFS
+
+/**
+ * Load project files from MongoDB (array of { path, content }) into memfs
+ */
+export function loadFilesToMemfs(files: { path: string, content: string }[]) {
+  const fsJSON: { [key: string]: string } = {}
+  for (const file of files) {
+    fsJSON[file.path] = file.content
+  }
+  // Replace the current memfs state
+  if (typeof vol !== 'undefined' && vol.fromJSON) {
+    vol.fromJSON(fsJSON, '/')
+  }
+  // If using a custom memfs class, add similar logic here
+  return fsJSON
+} 

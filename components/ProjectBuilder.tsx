@@ -46,6 +46,7 @@ import {
   ChevronUp,
   Trash
 } from 'lucide-react'
+import { loadFilesToMemfs } from '@/lib/utils/client-memfs'
 
 interface FileProgress {
   path: string
@@ -192,63 +193,33 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
           if (data.success) {
             const project = data.project
             console.log(`📁 Project loaded: ${project.name} with ${Object.keys(project.files).length} files`)
-            
-            // Set project data
+            // Load files into memfs
+            if (Array.isArray(project.files)) {
+              loadFilesToMemfs(project.files)
+              // Convert to { [key]: content } for state
+              const fsObj: { [key: string]: string } = {}
+              for (const file of project.files) {
+                fsObj[file.path] = file.content
+              }
+              setFiles(fsObj)
+            } else {
+              setFiles(project.files || {})
+            }
             setProject(project)
-            setFiles(project.files || {})
-            
             // Set active file to first file
-            const firstFile = Object.keys(project.files || {})[0]
-            if (firstFile) {
-              setActiveFile(firstFile)
-            }
-            
-            // Add welcome message with project info
-            setChatMessages([
-              {
-                id: 'project-loaded',
-                type: 'assistant',
-                content: `📁 **Project Loaded**: ${project.name}\n\n🔢 **Files**: ${Object.keys(project.files || {}).length}\n📅 **Created**: ${new Date(project.createdAt).toLocaleDateString()}\n\n💡 **Original Prompt**: ${project.prompt || 'No prompt saved'}\n\nYou can now view, edit, and modify this project. Ask me to make changes or add new features!`,
-                timestamp: new Date()
-              }
-            ])
-            
-            // Update project context
-            setProjectContext(prev => ({
-              ...prev,
-              mainPrompt: project.prompt,
-              projectType: project.name.includes('Todo') ? 'Todo/Productivity' : 
-                         project.name.includes('Shop') || project.name.includes('Store') ? 'eCommerce' : 
-                         project.name.includes('Chat') || project.name.includes('Social') ? 'Social/Messaging' : 
-                         undefined
-            }))
-            
+            const firstFile = project.files && project.files.length > 0 ? project.files[0].path : ''
+            setActiveFile(firstFile)
           } else {
-            console.error('Failed to load project:', data.error)
-            setChatMessages([
-              {
-                id: 'project-error',
-                type: 'system',
-                content: `❌ **Failed to load project**: ${data.error || 'Unknown error'}\n\nPlease try again or start a new project.`,
-                timestamp: new Date()
-              }
-            ])
+            alert('Failed to load project: ' + (data.error || 'Unknown error'))
           }
-        } catch (error) {
-          console.error('Error loading project:', error)
-          setChatMessages([
-            {
-              id: 'project-error',
-              type: 'system',
-              content: `❌ **Error loading project**: ${error instanceof Error ? error.message : 'Unknown error'}\n\nPlease try again or start a new project.`,
-              timestamp: new Date()
-            }
-          ])
+        } catch (err) {
+          console.error('Error loading project:', err)
+          alert('Failed to load project. Please try again.')
         }
       }
     }
-    
     loadProject()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId])
 
   // Auto-scroll chat to bottom

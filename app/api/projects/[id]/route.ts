@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import connectToDatabase from '@/lib/database/mongodb'
 import Project from '@/lib/database/models/Project'
+import { writeProjectToTempDir } from '@/lib/utils/project-to-temp'
 
 // GET - Fetch a specific project with all files
 export async function GET(
@@ -168,4 +169,14 @@ export async function DELETE(
       { status: 500 }
     )
   }
+}
+
+export async function POST(req: Request, { params }: { params: { id: string } }) {
+  // Export project to temp dir
+  const project = await Project.findById(params.id)
+  if (!project) {
+    return new Response(JSON.stringify({ error: 'Project not found' }), { status: 404 })
+  }
+  const tempDir = await writeProjectToTempDir(project.files, project._id.toString())
+  return new Response(JSON.stringify({ tempDir }), { status: 200 })
 } 
