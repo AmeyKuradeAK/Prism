@@ -620,9 +620,8 @@ async function generateSmartFallbackFiles(baseFiles: { [key: string]: string }, 
 
 // Generate fallback components based on app type
 function generateFallbackComponent(componentName: string, analysis: AppAnalysis, prompt: string): string {
-  const baseImports = `import { StyleSheet, View, Text, TouchableOpacity } from 'react-native'
-import { ThemedText } from '@/components/ThemedText'
-import { ThemedView } from '@/components/ThemedView'`
+  const baseImports = `import React from 'react';
+import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';`
 
   switch (componentName) {
     case 'TaskItem':
@@ -640,29 +639,29 @@ interface TaskItemProps {
 
 export function TaskItem({ task, onToggle, onDelete }: TaskItemProps) {
   return (
-    <ThemedView style={styles.container}>
+    <View style={styles.container}>
       <TouchableOpacity 
         style={[styles.checkbox, task.completed && styles.completed]}
         onPress={() => onToggle(task.id)}
       >
-        <ThemedText style={styles.checkmark}>
+        <Text style={styles.checkmark}>
           {task.completed ? '✓' : ''}
-        </ThemedText>
+        </Text>
       </TouchableOpacity>
       
-      <ThemedText 
+      <Text 
         style={[styles.title, task.completed && styles.completedText]}
       >
         {task.title}
-      </ThemedText>
+      </Text>
       
       <TouchableOpacity 
         style={styles.deleteButton}
         onPress={() => onDelete(task.id)}
       >
-        <ThemedText style={styles.deleteText}>×</ThemedText>
+        <Text style={styles.deleteText}>×</Text>
       </TouchableOpacity>
-    </ThemedView>
+    </View>
   )
 }
 
@@ -723,31 +722,31 @@ interface ProductCardProps {
 
 export function ProductCard({ product, onAddToCart }: ProductCardProps) {
   return (
-    <ThemedView style={styles.card}>
-      <ThemedView style={styles.imageContainer}>
-        <ThemedText style={styles.imagePlaceholder}>
+    <View style={styles.card}>
+      <View style={styles.imageContainer}>
+        <Text style={styles.imagePlaceholder}>
           📷
-        </ThemedText>
-      </ThemedView>
+        </Text>
+      </View>
       
-      <ThemedView style={styles.content}>
-        <ThemedText style={styles.productName}>
+      <View style={styles.content}>
+        <Text style={styles.productName}>
           {product.name}
-        </ThemedText>
-        <ThemedText style={styles.price}>
+        </Text>
+        <Text style={styles.price}>
           $\{product.price.toFixed(2)}
-        </ThemedText>
+        </Text>
         
         <TouchableOpacity 
           style={styles.addButton}
           onPress={() => onAddToCart(product.id)}
         >
-          <ThemedText style={styles.addButtonText}>
+          <Text style={styles.addButtonText}>
             Add to Cart
-          </ThemedText>
+          </Text>
         </TouchableOpacity>
-      </ThemedView>
-    </ThemedView>
+      </View>
+    </View>
   )
 }
 
@@ -804,14 +803,14 @@ const styles = StyleSheet.create({
 
 export function ${componentName}() {
   return (
-    <ThemedView style={styles.container}>
-      <ThemedText style={styles.title}>
+    <View style={styles.container}>
+      <Text style={styles.title}>
         ${componentName}
-      </ThemedText>
-      <ThemedText>
+      </Text>
+      <Text style={styles.description}>
         This ${componentName.toLowerCase()} component is ready for your customization.
-      </ThemedText>
-    </ThemedView>
+      </Text>
+    </View>
   )
 }
 
@@ -819,11 +818,20 @@ const styles = StyleSheet.create({
   container: {
     padding: 16,
     alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    margin: 8,
   },
   title: {
     fontSize: 18,
     fontWeight: '600',
     marginBottom: 8,
+    color: '#000000',
+  },
+  description: {
+    fontSize: 14,
+    color: '#666666',
+    textAlign: 'center',
   },
 })`
   }
@@ -833,54 +841,91 @@ const styles = StyleSheet.create({
 function generateFallbackScreen(screenName: string, analysis: AppAnalysis, prompt: string): string {
   const capitalizedName = screenName.charAt(0).toUpperCase() + screenName.slice(1)
   
-  return `import { StyleSheet, ScrollView } from 'react-native'
-import ParallaxScrollView from '@/components/ParallaxScrollView'
-import { ThemedText } from '@/components/ThemedText'
-import { ThemedView } from '@/components/ThemedView'
+  return `import React from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+} from 'react-native';
 
 export default function ${capitalizedName}Screen() {
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={<ThemedView style={styles.headerImage} />}
-    >
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">${capitalizedName}</ThemedText>
-      </ThemedView>
-      
-      <ThemedView style={styles.contentContainer}>
-        <ThemedText>
+    <ScrollView style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.title}>${capitalizedName}</Text>
+        <Text style={styles.subtitle}>
           Welcome to the ${screenName} screen of your ${analysis.type} app!
-        </ThemedText>
-        <ThemedText style={styles.subtitle}>
-          This screen is ready for your ${analysis.type} features.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
-  )
+        </Text>
+      </View>
+      
+      <View style={styles.content}>
+        <TouchableOpacity style={styles.card}>
+          <Text style={styles.cardTitle}>${capitalizedName} Features</Text>
+          <Text style={styles.cardText}>
+            This screen is ready for your ${analysis.type} features.
+          </Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity style={styles.card}>
+          <Text style={styles.cardTitle}>Customization</Text>
+          <Text style={styles.cardText}>
+            Edit this screen to add your specific functionality.
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </ScrollView>
+  );
 }
 
 const styles = StyleSheet.create({
-  headerImage: {
-    backgroundColor: '#A1CEDC',
-    height: 178,
-    width: '100%',
+  container: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
   },
-  titleContainer: {
-    flexDirection: 'row',
+  header: {
+    padding: 20,
+    backgroundColor: '#ffffff',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 16,
   },
-  contentContainer: {
-    gap: 16,
-    padding: 16,
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#000000',
+    marginBottom: 8,
   },
   subtitle: {
-    fontSize: 14,
-    opacity: 0.7,
+    fontSize: 16,
+    color: '#666666',
+    textAlign: 'center',
   },
-})`
+  content: {
+    padding: 20,
+  },
+  card: {
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#000000',
+    marginBottom: 8,
+  },
+  cardText: {
+    fontSize: 14,
+    color: '#666666',
+    lineHeight: 20,
+  },
+});`
 }
 
 // Generate enhanced tab layout with all screens
@@ -889,44 +934,54 @@ function generateEnhancedTabLayout(screens: string[]): string {
     const capitalizedScreen = screen.charAt(0).toUpperCase() + screen.slice(1)
     const iconName = getIconForScreen(screen)
     
-    return `      <Tabs.Screen
-        name="${screen === 'home' ? 'index' : screen}"
+    return `      <Tab.Screen
+        name="${screen === 'home' ? 'Home' : capitalizedScreen}"
+        component={${capitalizedScreen}Screen}
         options={{
           title: '${capitalizedScreen}',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="${iconName}" color={color} />,
+          tabBarIcon: ({ color, size }) => (
+            <IconSymbol size={size} name="${iconName}" color={color} />
+          ),
         }}
       />`
   }).join('\n')
   
-  return `import { Tabs } from 'expo-router';
-import React from 'react';
+  return `import React from 'react';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { NavigationContainer } from '@react-navigation/native';
 import { Platform } from 'react-native';
 
-import { HapticTab } from '@/components/HapticTab';
 import { IconSymbol } from '@/components/ui/IconSymbol';
-import TabBarBackground from '@/components/ui/TabBarBackground';
 import { Colors } from '@/constants/Colors';
 import { useColorScheme } from '@/hooks/useColorScheme';
+
+// Import screen components
+${screens.map(screen => {
+  const capitalizedScreen = screen.charAt(0).toUpperCase() + screen.slice(1)
+  return `import ${capitalizedScreen}Screen from '@/screens/${capitalizedScreen}Screen';`
+}).join('\n')}
+
+const Tab = createBottomTabNavigator();
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
 
   return (
-    <Tabs
-      screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
-        headerShown: false,
-        tabBarButton: HapticTab,
-        tabBarBackground: TabBarBackground,
-        tabBarStyle: Platform.select({
-          ios: {
-            position: 'absolute',
-          },
-          default: {},
-        }),
-      }}>
+    <NavigationContainer>
+      <Tab.Navigator
+        screenOptions={{
+          tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
+          headerShown: false,
+          tabBarStyle: Platform.select({
+            ios: {
+              position: 'absolute',
+            },
+            default: {},
+          }),
+        }}>
 ${screenTabs}
-    </Tabs>
+      </Tab.Navigator>
+    </NavigationContainer>
   );
 }`
 }
