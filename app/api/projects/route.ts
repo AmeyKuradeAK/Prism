@@ -52,33 +52,57 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    await connectToDatabase()
-    
-    // Fetch user's projects sorted by most recent
-    const projects = await Project.find({ userId })
-      .sort({ updatedAt: -1 })
-      .select('_id name description prompt status createdAt updatedAt analytics metadata tags')
-      .lean()
-    
-    // Transform to include file count and size info
-    const projectsWithStats = projects.map(project => ({
-      ...project,
-      fileCount: project.metadata?.size || 0,
-      lastModified: project.updatedAt,
-      id: project._id.toString()
-    }))
+    console.log('📁 Fetching projects for user:', userId)
 
-    return NextResponse.json({
-      success: true,
-      projects: projectsWithStats,
-      count: projects.length
-    })
+    try {
+      await connectToDatabase()
+      console.log('✅ Database connected successfully')
+    } catch (dbError) {
+      console.error('❌ Database connection failed:', dbError)
+      return NextResponse.json({
+        error: 'Database connection failed',
+        message: 'Unable to connect to database. Please try again later.',
+        offline: true
+      }, { status: 503 })
+    }
+    
+    try {
+      // Fetch user's projects sorted by most recent
+      const projects = await Project.find({ userId })
+        .sort({ updatedAt: -1 })
+        .select('_id name description prompt status createdAt updatedAt analytics metadata tags')
+        .lean()
+      
+      console.log(`📁 Found ${projects.length} projects for user`)
+      
+      // Transform to include file count and size info
+      const projectsWithStats = projects.map(project => ({
+        ...project,
+        fileCount: project.metadata?.size || 0,
+        lastModified: project.updatedAt,
+        id: project._id.toString()
+      }))
+
+      return NextResponse.json({
+        success: true,
+        projects: projectsWithStats,
+        count: projects.length
+      })
+    } catch (queryError) {
+      console.error('❌ Database query failed:', queryError)
+      return NextResponse.json({
+        error: 'Failed to fetch projects',
+        message: 'Database query failed. Please try again later.',
+        offline: true
+      }, { status: 500 })
+    }
   } catch (error) {
-    console.error('Error fetching projects:', error)
-    return NextResponse.json(
-      { error: 'Failed to fetch projects' },
-      { status: 500 }
-    )
+    console.error('❌ General error fetching projects:', error)
+    return NextResponse.json({
+      error: 'Failed to fetch projects',
+      message: 'An unexpected error occurred. Please try again later.',
+      offline: true
+    }, { status: 500 })
   }
 }
 
