@@ -171,12 +171,37 @@ export async function DELETE(
   }
 }
 
-export async function POST(req: Request, { params }: { params: { id: string } }) {
-  // Export project to temp dir
-  const project = await Project.findById(params.id)
-  if (!project) {
-    return new Response(JSON.stringify({ error: 'Project not found' }), { status: 404 })
+// POST - Export project to temp directory
+export async function POST(
+  request: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { userId } = await auth()
+    
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const params = await context.params
+    const { id } = params
+
+    await connectToDatabase()
+    
+    // Export project to temp dir
+    const project = await Project.findById(id)
+    if (!project) {
+      return NextResponse.json({ error: 'Project not found' }, { status: 404 })
+    }
+    
+    const tempDir = await writeProjectToTempDir(project.files, project._id.toString())
+    return NextResponse.json({ tempDir }, { status: 200 })
+    
+  } catch (error) {
+    console.error('Error exporting project:', error)
+    return NextResponse.json(
+      { error: 'Failed to export project' },
+      { status: 500 }
+    )
   }
-  const tempDir = await writeProjectToTempDir(project.files, project._id.toString())
-  return new Response(JSON.stringify({ tempDir }), { status: 200 })
 } 
