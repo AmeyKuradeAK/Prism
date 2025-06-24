@@ -1155,8 +1155,8 @@ export default function LandingPage() {
               <Link href="/docs" className="text-light hover:text-white transition-professional">
                 Documentation
               </Link>
-              <Link href="/support" className="text-light hover:text-white transition-professional">
-                Support
+              <Link href="/pricing" className="text-light hover:text-white transition-professional">
+                Pricing
               </Link>
               <div className="flex items-center space-x-4">
                 <motion.a 

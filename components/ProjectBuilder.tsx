@@ -134,6 +134,11 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
       clearTimeout(autoSaveTimeoutRef.current)
     }
     
+    // Don't trigger auto-save if already saving
+    if (autoSaveStatus === 'saving') {
+      return
+    }
+    
     setAutoSaveStatus('saving')
     autoSaveTimeoutRef.current = setTimeout(async () => {
       try {
@@ -142,11 +147,16 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
       } catch (error) {
         setAutoSaveStatus('error')
       }
-    }, 1000)
+    }, 2000) // Increased debounce time to 2 seconds
   }
 
   // Save project to database
   const saveProject = async () => {
+    // Prevent duplicate saves
+    if (autoSaveStatus === 'saving') {
+      return
+    }
+    
     try {
       const response = await fetch('/api/projects', {
         method: projectId ? 'PUT' : 'POST',
@@ -174,12 +184,12 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
     }
   }
 
-  // Auto-save when files change
+  // Auto-save when files change (with better debouncing)
   useEffect(() => {
-    if (Object.keys(files).length > 0) {
+    if (Object.keys(files).length > 0 && !isGenerating) {
       triggerAutoSave()
     }
-  }, [files])
+  }, [files, isGenerating]) // Added isGenerating dependency
 
   // Load project on mount if projectId is provided
   useEffect(() => {

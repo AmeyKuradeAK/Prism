@@ -136,9 +136,17 @@ export default function UserSettings() {
   }
 
   const handleBillingPortal = () => {
-    if (typeof window !== 'undefined' && window.Clerk && typeof window.Clerk.openBillingPortal === 'function') {
-      window.Clerk.openBillingPortal()
-    } else {
+    try {
+      // Try to use Clerk's billing portal if available
+      if (typeof window !== 'undefined' && window.Clerk && typeof window.Clerk.openBillingPortal === 'function') {
+        window.Clerk.openBillingPortal()
+      } else {
+        // Fallback: redirect to pricing page
+        console.log('Clerk billing portal not available, redirecting to pricing page')
+        window.location.href = '/pricing'
+      }
+    } catch (error) {
+      console.error('Error opening billing portal:', error)
       // Fallback to pricing page
       window.location.href = '/pricing'
     }
@@ -474,16 +482,29 @@ export default function UserSettings() {
                   <div className="flex flex-wrap gap-4">
                     <button
                       onClick={handleBillingPortal}
-                      className="bg-white/10 hover:bg-white/20 text-white px-6 py-2 rounded-lg font-medium transition-colors border border-white/20"
+                      className="bg-white/10 hover:bg-white/20 text-white px-6 py-2 rounded-lg font-medium transition-colors border border-white/20 flex items-center space-x-2"
                     >
-                      Open Billing Portal
+                      <CreditCard className="w-4 h-4" />
+                      <span>Open Billing Portal</span>
                     </button>
                     <button
                       onClick={() => window.location.href = '/pricing'}
-                      className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white px-6 py-2 rounded-lg font-medium transition-all"
+                      className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white px-6 py-2 rounded-lg font-medium transition-all flex items-center space-x-2"
                     >
-                      View All Plans
+                      <Sparkles className="w-4 h-4" />
+                      <span>View All Plans</span>
                     </button>
+                  </div>
+                  
+                  {/* Billing Status */}
+                  <div className="mt-4 p-4 bg-white/5 rounded-lg">
+                    <div className="flex items-center space-x-2 text-sm">
+                      <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                      <span className="text-white/70">Billing portal available</span>
+                    </div>
+                    <p className="text-white/50 text-xs mt-1">
+                      Click "Open Billing Portal" to manage your subscription and payment methods
+                    </p>
                   </div>
                 </div>
               </div>

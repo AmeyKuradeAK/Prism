@@ -39,170 +39,52 @@ export default function PricingPage() {
           </p>
         </motion.div>
 
-        {/* Pricing Table - Clerk for signed-in, Static for public */}
-        {isSignedIn ? (
-          // Signed-in users see Clerk PricingTable
-          <motion.div 
-            className="mb-16"
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.2 }}
-          >
-            <div className="text-center mb-8">
-              <h2 className="text-3xl font-bold text-white mb-4">Select Your Plan</h2>
-              <p className="text-light">Upgrade, downgrade, or manage your billing preferences</p>
+        {/* Clerk Pricing Table */}
+        <motion.div 
+          className="mb-16"
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, delay: 0.2 }}
+        >
+          <div className="text-center mb-8">
+            <h2 className="text-3xl font-bold text-white mb-4">
+              {isSignedIn ? 'Select Your Plan' : 'Choose Your Plan'}
+            </h2>
+            <p className="text-light">
+              {isSignedIn 
+                ? 'Upgrade, downgrade, or manage your billing preferences' 
+                : 'Start building with our AI-powered React Native generator'
+              }
+            </p>
+          </div>
+
+          <div className="flex justify-center">
+            <div className="w-full max-w-6xl">
+              <PricingTable 
+                appearance={{
+                  elements: {
+                    rootBox: 'w-full',
+                    pricingCard: 'bg-white/5 border border-white/10 rounded-professional p-8 hover:bg-white/10 transition-all duration-300 shadow-professional hover:shadow-glossy',
+                    pricingCardHeader: 'text-center mb-6',
+                    planTitle: 'text-white text-3xl font-bold mb-2',
+                    planPrice: 'text-white text-5xl font-bold mb-1',
+                    planPriceAmount: 'text-white text-5xl font-bold',
+                    planPriceCurrency: 'text-white text-2xl font-bold',
+                    planPriceInterval: 'text-light text-lg',
+                    planDescription: 'text-light text-lg mb-6',
+                    featureList: 'space-y-4 mb-8',
+                    featureListItem: 'flex items-center space-x-3 text-white',
+                    featureListIcon: 'w-5 h-5 text-green-400',
+                    featureListText: 'text-white',
+                    button: 'w-full bg-gradient-primary hover:bg-gradient-to-r hover:from-purple-700 hover:to-pink-700 text-white font-semibold py-4 px-8 rounded-professional transition-all duration-300 shadow-professional hover:shadow-glossy transform hover:scale-105',
+                    popularPlanPricingCard: 'border-2 border-white/30 bg-white/10 relative',
+                    popularPlanBadge: 'absolute -top-4 left-1/2 transform -translate-x-1/2 bg-gradient-primary px-6 py-2 rounded-professional text-white text-sm font-bold shadow-professional',
+                  }
+                }}
+              />
             </div>
-
-            <div className="flex justify-center">
-              <div className="w-full max-w-5xl">
-                <PricingTable 
-                  appearance={{
-                    elements: {
-                      card: 'bg-white/5 border border-white/10 rounded-lg p-6',
-                      cardHeader: 'text-white',
-                      planTitle: 'text-white text-2xl font-bold',
-                      planPrice: 'text-white text-4xl font-bold',
-                      planDescription: 'text-white/70',
-                      featureList: 'text-white/80',
-                      button: 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold py-3 px-6 rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl',
-                    }
-                  }}
-                />
-              </div>
-            </div>
-          </motion.div>
-        ) : (
-          // Public users see static plan cards
-          <motion.div 
-            className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16"
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.2 }}
-          >
-            {/* Free Plan */}
-            <motion.div 
-              className="card-glass p-8 relative"
-              whileHover={{ scale: 1.02 }}
-            >
-              <div className="text-center">
-                <h3 className="text-2xl font-bold text-white mb-2">Free</h3>
-                <div className="text-4xl font-bold text-white mb-4">$0</div>
-                <p className="text-light mb-6">Perfect for getting started</p>
-                
-                <ul className="space-y-3 text-left mb-8">
-                  <li className="flex items-center space-x-3">
-                    <CheckCircle className="w-5 h-5 text-green-400" />
-                    <span className="text-white">30 AI prompts/month</span>
-                  </li>
-                  <li className="flex items-center space-x-3">
-                    <CheckCircle className="w-5 h-5 text-green-400" />
-                    <span className="text-white">3 projects</span>
-                  </li>
-                  <li className="flex items-center space-x-3">
-                    <CheckCircle className="w-5 h-5 text-green-400" />
-                    <span className="text-white">Code export</span>
-                  </li>
-                  <li className="flex items-center space-x-3">
-                    <CheckCircle className="w-5 h-5 text-green-400" />
-                    <span className="text-white">Community support</span>
-                  </li>
-                </ul>
-
-                <Link 
-                  href="/sign-up"
-                  className="btn-glossy w-full inline-flex items-center justify-center space-x-2"
-                >
-                  <span>Get Started</span>
-                  <ArrowRight className="w-4 h-4" />
-                </Link>
-              </div>
-            </motion.div>
-
-            {/* Plus Plan */}
-            <motion.div 
-              className="card-glass p-8 relative border-2 border-white/20"
-              whileHover={{ scale: 1.02 }}
-            >
-              <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
-                <div className="bg-gradient-primary px-4 py-2 rounded-professional text-white text-sm font-medium">
-                  Popular
-                </div>
-              </div>
-
-              <div className="text-center">
-                <h3 className="text-2xl font-bold text-white mb-2">Plus</h3>
-                <div className="text-4xl font-bold text-white mb-4">$19<span className="text-lg text-light">/month</span></div>
-                <p className="text-light mb-6">For serious developers</p>
-                
-                <ul className="space-y-3 text-left mb-8">
-                  <li className="flex items-center space-x-3">
-                    <CheckCircle className="w-5 h-5 text-green-400" />
-                    <span className="text-white">500 AI prompts/month</span>
-                  </li>
-                  <li className="flex items-center space-x-3">
-                    <CheckCircle className="w-5 h-5 text-green-400" />
-                    <span className="text-white">Unlimited projects</span>
-                  </li>
-                  <li className="flex items-center space-x-3">
-                    <CheckCircle className="w-5 h-5 text-green-400" />
-                    <span className="text-white">Priority support</span>
-                  </li>
-                  <li className="flex items-center space-x-3">
-                    <CheckCircle className="w-5 h-5 text-green-400" />
-                    <span className="text-white">Custom API keys</span>
-                  </li>
-                </ul>
-
-                <Link 
-                  href="/sign-up"
-                  className="btn-glossy w-full inline-flex items-center justify-center space-x-2"
-                >
-                  <span>Start Free Trial</span>
-                  <ArrowRight className="w-4 h-4" />
-                </Link>
-              </div>
-            </motion.div>
-
-            {/* Pro Plan */}
-            <motion.div 
-              className="card-glass p-8 relative"
-              whileHover={{ scale: 1.02 }}
-            >
-              <div className="text-center">
-                <h3 className="text-2xl font-bold text-white mb-2">Pro</h3>
-                <div className="text-4xl font-bold text-white mb-4">$49<span className="text-lg text-light">/month</span></div>
-                <p className="text-light mb-6">For power users</p>
-                
-                <ul className="space-y-3 text-left mb-8">
-                  <li className="flex items-center space-x-3">
-                    <CheckCircle className="w-5 h-5 text-green-400" />
-                    <span className="text-white">2000 AI prompts/month</span>
-                  </li>
-                  <li className="flex items-center space-x-3">
-                    <CheckCircle className="w-5 h-5 text-green-400" />
-                    <span className="text-white">Unlimited projects</span>
-                  </li>
-                  <li className="flex items-center space-x-3">
-                    <CheckCircle className="w-5 h-5 text-green-400" />
-                    <span className="text-white">Custom branding</span>
-                  </li>
-                  <li className="flex items-center space-x-3">
-                    <CheckCircle className="w-5 h-5 text-green-400" />
-                    <span className="text-white">API access</span>
-                  </li>
-                </ul>
-
-                <Link 
-                  href="/sign-up"
-                  className="btn-glossy w-full inline-flex items-center justify-center space-x-2"
-                >
-                  <span>Start Free Trial</span>
-                  <ArrowRight className="w-4 h-4" />
-                </Link>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
+          </div>
+        </motion.div>
 
         {/* Features Comparison */}
         <motion.div 

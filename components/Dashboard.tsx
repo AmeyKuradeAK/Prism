@@ -110,16 +110,31 @@ export default function Dashboard() {
       
       if (projectsResponse.ok) {
         const projectsData = await projectsResponse.json()
-        setProjects(projectsData || [])
+        const projects = projectsData?.projects || projectsData || []
+        
+        // Ensure projects is an array
+        if (!Array.isArray(projects)) {
+          console.error('Projects data is not an array:', projects)
+          setProjects([])
+          setUserStats({
+            totalProjects: 0,
+            completedProjects: 0,
+            totalGenerations: 0,
+            thisMonthProjects: 0
+          })
+          return
+        }
+        
+        setProjects(projects)
         
         // Calculate stats from real data
-        const totalProjects = projectsData?.length || 0
-        const completedProjects = projectsData?.filter((p: Project) => p.status === 'completed').length || 0
+        const totalProjects = projects.length
+        const completedProjects = projects.filter((p: Project) => p.status === 'completed').length
         const thisMonth = new Date()
         thisMonth.setMonth(thisMonth.getMonth())
-        const thisMonthProjects = projectsData?.filter((p: Project) => 
+        const thisMonthProjects = projects.filter((p: Project) => 
           new Date(p.createdAt) >= thisMonth
-        ).length || 0
+        ).length
         
         setUserStats({
           totalProjects,
