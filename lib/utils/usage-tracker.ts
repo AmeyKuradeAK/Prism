@@ -127,22 +127,45 @@ export async function getUserUsageStats(userId: string): Promise<UsageStats> {
   try {
     await connectToDatabase()
     
-    const user = await User.findOne({ clerkId: userId })
+    let user = await User.findOne({ clerkId: userId })
     if (!user) {
-      throw new Error('User not found')
+      // Create user with proper free plan defaults
+      console.log(`Creating new user with free plan defaults: ${userId}`)
+      user = await User.create({
+        clerkId: userId,
+        plan: 'spark', // Free plan
+        usage: {
+          promptsThisMonth: 0,
+          projectsThisMonth: 0,
+          storageUsed: 0,
+          lastResetAt: new Date(),
+          dailyUsage: []
+        },
+        analytics: {
+          totalPrompts: 0,
+          totalProjects: 0,
+          lastActiveAt: new Date(),
+          accountAge: 0
+        }
+      })
     }
 
     // Check if we need to reset monthly usage
     await checkAndResetMonthlyUsage(user)
 
+    // Get plan limits - ensure minimum values for free plan
     const promptsLimit = getMonthlyLimit(user.plan, 'promptsPerMonth')
     const projectsLimit = getMonthlyLimit(user.plan, 'projectsPerMonth')
+    
+    // Ensure free plan has correct limits
+    const finalPromptsLimit = user.plan === 'spark' ? Math.max(15, promptsLimit === Infinity ? 15 : promptsLimit) : promptsLimit
+    const finalProjectsLimit = user.plan === 'spark' ? Math.max(3, projectsLimit === Infinity ? 3 : projectsLimit) : projectsLimit
 
-    const promptsUsed = user.usage.promptsThisMonth
-    const projectsCreated = user.usage.projectsThisMonth
+    const promptsUsed = user.usage.promptsThisMonth || 0
+    const projectsCreated = user.usage.projectsThisMonth || 0
 
-    const isOverPromptLimit = promptsLimit !== Infinity && promptsUsed >= promptsLimit
-    const isOverProjectLimit = projectsLimit !== Infinity && projectsCreated >= projectsLimit
+    const isOverPromptLimit = finalPromptsLimit !== Infinity && promptsUsed >= finalPromptsLimit
+    const isOverProjectLimit = finalProjectsLimit !== Infinity && projectsCreated >= finalProjectsLimit
 
     // Calculate next reset date (first day of next month)
     const resetDate = new Date()
@@ -150,18 +173,28 @@ export async function getUserUsageStats(userId: string): Promise<UsageStats> {
     resetDate.setDate(1)
     resetDate.setHours(0, 0, 0, 0)
 
-    return {
+    const stats = {
       promptsUsed,
-      promptsLimit: promptsLimit === Infinity ? -1 : promptsLimit,
+      promptsLimit: finalPromptsLimit === Infinity ? -1 : finalPromptsLimit,
       projectsCreated,
-      projectsLimit: projectsLimit === Infinity ? -1 : projectsLimit,
+      projectsLimit: finalProjectsLimit === Infinity ? -1 : finalProjectsLimit,
       isOverLimit: isOverPromptLimit || isOverProjectLimit,
       canUseAI: !isOverPromptLimit, // AI generation is prompt-based
       resetDate
     }
+
+    console.log(`📊 Usage stats for ${userId} (${user.plan}):`, {
+      promptsUsed: stats.promptsUsed,
+      promptsLimit: stats.promptsLimit,
+      projectsUsed: stats.projectsCreated,
+      projectsLimit: stats.projectsLimit,
+      canUseAI: stats.canUseAI
+    })
+
+    return stats
   } catch (error) {
     console.error('Error getting usage stats for user:', userId, error)
-    // Return safe defaults with better debugging info
+    // Return safe defaults with proper free tier limits
     const defaultStats = {
       promptsUsed: 0,
       promptsLimit: 15, // Free tier default

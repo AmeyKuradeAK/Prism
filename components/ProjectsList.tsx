@@ -51,13 +51,14 @@ export default function ProjectsList() {
       const data = await response.json()
       
       if (data.success) {
-        // Open project in a new tab or modal
-        console.log('Project files:', data.project.files)
-        // You could store this in state and show in a modal
-        alert(`Project "${data.project.name}" loaded with ${Object.keys(data.project.files).length} files`)
+        // Open project in builder with project ID
+        window.open(`/builder?project=${projectId}`, '_blank')
+      } else {
+        alert('Failed to load project: ' + (data.error || 'Unknown error'))
       }
     } catch (err) {
       console.error('Error viewing project:', err)
+      alert('Failed to load project. Please try again.')
     }
   }
 

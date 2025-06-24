@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
+import { redirect } from 'next/navigation'
 
 export async function GET(request: NextRequest) {
   try {
     const { userId } = await auth()
     
     if (!userId) {
-      // Redirect to sign-in if not authenticated
-      const signInUrl = new URL('/sign-in', request.url)
-      signInUrl.searchParams.set('redirect_url', request.url)
-      return NextResponse.redirect(signInUrl)
+      // Use redirect function instead of NextResponse.redirect for proper header handling
+      redirect('/sign-in')
     }
 
     const { searchParams } = new URL(request.url)
@@ -28,27 +27,21 @@ export async function GET(request: NextRequest) {
 
     // For enterprise, redirect to contact sales
     if (planId === 'enterprise') {
-      const contactUrl = new URL('/contact-sales', request.url)
-      return NextResponse.redirect(contactUrl)
+      redirect('/contact-sales')
     }
 
-    // For development/testing, redirect to dashboard with a message
-    // In production, you would set up proper Clerk billing integration
+    // Log the checkout attempt
     console.log(`🛒 Checkout initiated: User ${userId} -> Plan ${planId} (${interval})`)
     
-    // Redirect to dashboard with upgrade info
-    const dashboardUrl = new URL('/dashboard', request.url)
-    dashboardUrl.searchParams.set('upgrade', planId)
-    dashboardUrl.searchParams.set('interval', interval)
-    return NextResponse.redirect(dashboardUrl)
+    // For development, redirect to pricing page with plan selection
+    // In production, this would integrate with Clerk's billing system
+    redirect(`/pricing?selected=${planId}&interval=${interval}`)
 
   } catch (error) {
     console.error('Error processing checkout:', error)
     
-    // Redirect to pricing page with error
-    const pricingUrl = new URL('/pricing', request.url)
-    pricingUrl.searchParams.set('error', 'checkout_failed')
-    return NextResponse.redirect(pricingUrl)
+    // Use redirect instead of NextResponse.redirect to prevent header issues
+    redirect('/pricing?error=checkout_failed')
   }
 }
 

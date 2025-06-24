@@ -1,16 +1,37 @@
-import { auth } from '@clerk/nextjs/server'
-import { redirect } from 'next/navigation'
-import { PricingTable } from '@clerk/nextjs'
+'use client'
 
-export default async function PricingPage() {
-  const { userId } = await auth()
+import { useUser } from '@clerk/nextjs'
+import { useRouter } from 'next/navigation'
+import { PricingTable } from '@clerk/nextjs'
+import DashboardHeader from '@/components/dashboard/DashboardHeader'
+import { useEffect } from 'react'
+
+export default function PricingPage() {
+  const { isLoaded, isSignedIn } = useUser()
+  const router = useRouter()
   
-  if (!userId) {
-    redirect('/sign-in')
+  useEffect(() => {
+    if (isLoaded && !isSignedIn) {
+      router.push('/sign-in')
+    }
+  }, [isLoaded, isSignedIn, router])
+
+  if (!isLoaded) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="text-white">Loading...</div>
+      </div>
+    )
+  }
+
+  if (!isSignedIn) {
+    return null
   }
 
   return (
     <div className="min-h-screen bg-black">
+      <DashboardHeader />
+      
       <div className="container-professional section-professional">
         {/* Header */}
         <div className="text-center mb-16">
@@ -23,10 +44,46 @@ export default async function PricingPage() {
           </p>
         </div>
 
-        {/* Clerk Pricing Table */}
+        {/* Clerk Pricing Table - Only show if billing is properly configured */}
         <div className="flex justify-center">
-          <div className="w-full max-w-3xl">
-            <PricingTable />
+          <div className="w-full max-w-5xl">
+            <PricingTable 
+              appearance={{
+                elements: {
+                  card: 'bg-white/5 border border-white/10 rounded-lg p-6',
+                  cardHeader: 'text-white',
+                  planTitle: 'text-white text-2xl font-bold',
+                  planPrice: 'text-white text-4xl font-bold',
+                  planDescription: 'text-white/70',
+                  featureList: 'text-white/80',
+                  button: 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold py-3 px-6 rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl',
+                }
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Billing Management Section */}
+        <div className="mt-16 text-center">
+          <div className="card-glass p-8 max-w-2xl mx-auto">
+            <h2 className="text-2xl font-bold text-white mb-4">Manage Your Subscription</h2>
+            <p className="text-light mb-6">
+              Need to update payment methods, view invoices, or manage your subscription? 
+              Use the billing portal below.
+            </p>
+            <button
+              onClick={() => {
+                if (typeof window !== 'undefined' && window.Clerk) {
+                  // @ts-ignore
+                  window.Clerk.openBillingPortal?.()
+                } else {
+                  window.open('/settings', '_self')
+                }
+              }}
+              className="btn-glossy"
+            >
+              Open Billing Portal
+            </button>
           </div>
         </div>
       </div>

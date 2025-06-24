@@ -180,6 +180,77 @@ export default function ProjectBuilder({ projectId }: ProjectBuilderProps) {
     }
   }, [files])
 
+  // Load project on mount if projectId is provided
+  useEffect(() => {
+    const loadProject = async () => {
+      if (projectId) {
+        try {
+          console.log(`🔄 Loading project: ${projectId}`)
+          const response = await fetch(`/api/projects/${projectId}`)
+          const data = await response.json()
+          
+          if (data.success) {
+            const project = data.project
+            console.log(`📁 Project loaded: ${project.name} with ${Object.keys(project.files).length} files`)
+            
+            // Set project data
+            setProject(project)
+            setFiles(project.files || {})
+            
+            // Set active file to first file
+            const firstFile = Object.keys(project.files || {})[0]
+            if (firstFile) {
+              setActiveFile(firstFile)
+            }
+            
+            // Add welcome message with project info
+            setChatMessages([
+              {
+                id: 'project-loaded',
+                type: 'assistant',
+                content: `📁 **Project Loaded**: ${project.name}\n\n🔢 **Files**: ${Object.keys(project.files || {}).length}\n📅 **Created**: ${new Date(project.createdAt).toLocaleDateString()}\n\n💡 **Original Prompt**: ${project.prompt || 'No prompt saved'}\n\nYou can now view, edit, and modify this project. Ask me to make changes or add new features!`,
+                timestamp: new Date()
+              }
+            ])
+            
+            // Update project context
+            setProjectContext(prev => ({
+              ...prev,
+              mainPrompt: project.prompt,
+              projectType: project.name.includes('Todo') ? 'Todo/Productivity' : 
+                         project.name.includes('Shop') || project.name.includes('Store') ? 'eCommerce' : 
+                         project.name.includes('Chat') || project.name.includes('Social') ? 'Social/Messaging' : 
+                         undefined
+            }))
+            
+          } else {
+            console.error('Failed to load project:', data.error)
+            setChatMessages([
+              {
+                id: 'project-error',
+                type: 'system',
+                content: `❌ **Failed to load project**: ${data.error || 'Unknown error'}\n\nPlease try again or start a new project.`,
+                timestamp: new Date()
+              }
+            ])
+          }
+        } catch (error) {
+          console.error('Error loading project:', error)
+          setChatMessages([
+            {
+              id: 'project-error',
+              type: 'system',
+              content: `❌ **Error loading project**: ${error instanceof Error ? error.message : 'Unknown error'}\n\nPlease try again or start a new project.`,
+              timestamp: new Date()
+            }
+          ])
+        }
+      }
+    }
+    
+    loadProject()
+  }, [projectId])
+
   // Auto-scroll chat to bottom
   useEffect(() => {
     if (chatRef.current) {
@@ -965,6 +1036,59 @@ The base template is still loaded and functional. You can:
   const extractProjectName = (prompt: string) => {
     const words = prompt.split(' ').slice(0, 4).join(' ')
     return words.length > 30 ? words.substring(0, 30) + '...' : words
+  }
+
+  // Helper function to get file extension
+  const getFileExtension = (filePath: string) => {
+    const extension = filePath.split('.').pop()?.toLowerCase()
+    return extension || 'txt'
+  }
+
+  // Basic syntax highlighting function
+  const syntaxHighlight = (code: string, extension: string) => {
+    let highlighted = code
+    
+    // Common patterns for different file types
+    const patterns = {
+      tsx: [
+        { pattern: /(import|export|from|as|default)\b/g, className: 'text-purple-400' },
+        { pattern: /(function|const|let|var|return|if|else|for|while)\b/g, className: 'text-blue-400' },
+        { pattern: /(interface|type|extends|implements)\b/g, className: 'text-cyan-400' },
+        { pattern: /(['"`])((?:\\.|(?!\1)[^\\])*?)\1/g, className: 'text-green-400' },
+        { pattern: /\/\/.*$/gm, className: 'text-gray-500' },
+        { pattern: /\/\*[\s\S]*?\*\//g, className: 'text-gray-500' },
+        { pattern: /<\/?[^>]+>/g, className: 'text-yellow-400' }
+      ],
+      ts: [
+        { pattern: /(import|export|from|as|default)\b/g, className: 'text-purple-400' },
+        { pattern: /(function|const|let|var|return|if|else|for|while)\b/g, className: 'text-blue-400' },
+        { pattern: /(interface|type|extends|implements)\b/g, className: 'text-cyan-400' },
+        { pattern: /(['"`])((?:\\.|(?!\1)[^\\])*?)\1/g, className: 'text-green-400' },
+        { pattern: /\/\/.*$/gm, className: 'text-gray-500' }
+      ],
+      js: [
+        { pattern: /(import|export|from|as|default)\b/g, className: 'text-purple-400' },
+        { pattern: /(function|const|let|var|return|if|else|for|while)\b/g, className: 'text-blue-400' },
+        { pattern: /(['"`])((?:\\.|(?!\1)[^\\])*?)\1/g, className: 'text-green-400' },
+        { pattern: /\/\/.*$/gm, className: 'text-gray-500' }
+      ],
+      json: [
+        { pattern: /"[^"]*":/g, className: 'text-blue-400' },
+        { pattern: /:\s*"[^"]*"/g, className: 'text-green-400' },
+        { pattern: /:\s*\d+/g, className: 'text-yellow-400' }
+      ]
+    }
+    
+    const filePatterns = patterns[extension as keyof typeof patterns] || []
+    
+    // Apply syntax highlighting
+    filePatterns.forEach(({ pattern, className }) => {
+      highlighted = highlighted.replace(pattern, (match) => 
+        `<span class="${className}">${match}</span>`
+      )
+    })
+    
+    return highlighted
   }
 
   const downloadProject = async () => {
@@ -1790,14 +1914,23 @@ These paths contain FILE: prefixes or emoji artifacts that should be cleaned.` :
               <>
             {activeFile ? (
               <>
-                    <div className="flex-shrink-0 p-4 border-b border-gray-800 flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <Eye className="w-4 h-4 text-gray-400" />
+                    <div className="flex-shrink-0 p-4 border-b border-gray-800 flex items-center justify-between bg-gray-950">
+                  <div className="flex items-center space-x-3">
+                    {getFileIcon(activeFile)}
                     <span className="text-sm font-medium text-gray-200">
                       {activeFile}
                     </span>
+                        <div className="flex items-center space-x-2">
+                          <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                          <span className="text-xs text-gray-500">Saved</span>
+                        </div>
                   </div>
                       <div className="flex items-center space-x-2">
+                        <div className="flex items-center space-x-1 text-xs text-gray-500">
+                          <span>Lines: {(files[activeFile] || '').split('\n').length}</span>
+                          <span>•</span>
+                          <span>Chars: {(files[activeFile] || '').length}</span>
+                        </div>
                   <button
                     onClick={() => copyToClipboard(files[activeFile] || '')}
                     className="flex items-center space-x-1 px-3 py-1 text-xs bg-gray-800 hover:bg-gray-700 rounded border border-gray-700 transition-colors"
@@ -1815,19 +1948,69 @@ These paths contain FILE: prefixes or emoji artifacts that should be cleaned.` :
                   </button>
                 </div>
                     </div>
-                    {/* Scrollable Code Content */}
-                    <div className="flex-1 overflow-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
-                  <div className="p-4">
-                        <pre className="bg-black p-4 rounded-lg text-sm border border-gray-800 min-h-full">
-                          <code className="text-gray-300 whitespace-pre-wrap">
-                        {progressFiles[activeFile]?.content || files[activeFile] || ''}
-                      </code>
-                    </pre>
-                  </div>
-                </div>
+                    {/* Enhanced VS Code-style Editor */}
+                    <div className="flex-1 overflow-hidden bg-gray-950">
+                      <div className="h-full flex">
+                        {/* Line Numbers */}
+                        <div className="flex-shrink-0 bg-gray-900 border-r border-gray-800 p-4 pr-2 text-right font-mono text-xs text-gray-500 select-none min-w-[60px]">
+                          {(files[activeFile] || '').split('\n').map((_, index) => (
+                            <div key={index} className="h-5 leading-5">
+                              {index + 1}
+                            </div>
+                          ))}
+                        </div>
+                        
+                        {/* Code Content */}
+                        <div className="flex-1 overflow-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800 relative">
+                          <div className="p-4 font-mono text-sm leading-5">
+                            {/* Editable textarea overlay */}
+                            <textarea
+                              value={files[activeFile] || ''}
+                              onChange={(e) => {
+                                const newFiles = { ...files }
+                                newFiles[activeFile] = e.target.value
+                                setFiles(newFiles)
+                              }}
+                              className="absolute inset-0 w-full h-full bg-transparent text-transparent caret-white resize-none outline-none p-4 font-mono text-sm leading-5 z-10"
+                              style={{ 
+                                caretColor: 'white',
+                                tabSize: 2
+                              }}
+                              spellCheck={false}
+                              onKeyDown={(e) => {
+                                // Handle tab key for indentation
+                                if (e.key === 'Tab') {
+                                  e.preventDefault()
+                                  const start = e.currentTarget.selectionStart
+                                  const end = e.currentTarget.selectionEnd
+                                  const value = e.currentTarget.value
+                                  const newValue = value.substring(0, start) + '  ' + value.substring(end)
+                                  
+                                  const newFiles = { ...files }
+                                  newFiles[activeFile] = newValue
+                                  setFiles(newFiles)
+                                  
+                                  // Reset cursor position
+                                  setTimeout(() => {
+                                    e.currentTarget.selectionStart = e.currentTarget.selectionEnd = start + 2
+                                  }, 0)
+                                }
+                              }}
+                            />
+                            
+                            {/* Syntax-highlighted display */}
+                            <pre className="relative z-0 text-gray-300 whitespace-pre-wrap pointer-events-none">
+                              <code dangerouslySetInnerHTML={{
+                                __html: syntaxHighlight(files[activeFile] || '', getFileExtension(activeFile))
+                              }} />
+                            </pre>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
               </>
             ) : (
-              <div className="flex items-center justify-center h-full text-gray-500">
+              <div className="flex items-center justify-center h-full text-gray-500 bg-gray-950">
                 <div className="text-center">
                   <Code className="w-16 h-16 mx-auto mb-4 text-gray-700" />
                   <p className="text-lg font-medium mb-2">Select a file to view</p>
