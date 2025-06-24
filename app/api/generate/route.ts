@@ -1,434 +1,283 @@
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
-import { trackPromptUsage, canUserPerformAction } from '@/lib/utils/usage-tracker'
+import { runV0Pipeline } from '@/lib/generators/v0-pipeline'
+import { generateStandardReactNativeTemplate } from '@/lib/generators/templates/standard-react-native-template'
+import { trackPromptUsage } from '@/lib/utils/usage-tracker'
 import connectToDatabase from '@/lib/database/mongodb'
-import Project from '@/lib/database/models/Project'
 import User from '@/lib/database/models/User'
-
-// Helper function to create optimized prompts
-function createOptimizedPrompt(prompt: string): string {
-  return `Create React Native Expo app: ${prompt.substring(0, 60)}
-
-REQUIREMENTS:
-- Expo SDK 53, TypeScript
-- Working code only
-- Format: ===FILE: path===\ncode\n===END===
-
-Generate 3-5 essential files:
-1. app/_layout.tsx (root)
-2. app/(tabs)/_layout.tsx (tabs)  
-3. app/(tabs)/index.tsx (home screen)
-4. components/ThemedText.tsx
-5. package.json (deps)
-
-FAST response needed!`
-}
+import Project from '@/lib/database/models/Project'
 
 export async function POST(request: NextRequest) {
-  const startTime = Date.now()
-  
   try {
-    console.log('🚀 API Generate: Starting AI generation with user preferences...')
-    
-    // Check authentication
     const { userId } = await auth()
+    
     if (!userId) {
-      console.log('❌ Authentication failed: No userId')
-      return new Response(
-        JSON.stringify({ error: 'Authentication required. Please sign in to generate apps.' }),
-        { 
-          status: 401,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      )
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-    console.log(`✅ Authentication successful: ${userId}`)
 
-    // Check prompt usage limits based on user's plan
-    const canUseAI = await canUserPerformAction(userId, 'prompt')
+    const { prompt, projectId } = await request.json()
     
-    if (!canUseAI) {
-      console.log(`❌ Prompt limit reached for user: ${userId}`)
-      return new Response(
-        JSON.stringify({ 
-          error: 'Prompt limit exceeded. Upgrade your plan to continue using AI generation.',
-          upgradeRequired: true 
-        }),
-        { 
-          status: 429,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      )
-    }
-    
-    console.log(`✅ Prompt generation allowed for user: ${userId}`)
-
-    const { prompt, useBaseTemplate, testMode, quickMode } = await request.json()
-
-    if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
-      console.log('❌ Invalid prompt provided')
-      return new Response(
-        JSON.stringify({ error: 'Valid prompt is required' }),
-        { 
-          status: 400,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      )
+    if (!prompt) {
+      return NextResponse.json({ error: 'Prompt is required' }, { status: 400 })
     }
 
-    console.log(`🧠 AI generation for: "${prompt.substring(0, 100)}..."`)
-    console.log(`🧪 Test mode: ${testMode ? 'enabled' : 'disabled'}`)
-    console.log(`⚡ Quick mode: ${quickMode ? 'enabled' : 'disabled'}`)
+    console.log('🚀 Starting app generation for user:', userId)
+    console.log('📝 Prompt:', prompt.substring(0, 100) + '...')
 
-    // Quick mode fallback
-    if (testMode || quickMode) {
-      console.log('⚡ Quick mode - using COMPLETE demo-1 base template only')
-      
-      // Track prompt usage even in quick mode
-      const promptTracked = await trackPromptUsage(userId)
-      if (!promptTracked) {
-        console.log('⚠️ Quick mode: Failed to track prompt usage')
-      }
-      
-      const { generateDemo1BaseTemplate } = await import('@/lib/generators/templates/complete-demo1-template')
-      const { analyzePrompt } = await import('@/lib/generators/v0-pipeline')
-      
-      const analysis = analyzePrompt(prompt)
-      const appName = `${analysis.type.charAt(0).toUpperCase() + analysis.type.slice(1)}App`
-      const files = generateDemo1BaseTemplate(appName)
-      
-      return new Response(
-        JSON.stringify({
-          success: true,
-          files: files,
-          message: `Quick mode: Generated ${Object.keys(files).length} files`,
-          fileCount: Object.keys(files).length,
-          pipeline: 'quick-mode',
-          analysis: analysis,
-          usageTracked: promptTracked
-        }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } }
-      )
-    }
-
-    // Use new AI generation service that respects user preferences
-    console.log('🚀 Starting AI generation with user preferences...')
+    // Check usage limits
     try {
-      const { aiGenerationService } = await import('@/lib/utils/ai-generation-service')
+      await connectToDatabase()
+      const user = await User.findOne({ clerkId: userId })
       
-      // Get provider status for logging
-      const providerStatus = aiGenerationService.getProviderStatus()
-      console.log(`🤖 Using: ${providerStatus.provider} (${providerStatus.isUserOwned ? 'user-owned' : 'server-managed'})`)
-      
-      // Generate with selected provider
-      const aiResponse = await aiGenerationService.generate({
-        prompt: createOptimizedPrompt(prompt),
-        maxTokens: 2000,
-        temperature: 0.2,
-        userId
-      })
-      
-      // Parse AI response to extract files
-      const { parseCodeFromResponse } = await import('@/lib/utils/code-parser')
-      const generatedFiles = parseCodeFromResponse(aiResponse.content)
-      
-      // Convert to files object
-      const files: { [key: string]: string } = {}
-      generatedFiles.forEach(file => {
-        if (file.path && file.content) {
-          files[file.path] = file.content
-        }
-      })
-      
-      // If parsing failed, create enhanced demo-1 base template
-      if (Object.keys(files).length === 0) {
-        console.log('⚠️ AI parsing failed, using COMPLETE demo-1 base template...')
-        
-        // Track prompt usage even when AI parsing fails
-        const promptTracked = await trackPromptUsage(userId)
-        if (!promptTracked) {
-          console.log('⚠️ Fallback: Failed to track prompt usage')
-        }
-        
-        const { generateDemo1BaseTemplate } = await import('@/lib/generators/templates/complete-demo1-template')
-        const { analyzePrompt } = await import('@/lib/generators/v0-pipeline')
-        
-        const analysis = analyzePrompt(prompt)
-        const appName = `${analysis.type.charAt(0).toUpperCase() + analysis.type.slice(1)}App`
-        const templateFiles = generateDemo1BaseTemplate(appName)
-        
-        return new Response(
-          JSON.stringify({
-            success: true,
-            files: templateFiles,
-            message: `AI parsing failed, using base template (${Object.keys(templateFiles).length} files)`,
-            fileCount: Object.keys(templateFiles).length,
-            pipeline: 'base-template-fallback',
-            provider: aiResponse.provider,
-            cost: aiResponse.cost,
-            usageTracked: promptTracked
-          }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } }
-        )
+      if (!user) {
+        return NextResponse.json({ error: 'User not found' }, { status: 404 })
       }
-      
-      // Track prompt usage
-      const promptTracked = await trackPromptUsage(userId)
-      if (!promptTracked) {
-        console.log('⚠️ Failed to track prompt usage for successful generation')
+
+      const canGenerate = await trackPromptUsage(userId)
+      if (!canGenerate) {
+        return NextResponse.json({ 
+          error: 'Prompt limit reached for this month',
+          limitReached: true
+        }, { status: 429 })
       }
-      
-      // Auto-save project to database
-      let projectId = null
-      try {
-        const savedProject = await saveProjectToDatabase(userId, prompt, files, aiResponse.provider, aiResponse.model)
-        projectId = savedProject.id
-        console.log(`💾 Project auto-saved: ${savedProject.name} (ID: ${projectId})`)
-      } catch (saveError) {
-        console.warn('⚠️ Failed to auto-save project:', saveError)
-        // Continue without failing the generation
-      }
-      
-      console.log(`✅ AI generation success: ${Object.keys(files).length} files`)
-      return new Response(
-        JSON.stringify({
-          success: true,
-          files: files,
-          message: `Generated ${Object.keys(files).length} files with ${aiResponse.provider}`,
-          fileCount: Object.keys(files).length,
-          pipeline: 'ai-generation-service',
-          provider: aiResponse.provider,
-          model: aiResponse.model,
-          cost: aiResponse.cost,
-          tokensUsed: aiResponse.tokensUsed,
-          // Usage tracking handled separately
-          projectId: projectId // Include project ID in response
-        }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } }
-      )
-      
+    } catch (error) {
+      console.error('❌ Usage check failed:', error)
+      // Continue with generation but log the error
+    }
+
+    let files: { [key: string]: string } = {}
+    let appName = 'MyReactNativeApp'
+
+    // Try AI generation first
+    try {
+      console.log('🧠 Attempting AI generation...')
+      files = await runV0Pipeline(prompt)
+      appName = extractAppName(prompt)
+      console.log('✅ AI generation successful')
     } catch (aiError) {
       console.error('❌ AI generation failed:', aiError)
       
-      // Fallback to base template
-      console.log('🔄 Falling back to base template...')
-      const { generateDemo1BaseTemplate } = await import('@/lib/generators/templates/complete-demo1-template')
-      const { analyzePrompt } = await import('@/lib/generators/v0-pipeline')
+      // Fallback to template generation
+      try {
+        console.log('📱 Falling back to template generation...')
+        const { generateStandardReactNativeTemplate } = await import('@/lib/generators/templates/standard-react-native-template')
+        appName = extractAppName(prompt)
+        files = generateStandardReactNativeTemplate(appName)
+        console.log('✅ Template generation successful')
+      } catch (templateError) {
+        console.error('❌ Template generation failed:', templateError)
+        return NextResponse.json({ 
+          error: 'Failed to generate app. Please try again.',
+          details: templateError instanceof Error ? templateError.message : 'Unknown error'
+        }, { status: 500 })
+      }
+    }
+
+    // Save project to database
+    try {
+      await connectToDatabase()
       
-      const analysis = analyzePrompt(prompt)
-      const appName = `${analysis.type.charAt(0).toUpperCase() + analysis.type.slice(1)}App`
-      const files = generateDemo1BaseTemplate(appName)
-      
-      return new Response(
-        JSON.stringify({
-          success: true,
+      let project: any = null
+      if (projectId) {
+        // Update existing project
+        project = await Project.findOneAndUpdate(
+          { _id: projectId, userId },
+          {
+            name: appName,
+            description: prompt,
+            files: files,
+            lastModified: new Date(),
+            version: 1
+          },
+          { new: true }
+        )
+      } else {
+        // Create new project
+        project = await Project.create({
+          userId,
+          name: appName,
+          description: prompt,
           files: files,
-          message: `AI generation failed, using base template (${Object.keys(files).length} files)`,
-          fileCount: Object.keys(files).length,
-          pipeline: 'error-fallback',
-          error: aiError instanceof Error ? aiError.message : 'Unknown error'
-        }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } }
-      )
+          version: 1
+        })
+      }
+
+      if (!project) {
+        throw new Error('Failed to save project')
+      }
+
+      console.log('✅ Project saved:', project._id)
+
+      return NextResponse.json({
+        success: true,
+        projectId: project._id,
+        appName,
+        files,
+        message: 'App generated successfully!'
+      })
+
+    } catch (dbError) {
+      console.error('❌ Database save failed:', dbError)
+      
+      // Return files even if save fails
+      return NextResponse.json({
+        success: true,
+        appName,
+        files,
+        message: 'App generated successfully! (Project save failed)',
+        warning: 'Project was not saved to database'
+      })
     }
 
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
-    const timeSpent = Date.now() - startTime
-    
-    console.error('❌ FREE AI Generation failed:', {
-      error: errorMessage,
-      timeSpent: `${timeSpent}ms`
-    })
-    
-    return new Response(
-      JSON.stringify({ 
-        error: 'FREE AI generation failed',
-        details: errorMessage,
-        timeSpent: `${timeSpent}ms`,
-        suggestion: 'Mistral API might be slow. Try Quick Mode for instant results.',
-        provider: 'Mistral (Free)',
-        timestamp: new Date().toISOString()
-      }),
-      { 
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      }
-    )
+    console.error('❌ Generation failed:', error)
+    return NextResponse.json({
+      error: 'Failed to generate app',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 })
   }
 }
 
-// SUPER OPTIMIZED MISTRAL (FREE BUT FAST!)
-async function generateWithOptimizedMistral(prompt: string): Promise<{ [key: string]: string }> {
-  console.log('🤖 Starting OPTIMIZED FREE Mistral generation...')
-  
-  const { Mistral } = await import('@mistralai/mistralai')
-  const mistral = new Mistral({ apiKey: process.env.MISTRAL_API_KEY! })
-  
-  // ULTRA-SHORT PROMPT FOR SPEED ⚡
-  const optimizedPrompt = `Create React Native Expo app: ${prompt.substring(0, 60)}
-
-REQUIREMENTS:
-- Expo SDK 53, TypeScript
-- Working code only
-- Format: ===FILE: path===\ncode\n===END===
-
-Generate 3-5 essential files:
-1. app/_layout.tsx (root)
-2. app/(tabs)/_layout.tsx (tabs)  
-3. app/(tabs)/index.tsx (home screen)
-4. components/ThemedText.tsx
-5. package.json (deps)
-
-FAST response needed!`
-
-  console.log(`📋 Optimized prompt: ${optimizedPrompt.length} chars (reduced for speed)`)
-  
-  const startTime = Date.now()
-  
-  // EXTENDED 90-SECOND TIMEOUT FOR CLIENT-SIDE CALLS
-  const response = await Promise.race([
-    mistral.chat.complete({
-      model: 'mistral-small-latest',
-      messages: [{ role: 'user', content: optimizedPrompt }],
-      temperature: 0.1, // Lower for consistency
-      maxTokens: 2000   // Reduced for speed
-    }),
-    new Promise((_, reject) => {
-              setTimeout(() => reject(new Error('Mistral timeout after 90 seconds')), 90000)
-    })
-  ]) as any
-
-  const duration = Date.now() - startTime
-  console.log(`📥 FREE Mistral responded in ${duration}ms`)
-  
-  const content = response.choices[0]?.message?.content || ''
-  if (!content) throw new Error('Empty Mistral response')
-  
-  console.log(`📝 Mistral response length: ${content.length} chars`)
-  
-  // Parse response into files
-  const { parseCodeFromResponse } = await import('@/lib/utils/code-parser')
-  const generatedFiles = parseCodeFromResponse(content)
-  
-  // Convert to files object
-  const files: { [key: string]: string } = {}
-  generatedFiles.forEach(file => {
-    if (file.path && file.content) {
-      files[file.path] = file.content
-    }
-  })
-  
-  // If parsing failed, create enhanced demo-1 base template
-  if (Object.keys(files).length === 0) {
-    console.log('⚠️ Mistral parsing failed, using COMPLETE demo-1 base template...')
-    const { generateDemo1BaseTemplate } = await import('@/lib/generators/templates/complete-demo1-template')
-    const { analyzePrompt } = await import('@/lib/generators/v0-pipeline')
-    
-    const analysis = analyzePrompt(prompt)
-    const appName = `${analysis.type.charAt(0).toUpperCase() + analysis.type.slice(1)}App`
-    return generateDemo1BaseTemplate(appName)
+// Helper function to extract app name from prompt
+function extractAppName(prompt: string): string {
+  // Look for app name patterns in the prompt
+  const nameMatch = prompt.match(/(?:create|build|make)\s+(?:a|an)\s+(?:app|application)\s+(?:called\s+)?([A-Za-z][A-Za-z0-9\s]+?)(?:\s|$|\.|,)/i)
+  if (nameMatch && nameMatch[1]) {
+    return nameMatch[1].trim().replace(/\s+/g, '')
   }
   
-  console.log(`✅ FREE Mistral generated ${Object.keys(files).length} files`)
-  return files
+  // Fallback to default name
+  return 'MyReactNativeApp'
 }
 
-// Helper function to save generated project to database
-async function saveProjectToDatabase(userId: string, prompt: string, files: { [key: string]: string }, provider?: string, model?: string) {
-  await connectToDatabase()
-
-  // Transform files object to array format expected by the model
-  const filesArray = Object.entries(files).map(([path, content]) => {
-    const extension = path.split('.').pop()?.toLowerCase() || 'txt'
+// GET endpoint for testing
+export async function GET() {
+  try {
+    const { userId } = await auth()
     
-    let fileType = 'txt'
-    if (['tsx', 'ts', 'js', 'jsx', 'json', 'md'].includes(extension)) {
-      fileType = extension
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    return {
-      path,
-      content: content as string,
-      type: fileType
-    }
-  })
+    // Return a simple test response
+    const { generateStandardReactNativeTemplate } = await import('@/lib/generators/templates/standard-react-native-template')
+    const templateFiles = generateStandardReactNativeTemplate('TestApp')
+    
+    return NextResponse.json({
+      success: true,
+      message: 'Generation endpoint is working',
+      templateFiles: Object.keys(templateFiles),
+      sampleFile: Object.keys(templateFiles)[0]
+    })
 
-  // Generate project name from prompt
-  const words = prompt.split(' ').slice(0, 4).join(' ')
-  const projectName = words.length > 0 ? words : 'Generated App'
-  
-  // Extract dependencies from package.json if it exists
-  const packageJsonFile = filesArray.find(file => file.path.includes('package.json'))
-  let dependencies: string[] = []
-  
-  if (packageJsonFile) {
+  } catch (error) {
+    console.error('❌ GET test failed:', error)
+    return NextResponse.json({
+      error: 'Test failed',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 })
+  }
+}
+
+// PUT endpoint for updating projects
+export async function PUT(request: NextRequest) {
+  try {
+    const { userId } = await auth()
+    
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { projectId, prompt } = await request.json()
+    
+    if (!projectId || !prompt) {
+      return NextResponse.json({ error: 'Project ID and prompt are required' }, { status: 400 })
+    }
+
+    console.log('🔄 Updating project:', projectId)
+
+    // Generate new files
+    let files: { [key: string]: string } = {}
+    let appName = 'MyReactNativeApp'
+
     try {
-      const packageJson = JSON.parse(packageJsonFile.content)
-      const deps = Object.keys(packageJson.dependencies || {})
-      const devDeps = Object.keys(packageJson.devDependencies || {})
-      dependencies = [...deps, ...devDeps]
-    } catch {
-      // Ignore JSON parse errors
+      files = await runV0Pipeline(prompt)
+      appName = extractAppName(prompt)
+    } catch (error) {
+      console.error('❌ Generation failed:', error)
+      const { generateStandardReactNativeTemplate } = await import('@/lib/generators/templates/standard-react-native-template')
+      appName = extractAppName(prompt)
+      files = generateStandardReactNativeTemplate(appName)
     }
-  }
 
-  // Create new project
-  const project = new Project({
-    name: projectName,
-    description: `Generated from: ${prompt}`,
-    prompt,
-    userId,
-    files: filesArray,
-    status: 'completed',
-    metadata: {
-      version: '1.0.0',
-      expoVersion: '50.0.0',
-      dependencies,
-      size: filesArray.length
-    },
-    analytics: {
-      views: 0,
-      downloads: 0,
-      likes: 0,
-      shares: 0
-    },
-    tags: ['react-native', 'expo', 'ai-generated']
-  })
-
-  const savedProject = await project.save()
-
-  // Track project creation using the usage tracker
-  const { trackProjectCreation } = await import('@/lib/utils/usage-tracker')
-  const projectTracked = await trackProjectCreation(userId)
-  if (!projectTracked) {
-    console.log('⚠️ Failed to track project creation')
-    
-    // Fallback to direct database update if tracking fails
-    await User.findOneAndUpdate(
-      { clerkId: userId },
-      { 
-        $inc: { 
-          'usage.projectsThisMonth': 1,
-          'analytics.totalProjects': 1
-        },
-        $set: {
-          'analytics.lastActiveAt': new Date()
-        }
-      }
+    // Update project
+    await connectToDatabase()
+    const project = await Project.findOneAndUpdate(
+      { _id: projectId, userId },
+      {
+        name: appName,
+        description: prompt,
+        files: files,
+        lastModified: new Date(),
+        version: 1
+      },
+      { new: true }
     )
-  }
 
-  return {
-    id: savedProject._id.toString(),
-    name: savedProject.name,
-    fileCount: filesArray.length
+    if (!project) {
+      return NextResponse.json({ error: 'Project not found' }, { status: 404 })
+    }
+
+    return NextResponse.json({
+      success: true,
+      projectId: project._id,
+      appName,
+      files,
+      message: 'Project updated successfully!'
+    })
+
+  } catch (error) {
+    console.error('❌ Update failed:', error)
+    return NextResponse.json({
+      error: 'Failed to update project',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 })
   }
 }
 
-// Old functions removed - now using complete v0-pipeline.ts with proper:
-// - Prompt parsing & classification
-// - Plan formation (components, layout, functionality) 
-// - Code generation (LLM + Templates + Rules)
-// - AST validation & auto-fix
-// - Build validation & error recovery 
+// DELETE endpoint for removing projects
+export async function DELETE(request: NextRequest) {
+  try {
+    const { userId } = await auth()
+    
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { searchParams } = new URL(request.url)
+    const projectId = searchParams.get('id')
+    
+    if (!projectId) {
+      return NextResponse.json({ error: 'Project ID is required' }, { status: 400 })
+    }
+
+    await connectToDatabase()
+    const result = await Project.deleteOne({ _id: projectId, userId })
+
+    if (result.deletedCount === 0) {
+      return NextResponse.json({ error: 'Project not found' }, { status: 404 })
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: 'Project deleted successfully!'
+    })
+
+  } catch (error) {
+    console.error('❌ Delete failed:', error)
+    return NextResponse.json({
+      error: 'Failed to delete project',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 })
+  }
+} 

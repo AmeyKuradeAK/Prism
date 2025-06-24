@@ -1,5 +1,10 @@
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
+import { runV0Pipeline } from '@/lib/generators/v0-pipeline'
+import { generateStandardReactNativeTemplate } from '@/lib/generators/templates/standard-react-native-template'
+import { trackPromptUsage } from '@/lib/utils/usage-tracker'
+import connectToDatabase from '@/lib/database/mongodb'
+import User from '@/lib/database/models/User'
 
 // Extended timeout API with streaming support
 export async function POST(request: NextRequest) {
@@ -11,89 +16,92 @@ export async function POST(request: NextRequest) {
     // Check authentication
     const { userId } = await auth()
     if (!userId) {
-      return new Response(
-        JSON.stringify({ error: 'Authentication required' }),
-        { status: 401, headers: { 'Content-Type': 'application/json' } }
-      )
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const { prompt } = await request.json()
-    if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
-      return new Response(
-        JSON.stringify({ error: 'Valid prompt is required' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
-      )
+    if (!prompt) {
+      return NextResponse.json({ error: 'Prompt is required' }, { status: 400 })
     }
 
-    if (!process.env.MISTRAL_API_KEY) {
-      return new Response(
-        JSON.stringify({ error: 'Mistral API key not configured' }),
-        { status: 500, headers: { 'Content-Type': 'application/json' } }
-      )
+    console.log('🚀 Starting AI stream generation for user:', userId)
+    console.log('📝 Prompt:', prompt.substring(0, 100) + '...')
+
+    // Check usage limits
+    try {
+      await connectToDatabase()
+      const user = await User.findOne({ clerkId: userId })
+      
+      if (!user) {
+        return NextResponse.json({ error: 'User not found' }, { status: 404 })
+      }
+
+      const canGenerate = await trackPromptUsage(userId)
+      if (!canGenerate) {
+        return NextResponse.json({ 
+          error: 'Prompt limit reached for this month',
+          limitReached: true
+        }, { status: 429 })
+      }
+    } catch (error) {
+      console.error('❌ Usage check failed:', error)
+      // Continue with generation but log the error
     }
 
-    console.log(`🧠 Extended AI generation for: "${prompt.substring(0, 100)}..."`)
+    let files: { [key: string]: string } = {}
+    let appName = 'MyReactNativeApp'
 
-    // Create streaming response
-    const encoder = new TextEncoder()
-    const stream = new ReadableStream({
-      async start(controller) {
-        try {
-          // Send progress updates
-          const sendProgress = (message: string) => {
-            const data = JSON.stringify({ type: 'progress', message, timestamp: Date.now() })
-            controller.enqueue(encoder.encode(`data: ${data}\n\n`))
-          }
-
-          sendProgress('🔑 Initializing AI generation...')
-          
-          // Generate with extended timeout
-          const files = await generateWithExtendedTimeout(prompt, sendProgress)
-          
-          // Send final result
-          const result = JSON.stringify({ 
-            type: 'complete', 
-            files, 
-            fileCount: Object.keys(files).length,
-            duration: Date.now() - startTime 
-          })
-          controller.enqueue(encoder.encode(`data: ${result}\n\n`))
-          controller.close()
-          
-        } catch (error) {
-          const errorData = JSON.stringify({
-            type: 'error',
-            message: error instanceof Error ? error.message : 'Unknown error',
-            duration: Date.now() - startTime
-          })
-          controller.enqueue(encoder.encode(`data: ${errorData}\n\n`))
-          controller.close()
-        }
+    // Try AI generation first
+    try {
+      console.log('🧠 Attempting AI generation...')
+      files = await runV0Pipeline(prompt)
+      appName = extractAppName(prompt)
+      console.log('✅ AI generation successful')
+    } catch (aiError) {
+      console.error('❌ AI generation failed:', aiError)
+      
+      // Fallback to template generation
+      try {
+        console.log('📱 Falling back to template generation...')
+        const { generateStandardReactNativeTemplate } = await import('@/lib/generators/templates/standard-react-native-template')
+        appName = extractAppName(prompt)
+        const files = generateStandardReactNativeTemplate(appName)
+        console.log('✅ Template generation successful')
+      } catch (templateError) {
+        console.error('❌ Template generation failed:', templateError)
+        return NextResponse.json({ 
+          error: 'Failed to generate app. Please try again.',
+          details: templateError instanceof Error ? templateError.message : 'Unknown error'
+        }, { status: 500 })
       }
-    })
+    }
 
-    return new Response(stream, {
-      headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST',
-        'Access-Control-Allow-Headers': 'Content-Type'
-      }
+    return NextResponse.json({
+      success: true,
+      appName,
+      files,
+      message: 'App generated successfully!'
     })
 
   } catch (error) {
-    console.error('❌ AI Stream failed:', error)
-    return new Response(
-      JSON.stringify({ 
-        error: 'AI Stream generation failed',
-        details: error instanceof Error ? error.message : 'Unknown error',
-        duration: Date.now() - startTime
-      }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
-    )
+    console.error('❌ Generation failed:', error)
+    return NextResponse.json({
+      error: 'Failed to generate app',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 })
   }
+}
+
+// Helper function to extract app name from prompt
+function extractAppName(prompt: string): string {
+  // Look for app name patterns in the prompt
+  const nameMatch = prompt.match(/(?:create|build|make)\s+(?:a|an)\s+(?:app|application)\s+(?:called\s+)?([A-Za-z][A-Za-z0-9\s]+?)(?:\s|$|\.|,)/i)
+  if (nameMatch && nameMatch[1]) {
+    return nameMatch[1].trim().replace(/\s+/g, '')
+  }
+  
+  // Fallback to default name
+  return 'MyReactNativeApp'
 }
 
 // Extended timeout generation with progress updates
