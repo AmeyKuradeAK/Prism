@@ -7,15 +7,22 @@ const isPublicRoute = createRouteMatcher([
   '/sign-up(.*)',
   '/api/webhooks(.*)',
   '/api/webhooks/clerk',
-  '/docs',
-  '/pricing(.*)', // Make pricing public but redirect in component
-  '/about',
-  '/contact'
+  '/docs(.*)', // Allow all docs routes 
+  '/pricing(.*)', // Allow all pricing routes
+  '/about(.*)',
+  '/contact(.*)'
 ])
 
 export default clerkMiddleware(async (auth, request) => {
+  const { pathname } = request.nextUrl
+
   // Allow webhooks to pass through without authentication
-  if (request.nextUrl.pathname.startsWith('/api/webhooks/')) {
+  if (pathname.startsWith('/api/webhooks/')) {
+    return NextResponse.next()
+  }
+
+  // Explicitly allow docs and pricing pages (public access)
+  if (pathname.startsWith('/docs') || pathname.startsWith('/pricing')) {
     return NextResponse.next()
   }
 
