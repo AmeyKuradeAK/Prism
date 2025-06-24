@@ -1,66 +1,88 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth, clerkClient } from '@clerk/nextjs/server'
+import { auth } from '@clerk/nextjs/server'
 import connectToDatabase from '@/lib/database/mongodb'
 import User from '@/lib/database/models/User'
 import Project from '@/lib/database/models/Project'
+import { IUser } from '@/lib/database/models/User'
 
 export async function GET() {
   try {
-    const { userId, getToken } = await auth()
-    
-    console.log('🔧 Test DB Route - User ID:', userId)
+    const { userId } = await auth()
     
     if (!userId) {
-      return NextResponse.json({ 
-        error: 'Not authenticated',
-        message: 'Please sign in to test database connection'
-      }, { status: 401 })
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     // Test database connection
     let dbConnected = false
-    let dbError: any = null
+    let dbError: Error | null = null
+
     try {
       await connectToDatabase()
       dbConnected = true
-      console.log('✅ Database connection successful')
+      console.log('✅ Database connected successfully')
     } catch (error) {
-      dbConnected = false
-      dbError = error
+      dbError = error instanceof Error ? error : new Error('Unknown database error')
       console.error('❌ Database connection failed:', error)
     }
 
-    // Test Clerk billing using the correct method
-    let clerkBilling: any = {}
-    try {
-      // Method 1: Check session token
-      const sessionToken = await getToken()
-      const planFromToken = (sessionToken as any)?.publicMetadata?.subscription_plan
-      
-      // Method 2: Check user metadata directly
-      const clerkClientInstance = await clerkClient()
-      const user = await clerkClientInstance.users.getUser(userId)
-      const planFromUser = (user.publicMetadata as any)?.subscription_plan
-      const billingPeriodEnd = (user.publicMetadata as any)?.subscription_period_end
-      
-      clerkBilling = {
-        available: true,
-        planFromToken,
-        planFromUser,
-        billingPeriodEnd,
-        detectedPlan: planFromUser || planFromToken || 'free',
-        clerkUserId: user.id,
-        hasMetadata: !!user.publicMetadata
+    // Test Clerk billing API
+    let clerkBilling: {
+      available: boolean
+      detectedPlan: string | null
+      error: string | null
+    } = {
+      available: false,
+      detectedPlan: null,
+      error: null
+    }
+
+    if (process.env.CLERK_SECRET_KEY) {
+      try {
+        const response = await fetch('https://api.clerk.com/v1/users/' + userId, {
+          headers: {
+            'Authorization': `Bearer ${process.env.CLERK_SECRET_KEY}`,
+            'Content-Type': 'application/json'
+          }
+        })
+
+        if (response.ok) {
+          const userData = await response.json()
+          console.log('✅ Clerk API response:', userData)
+          
+          // Check for subscription data
+          const subscription = userData.public_metadata?.subscription
+          if (subscription) {
+            clerkBilling = {
+              available: true,
+              detectedPlan: subscription.plan || 'free',
+              error: null
+            }
+            console.log('✅ Detected plan from Clerk:', subscription.plan)
+          } else {
+            clerkBilling = {
+              available: true,
+              detectedPlan: 'free',
+              error: null
+            }
+            console.log('✅ No subscription found, defaulting to free')
+          }
+        } else {
+          clerkBilling = {
+            available: false,
+            detectedPlan: null,
+            error: `Clerk API returned ${response.status}`
+          }
+          console.error('❌ Clerk API error:', response.status)
+        }
+      } catch (error) {
+        clerkBilling = {
+          available: false,
+          detectedPlan: null,
+          error: error instanceof Error ? error.message : 'Clerk billing API error'
+        }
+        console.error('❌ Clerk billing error:', error)
       }
-      
-      console.log('🔍 Clerk billing status:', clerkBilling)
-    } catch (error) {
-      clerkBilling = {
-        available: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
-        message: 'Clerk billing API error'
-      }
-      console.error('❌ Clerk billing error:', error)
     }
 
     // Test user retrieval
@@ -78,7 +100,7 @@ export async function GET() {
 
     if (dbConnected) {
       try {
-        const user = await User.findOne({ clerkId: userId }).lean()
+        const user = await User.findOne({ clerkId: userId })
         if (user) {
           userTest = {
             found: true,
