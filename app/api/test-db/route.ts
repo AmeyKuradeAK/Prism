@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '@clerk/nextjs/server'
+import { auth, clerkClient } from '@clerk/nextjs/server'
 import connectToDatabase from '@/lib/database/mongodb'
 import User from '@/lib/database/models/User'
 import Project from '@/lib/database/models/Project'
 
 export async function GET() {
   try {
-    const { userId, has } = await auth()
+    const { userId, getToken } = await auth()
     
     console.log('🔧 Test DB Route - User ID:', userId)
     
@@ -30,23 +30,37 @@ export async function GET() {
       console.error('❌ Database connection failed:', error)
     }
 
-    // Test Clerk billing
+    // Test Clerk billing using the correct method
     let clerkBilling: any = {}
-    if (has && typeof has === 'function') {
+    try {
+      // Method 1: Check session token
+      const sessionToken = await getToken()
+      const planFromToken = (sessionToken as any)?.publicMetadata?.subscription_plan
+      
+      // Method 2: Check user metadata directly
+      const clerkClientInstance = await clerkClient()
+      const user = await clerkClientInstance.users.getUser(userId)
+      const planFromUser = (user.publicMetadata as any)?.subscription_plan
+      const billingPeriodEnd = (user.publicMetadata as any)?.subscription_period_end
+      
       clerkBilling = {
         available: true,
-        hasPro: has({ plan: 'pro' }),
-        hasPlus: has({ plan: 'plus' }),
-        hasPremium: has({ plan: 'premium' }),
-        hasTeam: has({ plan: 'team' }),
-        hasEnterprise: has({ plan: 'enterprise' })
+        planFromToken,
+        planFromUser,
+        billingPeriodEnd,
+        detectedPlan: planFromUser || planFromToken || 'free',
+        clerkUserId: user.id,
+        hasMetadata: !!user.publicMetadata
       }
+      
       console.log('🔍 Clerk billing status:', clerkBilling)
-    } else {
+    } catch (error) {
       clerkBilling = {
         available: false,
-        message: 'Clerk billing API not available'
+        error: error instanceof Error ? error.message : 'Unknown error',
+        message: 'Clerk billing API error'
       }
+      console.error('❌ Clerk billing error:', error)
     }
 
     // Test user retrieval
@@ -82,13 +96,13 @@ export async function GET() {
           }
           console.log('❌ User not found in database')
         }
-              } catch (error) {
-          userTest = {
-            found: false,
-            plan: null,
-            usage: null,
-            error: error instanceof Error ? error.message : 'Unknown error'
-          }
+      } catch (error) {
+        userTest = {
+          found: false,
+          plan: null,
+          usage: null,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        }
         console.error('❌ Error finding user:', error)
       }
     }
@@ -110,11 +124,11 @@ export async function GET() {
           error: null
         }
         console.log(`📁 Found ${projectCount} projects for user`)
-              } catch (error) {
-          projectTest = {
-            count: 0,
-            error: error instanceof Error ? error.message : 'Unknown error'
-          }
+      } catch (error) {
+        projectTest = {
+          count: 0,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        }
         console.error('❌ Error counting projects:', error)
       }
     }
@@ -125,6 +139,42 @@ export async function GET() {
       mongodbUri: process.env.MONGODB_URI ? 'Set' : 'Not set',
       clerkPublishableKey: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ? 'Set' : 'Not set',
       clerkSecretKey: process.env.CLERK_SECRET_KEY ? 'Set' : 'Not set'
+    }
+
+    // Enhanced recommendations based on Clerk billing system
+    let recommendations: string[] = []
+    
+    if (!dbConnected) {
+      recommendations = [
+        'Check MongoDB connection string',
+        'Verify database is running', 
+        'Check network connectivity'
+      ]
+    } else if (!userTest.found) {
+      recommendations = [
+        'User needs to be created in database',
+        'Check user authentication flow',
+        'Consider calling POST /api/test-db to force create user'
+      ]
+    } else if (!clerkBilling.available) {
+      recommendations = [
+        'Clerk API connection issue',
+        'Check CLERK_SECRET_KEY environment variable',
+        'Verify Clerk configuration'
+      ]
+    } else if (clerkBilling.detectedPlan === 'free') {
+      recommendations = [
+        'User is on free plan',
+        'Check Clerk billing dashboard for subscription status',
+        'Verify Stripe integration is working',
+        'Ensure user has successfully upgraded to Pro plan'
+      ]
+    } else {
+      recommendations = [
+        'All systems appear to be working',
+        `User detected on plan: ${clerkBilling.detectedPlan}`,
+        'Plan should sync automatically to database'
+      ]
     }
 
     return NextResponse.json({
@@ -141,20 +191,7 @@ export async function GET() {
         projects: projectTest,
         environment: envInfo
       },
-      recommendations: !dbConnected ? [
-        'Check MongoDB connection string',
-        'Verify database is running',
-        'Check network connectivity'
-      ] : !userTest.found ? [
-        'User needs to be created in database',
-        'Check user authentication flow'
-      ] : clerkBilling.available && !clerkBilling.hasPro && !clerkBilling.hasPlus ? [
-        'Verify Clerk billing setup',
-        'Check plan subscription status',
-        'Ensure webhooks are configured'
-      ] : [
-        'All systems appear to be working'
-      ]
+      recommendations
     })
 
   } catch (error) {

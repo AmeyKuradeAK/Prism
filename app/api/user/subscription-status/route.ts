@@ -1,13 +1,11 @@
 import { NextResponse } from 'next/server'
-import { auth } from '@clerk/nextjs/server'
-import { getCurrentPlan, getCurrentPlanLimits } from '@/lib/utils/plan-protection'
-import { getUserUsageStats } from '@/lib/utils/usage-tracker'
+import { auth, clerkClient } from '@clerk/nextjs/server'
 import connectToDatabase from '@/lib/database/mongodb'
 import User from '@/lib/database/models/User'
 
 export async function GET() {
   try {
-    const { userId, has } = await auth()
+    const { userId, getToken } = await auth()
     
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -15,40 +13,73 @@ export async function GET() {
 
     console.log('🔍 Getting subscription status for user:', userId)
 
-    // First, let's directly check what Clerk says about the plan
+    // Get subscription plan from Clerk's billing system
     let clerkPlan: 'spark' | 'pro' | 'premium' | 'team' | 'enterprise' = 'spark'
-    if (has && typeof has === 'function') {
-      console.log('🔍 Checking Clerk billing...')
+    let subscriptionInfo = null
+
+    try {
+      // Method 1: Check session token metadata
+      const sessionToken = await getToken()
+      const planFromToken = (sessionToken as any)?.publicMetadata?.subscription_plan
       
-      // Check for Pro plan first (this is what the user upgraded to)
-      if (has({ plan: 'pro' })) {
-        clerkPlan = 'premium' // Pro in Clerk = premium in our system
-        console.log('✅ User has Pro plan in Clerk (mapping to premium)')
-      } else if (has({ plan: 'plus' })) {
-        clerkPlan = 'pro' // Plus in Clerk = pro in our system
-        console.log('✅ User has Plus plan in Clerk (mapping to pro)')
-      } else if (has({ plan: 'premium' })) {
-        clerkPlan = 'premium'
-        console.log('✅ User has premium plan directly')
-      } else if (has({ plan: 'team' })) {
-        clerkPlan = 'team'
-        console.log('✅ User has team plan')
-      } else if (has({ plan: 'enterprise' })) {
-        clerkPlan = 'enterprise'
-        console.log('✅ User has enterprise plan')
-      } else {
-        console.log('❌ No paid plans found in Clerk, using spark')
+      console.log('🔍 Plan from session token:', planFromToken)
+
+      // Method 2: Check user metadata directly
+      const clerkClientInstance = await clerkClient()
+      const user = await clerkClientInstance.users.getUser(userId)
+      const planFromUser = (user.publicMetadata as any)?.subscription_plan
+      const billingPeriodEnd = (user.publicMetadata as any)?.subscription_period_end
+      
+      console.log('🔍 Plan from user metadata:', planFromUser)
+      console.log('🔍 Billing period end:', billingPeriodEnd)
+
+      // Use the plan from user metadata (more reliable)
+      const detectedPlan = planFromUser || planFromToken || 'free'
+      
+      // Map Clerk billing plans to our internal system
+      switch (detectedPlan) {
+        case 'free-plan':
+        case 'free':
+          clerkPlan = 'spark'
+          break
+        case 'plus-plan':
+        case 'plus':
+          clerkPlan = 'pro' // Plus = 200 prompts
+          break
+        case 'pro-plan':
+        case 'pro':
+          clerkPlan = 'premium' // Pro = 500-1000 prompts
+          break
+        case 'team-plan':
+        case 'team':
+          clerkPlan = 'team'
+          break
+        case 'enterprise-plan':
+        case 'enterprise':
+        case 'custom-plan':
+          clerkPlan = 'enterprise'
+          break
+        default:
+          clerkPlan = 'spark'
       }
-    } else {
-      console.log('❌ Clerk billing API not available')
+
+      subscriptionInfo = {
+        plan: detectedPlan,
+        periodEnd: billingPeriodEnd,
+        source: 'clerk_billing'
+      }
+
+      console.log('✅ Detected plan:', detectedPlan, '-> mapped to:', clerkPlan)
+
+    } catch (clerkError) {
+      console.error('❌ Error fetching Clerk billing info:', clerkError)
+      clerkPlan = 'spark' // Default to free on error
     }
 
-    console.log('🔍 Final determined plan:', clerkPlan)
-
-    // Get plan limits for the determined plan
+    // Get plan limits based on the detected plan
     const planLimits = clerkPlan === 'premium' ? {
       projectsPerMonth: -1, // unlimited
-      promptsPerMonth: 500,
+      promptsPerMonth: 1000, // Pro plan gets 1000 prompts
       customApiKeys: true,
       prioritySupport: true,
       exportCode: true,
@@ -57,16 +88,34 @@ export async function GET() {
       apiAccess: true
     } : clerkPlan === 'pro' ? {
       projectsPerMonth: -1, // unlimited  
-      promptsPerMonth: 200,
+      promptsPerMonth: 200, // Plus plan gets 200 prompts
       customApiKeys: true,
       prioritySupport: true,
       exportCode: true,
       teamCollaboration: false,
       customBranding: false,
       apiAccess: false
+    } : clerkPlan === 'team' ? {
+      projectsPerMonth: -1,
+      promptsPerMonth: 2000,
+      customApiKeys: true,
+      prioritySupport: true,
+      exportCode: true,
+      teamCollaboration: true,
+      customBranding: true,
+      apiAccess: true
+    } : clerkPlan === 'enterprise' ? {
+      projectsPerMonth: -1,
+      promptsPerMonth: -1, // unlimited
+      customApiKeys: true,
+      prioritySupport: true,
+      exportCode: true,
+      teamCollaboration: true,
+      customBranding: true,
+      apiAccess: true
     } : {
       projectsPerMonth: 3,
-      promptsPerMonth: 15,
+      promptsPerMonth: 15, // Free plan gets 15 prompts as per your guide
       customApiKeys: false,
       prioritySupport: false,
       exportCode: true,
@@ -75,7 +124,7 @@ export async function GET() {
       apiAccess: false
     }
 
-    console.log('📊 Plan limits:', planLimits)
+    console.log('📊 Plan limits for', clerkPlan, ':', planLimits)
 
     // Try to get/update user in database
     let user = null
@@ -112,6 +161,34 @@ export async function GET() {
         )
         user.plan = clerkPlan
       }
+
+      // Check if we need to reset monthly usage based on billing period
+      const now = new Date()
+      const lastReset = user.usage?.lastResetAt || new Date()
+      
+      // Reset if it's a new month OR if billing period has ended
+      let shouldReset = now.getMonth() !== lastReset.getMonth() || now.getFullYear() !== lastReset.getFullYear()
+      
+      if (subscriptionInfo?.periodEnd) {
+        const periodEndDate = new Date(subscriptionInfo.periodEnd)
+        shouldReset = shouldReset || now > periodEndDate
+      }
+
+      if (shouldReset) {
+        console.log('📊 Resetting monthly usage for new billing period')
+        await User.findOneAndUpdate(
+          { clerkId: userId },
+          {
+            'usage.promptsThisMonth': 0,
+            'usage.projectsThisMonth': 0,
+            'usage.lastResetAt': now
+          }
+        )
+        user.usage.promptsThisMonth = 0
+        user.usage.projectsThisMonth = 0
+        user.usage.lastResetAt = now
+      }
+
     } catch (dbError) {
       console.error('❌ Database error:', dbError)
       // Continue with in-memory defaults
@@ -177,10 +254,10 @@ export async function GET() {
         customBranding: planLimits.customBranding,
         apiAccess: planLimits.apiAccess
       },
-      subscription: user?.subscription || null,
+      subscription: subscriptionInfo,
       canUseAI,
       lastResetAt: user?.usage?.lastResetAt || new Date(),
-      resetDate: new Date(new Date().setMonth(new Date().getMonth() + 1))
+      resetDate: subscriptionInfo?.periodEnd ? new Date(subscriptionInfo.periodEnd) : new Date(new Date().setMonth(new Date().getMonth() + 1))
     }
 
     return NextResponse.json(response)
@@ -192,7 +269,7 @@ export async function GET() {
     return NextResponse.json({
       plan: 'spark',
       limits: {
-        promptsPerMonth: 15,
+        promptsPerMonth: 30,
         projectsPerMonth: 3,
         customApiKeys: false,
         prioritySupport: false,
@@ -204,14 +281,14 @@ export async function GET() {
       usage: {
         promptsThisMonth: 0,
         projectsThisMonth: 0,
-        promptsRemaining: 15,
-        promptLimit: 15,
+        promptsRemaining: 30,
+        promptLimit: 30,
         projectLimit: 3,
         promptUsagePercent: 0,
         projectUsagePercent: 0,
         generationsThisMonth: 0,
-        generationsRemaining: 15,
-        generationLimit: 15,
+        generationsRemaining: 30,
+        generationLimit: 30,
         generationUsagePercent: 0,
         projectsUsed: 0,
         projectsRemaining: 3
