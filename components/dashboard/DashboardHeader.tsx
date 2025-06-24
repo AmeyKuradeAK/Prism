@@ -2,7 +2,7 @@
 
 import { UserButton, useUser } from '@clerk/nextjs'
 import { motion } from 'framer-motion'
-import { Settings, HelpCircle, Wand2, Sparkles, Zap } from 'lucide-react'
+import { Settings, HelpCircle, Wand2, Sparkles, Zap, Users, BookOpen } from 'lucide-react'
 import Link from 'next/link'
 
 declare global {
@@ -57,6 +57,20 @@ export default function DashboardHeader() {
                 <span>Builder</span>
               </Link>
               <Link 
+                href="/templates" 
+                className="text-muted hover:text-professional transition-professional px-3 py-2 rounded-professional hover:bg-white/10 flex items-center space-x-2"
+              >
+                <BookOpen className="w-4 h-4" />
+                <span>Templates</span>
+              </Link>
+              <Link 
+                href="/community" 
+                className="text-muted hover:text-professional transition-professional px-3 py-2 rounded-professional hover:bg-white/10 flex items-center space-x-2"
+              >
+                <Users className="w-4 h-4" />
+                <span>Community</span>
+              </Link>
+              <Link 
                 href="/pricing" 
                 className="text-muted hover:text-professional transition-professional px-3 py-2 rounded-professional hover:bg-white/10"
               >
@@ -76,13 +90,14 @@ export default function DashboardHeader() {
             {/* Quick Actions */}
             <div className="flex items-center space-x-2">
               {/* Help */}
-              <motion.button 
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="p-3 text-muted hover:text-professional hover:bg-white/10 transition-professional rounded-professional"
-              >
-                <HelpCircle className="w-5 h-5" />
-              </motion.button>
+              <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                <Link 
+                  href="/support"
+                  className="p-3 text-muted hover:text-professional hover:bg-white/10 transition-professional rounded-professional inline-block"
+                >
+                  <HelpCircle className="w-5 h-5" />
+                </Link>
+              </motion.div>
 
               {/* Settings */}
               <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
