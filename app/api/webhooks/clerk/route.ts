@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { Webhook } from 'svix'
 import connectToDatabase from '@/lib/database/mongodb'
 import User from '@/lib/database/models/User'
+import { mapClerkPlanToInternal } from '@/lib/utils/subscription-plans'
 
 // Webhook event types from Clerk
 type ClerkWebhookEvent = {
@@ -93,7 +94,7 @@ export async function POST(request: NextRequest) {
       case 'user.deleted':
         await handleUserDeleted(event.data)
         break
-      // Billing webhook events
+      // Clerk billing webhook events
       case 'subscription.created':
         await handleSubscriptionCreated(event.data)
         break
@@ -105,6 +106,15 @@ export async function POST(request: NextRequest) {
         break
       case 'subscription.renewed':
         await handleSubscriptionRenewed(event.data)
+        break
+      case 'billing.subscription.created':
+        await handleBillingSubscriptionCreated(event.data)
+        break
+      case 'billing.subscription.updated':
+        await handleBillingSubscriptionUpdated(event.data)
+        break
+      case 'billing.subscription.cancelled':
+        await handleBillingSubscriptionCancelled(event.data)
         break
       default:
         console.log(`Unhandled webhook event type: ${event.type}`)
@@ -130,23 +140,24 @@ async function handleUserCreated(userData: ClerkWebhookEvent['data']) {
       firstName: userData.first_name,
       lastName: userData.last_name,
       avatar: userData.image_url,
-      plan: 'spark', // Free plan
-      credits: 10, // Free plan gets 10 generations per month
+      plan: 'spark', // Start with free plan
       preferences: {
         expoVersion: '53.0.0',
         codeStyle: 'typescript',
         theme: 'light'
       },
       usage: {
-        generationsThisMonth: 0,
-        buildsThisMonth: 0,
-        storageUsed: 0
+        promptsThisMonth: 0,
+        projectsThisMonth: 0,
+        storageUsed: 0,
+        lastResetAt: new Date(),
+        dailyUsage: []
       },
       analytics: {
-        totalGenerations: 0,
-        totalBuilds: 0,
+        totalPrompts: 0,
         totalProjects: 0,
-        lastActiveAt: new Date()
+        lastActiveAt: new Date(),
+        accountAge: 0
       }
     })
 
@@ -162,18 +173,15 @@ async function handleUserUpdated(userData: ClerkWebhookEvent['data']) {
   try {
     const primaryEmail = userData.email_addresses?.[0]?.email_address
 
-    const updateData = {
-      email: primaryEmail,
-      firstName: userData.first_name,
-      lastName: userData.last_name,
-      avatar: userData.image_url,
-      updatedAt: new Date()
-    }
-
-    const user = await User.findOneAndUpdate(
+    await User.findOneAndUpdate(
       { clerkId: userData.id },
-      { $set: updateData },
-      { new: true, upsert: true }
+      {
+        email: primaryEmail,
+        firstName: userData.first_name,
+        lastName: userData.last_name,
+        avatar: userData.image_url,
+        updatedAt: new Date()
+      }
     )
 
     console.log('✅ Updated user in MongoDB:', userData.id)
@@ -185,8 +193,6 @@ async function handleUserUpdated(userData: ClerkWebhookEvent['data']) {
 
 async function handleUserDeleted(userData: ClerkWebhookEvent['data']) {
   try {
-    // Note: You might want to soft delete or archive user data instead
-    // For now, we'll completely remove the user
     await User.findOneAndDelete({ clerkId: userData.id })
     console.log('✅ Deleted user from MongoDB:', userData.id)
   } catch (error) {
@@ -195,24 +201,28 @@ async function handleUserDeleted(userData: ClerkWebhookEvent['data']) {
   }
 }
 
-// Billing webhook handlers
-async function handleSubscriptionCreated(data: ClerkWebhookEvent['data']) {
+// New Clerk billing webhook handlers
+async function handleBillingSubscriptionCreated(data: ClerkWebhookEvent['data']) {
   try {
-    console.log('💳 Subscription created:', data.subscription_id)
+    console.log('💳 Clerk billing subscription created:', data)
     
     const userId = data.user_id || data.id
-    if (!userId) {
-      console.error('No user ID in subscription created event')
+    const planId = data.plan_id
+    
+    if (!userId || !planId) {
+      console.error('Missing user ID or plan ID in billing subscription created event')
       return
     }
+
+    // Map Clerk plan ID to our internal plan
+    const internalPlan = mapClerkPlanToInternal(planId)
 
     await User.findOneAndUpdate(
       { clerkId: userId },
       {
-        plan: data.plan_id || 'spark',
-        'subscription.planId': data.plan_id,
+        plan: internalPlan,
+        'subscription.planId': planId,
         'subscription.status': 'active',
-        'subscription.stripeSubscriptionId': data.subscription_id,
         'subscription.currentPeriodEnd': data.current_period_end ? new Date(data.current_period_end * 1000) : null,
         'subscription.cancelAtPeriodEnd': false,
         updatedAt: new Date()
@@ -220,7 +230,101 @@ async function handleSubscriptionCreated(data: ClerkWebhookEvent['data']) {
       { upsert: true }
     )
 
-    console.log(`✅ Updated user subscription: ${userId} -> ${data.plan_id}`)
+    console.log(`✅ Updated user billing subscription: ${userId} -> ${internalPlan} (${planId})`)
+  } catch (error) {
+    console.error('Error handling billing subscription created:', error)
+    throw error
+  }
+}
+
+async function handleBillingSubscriptionUpdated(data: ClerkWebhookEvent['data']) {
+  try {
+    console.log('💳 Clerk billing subscription updated:', data)
+    
+    const userId = data.user_id || data.id
+    const planId = data.plan_id
+    
+    if (!userId) {
+      console.error('Missing user ID in billing subscription updated event')
+      return
+    }
+
+    // Map Clerk plan ID to our internal plan
+    const internalPlan = planId ? mapClerkPlanToInternal(planId) : 'spark'
+
+    await User.findOneAndUpdate(
+      { clerkId: userId },
+      {
+        plan: internalPlan,
+        'subscription.planId': planId,
+        'subscription.status': data.status || 'active',
+        'subscription.currentPeriodEnd': data.current_period_end ? new Date(data.current_period_end * 1000) : null,
+        'subscription.cancelAtPeriodEnd': data.cancel_at_period_end || false,
+        updatedAt: new Date()
+      }
+    )
+
+    console.log(`✅ Updated user billing subscription: ${userId} -> ${internalPlan} (${data.status})`)
+  } catch (error) {
+    console.error('Error handling billing subscription updated:', error)
+    throw error
+  }
+}
+
+async function handleBillingSubscriptionCancelled(data: ClerkWebhookEvent['data']) {
+  try {
+    console.log('💳 Clerk billing subscription cancelled:', data)
+    
+    const userId = data.user_id || data.id
+    if (!userId) {
+      console.error('Missing user ID in billing subscription cancelled event')
+      return
+    }
+
+    await User.findOneAndUpdate(
+      { clerkId: userId },
+      {
+        plan: 'spark', // Revert to free plan
+        'subscription.status': 'canceled',
+        'subscription.cancelAtPeriodEnd': true,
+        updatedAt: new Date()
+      }
+    )
+
+    console.log(`✅ Cancelled user billing subscription: ${userId}`)
+  } catch (error) {
+    console.error('Error handling billing subscription cancelled:', error)
+    throw error
+  }
+}
+
+// Legacy subscription webhook handlers (keep for backward compatibility)
+async function handleSubscriptionCreated(data: ClerkWebhookEvent['data']) {
+  try {
+    console.log('💳 Legacy subscription created:', data.subscription_id)
+    
+    const userId = data.user_id || data.id
+    if (!userId) {
+      console.error('No user ID in subscription created event')
+      return
+    }
+
+    const internalPlan = data.plan_id ? mapClerkPlanToInternal(data.plan_id) : 'spark'
+
+    await User.findOneAndUpdate(
+      { clerkId: userId },
+      {
+        plan: internalPlan,
+        'subscription.planId': data.plan_id,
+        'subscription.status': 'active',
+        'subscription.currentPeriodEnd': data.current_period_end ? new Date(data.current_period_end * 1000) : null,
+        'subscription.cancelAtPeriodEnd': false,
+        updatedAt: new Date()
+      },
+      { upsert: true }
+    )
+
+    console.log(`✅ Updated user subscription: ${userId} -> ${internalPlan}`)
   } catch (error) {
     console.error('Error handling subscription created:', error)
     throw error
@@ -229,7 +333,7 @@ async function handleSubscriptionCreated(data: ClerkWebhookEvent['data']) {
 
 async function handleSubscriptionUpdated(data: ClerkWebhookEvent['data']) {
   try {
-    console.log('💳 Subscription updated:', data.subscription_id)
+    console.log('💳 Legacy subscription updated:', data.subscription_id)
     
     const userId = data.user_id || data.id
     if (!userId) {
@@ -237,20 +341,21 @@ async function handleSubscriptionUpdated(data: ClerkWebhookEvent['data']) {
       return
     }
 
+    const internalPlan = data.plan_id ? mapClerkPlanToInternal(data.plan_id) : 'spark'
+
     await User.findOneAndUpdate(
       { clerkId: userId },
       {
-        plan: data.plan_id || 'spark',
+        plan: internalPlan,
         'subscription.planId': data.plan_id,
         'subscription.status': data.status || 'active',
-        'subscription.stripeSubscriptionId': data.subscription_id,
         'subscription.currentPeriodEnd': data.current_period_end ? new Date(data.current_period_end * 1000) : null,
         'subscription.cancelAtPeriodEnd': data.cancel_at_period_end || false,
         updatedAt: new Date()
       }
     )
 
-    console.log(`✅ Updated user subscription: ${userId} -> ${data.plan_id} (${data.status})`)
+    console.log(`✅ Updated user subscription: ${userId} -> ${internalPlan} (${data.status})`)
   } catch (error) {
     console.error('Error handling subscription updated:', error)
     throw error
@@ -259,7 +364,7 @@ async function handleSubscriptionUpdated(data: ClerkWebhookEvent['data']) {
 
 async function handleSubscriptionCancelled(data: ClerkWebhookEvent['data']) {
   try {
-    console.log('💳 Subscription cancelled:', data.subscription_id)
+    console.log('💳 Legacy subscription cancelled:', data.subscription_id)
     
     const userId = data.user_id || data.id
     if (!userId) {
@@ -286,7 +391,7 @@ async function handleSubscriptionCancelled(data: ClerkWebhookEvent['data']) {
 
 async function handleSubscriptionRenewed(data: ClerkWebhookEvent['data']) {
   try {
-    console.log('💳 Subscription renewed:', data.subscription_id)
+    console.log('💳 Legacy subscription renewed:', data.subscription_id)
     
     const userId = data.user_id || data.id
     if (!userId) {

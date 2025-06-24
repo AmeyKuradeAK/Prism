@@ -1,3 +1,6 @@
+// Subscription Plans Configuration for Clerk Billing
+// These plan IDs MUST match exactly with the plan IDs created in Clerk Dashboard
+
 export interface SubscriptionPlan {
   id: string
   name: string
@@ -18,11 +21,7 @@ export interface SubscriptionPlan {
     apiAccess: boolean
   }
   popular?: boolean
-  clerkPlanId?: string // Will be set after creating in Clerk Dashboard
-  stripePriceIds?: {
-    monthly: string
-    yearly: string
-  }
+  clerkPlanId: string // Must match Clerk Dashboard plan ID
 }
 
 export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
@@ -48,7 +47,8 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
       teamCollaboration: false,
       customBranding: false,
       apiAccess: false
-    }
+    },
+    clerkPlanId: 'free' // Free plan in Clerk
   },
   {
     id: 'pro',
@@ -74,7 +74,8 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
       customBranding: false,
       apiAccess: false
     },
-    popular: true
+    popular: true,
+    clerkPlanId: 'plus' // Plus plan in Clerk
   },
   {
     id: 'premium',
@@ -99,7 +100,8 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
       teamCollaboration: false,
       customBranding: true,
       apiAccess: true
-    }
+    },
+    clerkPlanId: 'pro' // Pro plan in Clerk
   },
   {
     id: 'team',
@@ -126,13 +128,14 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
       teamCollaboration: true,
       customBranding: true,
       apiAccess: true
-    }
+    },
+    clerkPlanId: 'team' // Team plan in Clerk
   },
   {
     id: 'enterprise',
     name: '🏢 Enterprise',
     tagline: 'Large organizations with custom needs',
-    price: { monthly: 299, yearly: 2990 }, // Placeholder pricing - handle custom deals separately
+    price: { monthly: 299, yearly: 2990 },
     features: [
       'Unlimited prompts',
       'Everything in Team',
@@ -154,7 +157,8 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
       teamCollaboration: true,
       customBranding: true,
       apiAccess: true
-    }
+    },
+    clerkPlanId: 'enterprise' // Enterprise plan in Clerk
   }
 ]
 
@@ -163,19 +167,17 @@ export function getPlanById(planId: string): SubscriptionPlan | null {
   return SUBSCRIPTION_PLANS.find(plan => plan.id === planId) || null
 }
 
+export function getPlanByClerkId(clerkPlanId: string): SubscriptionPlan | null {
+  return SUBSCRIPTION_PLANS.find(plan => plan.clerkPlanId === clerkPlanId) || null
+}
+
 export function getFreePlan(): SubscriptionPlan {
   return SUBSCRIPTION_PLANS[0] // Spark
 }
 
-export function isFeatureAvailable(planId: string, feature: keyof SubscriptionPlan['limits']): boolean {
+export function getPlanLimits(planId: string) {
   const plan = getPlanById(planId)
-  return plan ? plan.limits[feature] === true : false
-}
-
-export function getMonthlyLimit(planId: string, limit: 'projectsPerMonth' | 'promptsPerMonth'): number {
-  const plan = getPlanById(planId)
-  if (!plan) return 0
-  return plan.limits[limit] === -1 ? Infinity : plan.limits[limit]
+  return plan?.limits || getFreePlan().limits
 }
 
 export function formatPrice(amount: number): string {
@@ -183,8 +185,18 @@ export function formatPrice(amount: number): string {
   return `$${amount}`
 }
 
-export function calculateYearlySavings(monthly: number, yearly: number): number {
-  if (monthly === 0 || yearly === 0) return 0
-  const monthlyTotal = monthly * 12
-  return Math.round(((monthlyTotal - yearly) / monthlyTotal) * 100)
+export function calculateYearlySavings(monthlyPrice: number, yearlyPrice: number): number {
+  return (monthlyPrice * 12) - yearlyPrice
+}
+
+// Map Clerk plan ID to our internal plan ID
+export function mapClerkPlanToInternal(clerkPlanId: string): string {
+  const plan = getPlanByClerkId(clerkPlanId)
+  return plan?.id || 'spark'
+}
+
+// Map our internal plan ID to Clerk plan ID
+export function mapInternalPlanToClerk(internalPlanId: string): string {
+  const plan = getPlanById(internalPlanId)
+  return plan?.clerkPlanId || 'free'
 } 
