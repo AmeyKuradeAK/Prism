@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import connectToDatabase from '@/lib/database/mongodb'
 import User from '@/lib/database/models/User'
+import { IUser } from '@/lib/database/models/User'
 
 export async function GET() {
   try {
@@ -13,7 +14,7 @@ export async function GET() {
 
     await connectToDatabase()
     
-    const user = await User.findOne({ clerkId: userId }).lean()
+    const user = await User.findOne({ clerkId: userId }) as IUser | null
     
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
