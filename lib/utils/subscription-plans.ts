@@ -26,21 +26,20 @@ export interface SubscriptionPlan {
 
 export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
   {
-    id: 'spark',
-    name: '⚡ Spark',
-    tagline: 'Perfect for hobbyists and learners',
+    id: 'free',
+    name: 'Free',
+    tagline: 'Perfect for getting started',
     price: { monthly: 0, yearly: 0 },
     features: [
-      '15 prompts per month (400k tokens each)',
+      '30 prompts per month',
       '3 projects per month',
       'Basic templates',
       'Community support',
-      'Expo SDK latest',
       'Code export'
     ],
     limits: {
       projectsPerMonth: 3,
-      promptsPerMonth: 15,
+      promptsPerMonth: 30,
       customApiKeys: false,
       prioritySupport: false,
       exportCode: true,
@@ -51,12 +50,12 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     clerkPlanId: 'free' // Free plan in Clerk
   },
   {
-    id: 'pro',
-    name: '🚀 Plus',
+    id: 'plus',
+    name: 'Plus',
     tagline: 'For serious individual developers',
     price: { monthly: 19, yearly: 190 },
     features: [
-      '200 prompts per month (400k tokens each)',
+      '500 prompts per month',
       'Unlimited projects',
       'Custom API keys (bring your own)',
       'Premium templates',
@@ -66,7 +65,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     ],
     limits: {
       projectsPerMonth: -1, // unlimited
-      promptsPerMonth: 200,
+      promptsPerMonth: 500,
       customApiKeys: true,
       prioritySupport: true,
       exportCode: true,
@@ -78,12 +77,12 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     clerkPlanId: 'plus' // Plus plan in Clerk
   },
   {
-    id: 'premium',
-    name: '💎 Pro',
+    id: 'pro',
+    name: 'Pro',
     tagline: 'Maximum power for professionals',
     price: { monthly: 49, yearly: 490 },
     features: [
-      '500 prompts per month (400k tokens each)',
+      '2000 prompts per month',
       'Everything in Plus',
       'All AI models (GPT-4, Claude, etc.)',
       'Custom branding',
@@ -93,7 +92,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     ],
     limits: {
       projectsPerMonth: -1,
-      promptsPerMonth: 500,
+      promptsPerMonth: 2000,
       customApiKeys: true,
       prioritySupport: true,
       exportCode: true,
@@ -105,11 +104,11 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
   },
   {
     id: 'team',
-    name: '👥 Team',
+    name: 'Team',
     tagline: 'Collaboration for teams and agencies',
     price: { monthly: 99, yearly: 990 },
     features: [
-      '1,000-1,800 prompts per month (400k tokens each)',
+      '1,000-1,800 prompts per month',
       'Everything in Pro',
       'Team collaboration (10 seats)',
       'Shared workspaces',
@@ -133,7 +132,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
   },
   {
     id: 'enterprise',
-    name: '🏢 Enterprise',
+    name: 'Enterprise',
     tagline: 'Large organizations with custom needs',
     price: { monthly: 299, yearly: 2990 },
     features: [
@@ -162,24 +161,83 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
   }
 ]
 
-// Helper functions
+/**
+ * Get plan by internal ID
+ */
 export function getPlanById(planId: string): SubscriptionPlan | null {
   return SUBSCRIPTION_PLANS.find(plan => plan.id === planId) || null
 }
 
+/**
+ * Get plan by Clerk plan ID
+ */
 export function getPlanByClerkId(clerkPlanId: string): SubscriptionPlan | null {
   return SUBSCRIPTION_PLANS.find(plan => plan.clerkPlanId === clerkPlanId) || null
 }
 
-export function getFreePlan(): SubscriptionPlan {
-  return SUBSCRIPTION_PLANS[0] // Spark
+/**
+ * Get monthly limit for a specific feature (numeric limits only)
+ */
+export function getMonthlyLimit(planId: string, feature: 'projectsPerMonth' | 'promptsPerMonth'): number {
+  const plan = getPlanById(planId)
+  return plan ? plan.limits[feature] : 0
 }
 
+/**
+ * Check if user has access to a specific feature (boolean features)
+ */
+export function hasFeature(planId: string, feature: 'customApiKeys' | 'prioritySupport' | 'exportCode' | 'teamCollaboration' | 'customBranding' | 'apiAccess'): boolean {
+  const plan = getPlanById(planId)
+  if (!plan) return false
+  return plan.limits[feature]
+}
+
+/**
+ * Get plan limits object
+ */
 export function getPlanLimits(planId: string) {
   const plan = getPlanById(planId)
   return plan?.limits || getFreePlan().limits
 }
 
+/**
+ * Map Clerk plan ID to our internal plan ID
+ */
+export function mapClerkPlanToInternal(clerkPlanId: string): string {
+  const plan = getPlanByClerkId(clerkPlanId)
+  return plan?.id || 'free'
+}
+
+/**
+ * Map our internal plan ID to Clerk plan ID
+ */
+export function mapInternalPlanToClerk(internalPlanId: string): string {
+  const plan = getPlanById(internalPlanId)
+  return plan?.clerkPlanId || 'free'
+}
+
+/**
+ * Get all available plans
+ */
+export function getAllPlans(): SubscriptionPlan[] {
+  return SUBSCRIPTION_PLANS
+}
+
+/**
+ * Get free plan
+ */
+export function getFreePlan(): SubscriptionPlan {
+  return SUBSCRIPTION_PLANS[0]
+}
+
+/**
+ * Get popular plan
+ */
+export function getPopularPlan(): SubscriptionPlan | null {
+  return SUBSCRIPTION_PLANS.find(plan => plan.popular) || null
+}
+
+// Helper functions
 export function formatPrice(amount: number): string {
   if (amount === 0) return 'Free'
   return `$${amount}`
@@ -187,16 +245,4 @@ export function formatPrice(amount: number): string {
 
 export function calculateYearlySavings(monthlyPrice: number, yearlyPrice: number): number {
   return (monthlyPrice * 12) - yearlyPrice
-}
-
-// Map Clerk plan ID to our internal plan ID
-export function mapClerkPlanToInternal(clerkPlanId: string): string {
-  const plan = getPlanByClerkId(clerkPlanId)
-  return plan?.id || 'spark'
-}
-
-// Map our internal plan ID to Clerk plan ID
-export function mapInternalPlanToClerk(internalPlanId: string): string {
-  const plan = getPlanById(internalPlanId)
-  return plan?.clerkPlanId || 'free'
 } 

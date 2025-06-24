@@ -9,7 +9,8 @@ This guide will help you set up **Clerk's native billing system** for your React
 - ✅ Automatic billing portal integration
 - ✅ Real-time subscription status via webhooks
 - ✅ Plan protection system using Clerk's `has()` method
-- ✅ Same plan slugs (spark, pro, premium, team, enterprise)
+- ✅ Monthly prompt quotas with automatic reset
+- ✅ Usage tracking and analytics
 
 ---
 
@@ -32,192 +33,178 @@ This guide will help you set up **Clerk's native billing system** for your React
 **⚠️ CRITICAL:** Plan IDs must match exactly for the system to work.
 
 #### **🆓 Free Plan**
-- **Plan ID**: `free` 
-- **Name**: `Spark`
+- **Plan ID**: `free` *(must match exactly)*
+- **Name**: `Free`
 - **Price**: Free
-- **Features**: 15 prompts/month, 3 projects/month
+- **Features**: 30 prompts/month, 3 projects/month
 
 #### **🚀 Plus Plan**
 - **Plan ID**: `plus` *(must match exactly)*
 - **Name**: `Plus`
 - **Monthly Price**: `$19/month`
 - **Yearly Price**: `$190/year`
-- **Features**: 200 prompts/month, unlimited projects, custom API keys
+- **Features**: 500 prompts/month, unlimited projects, custom API keys
 
 #### **💎 Pro Plan**
 - **Plan ID**: `pro` *(must match exactly)*
 - **Name**: `Pro`
 - **Monthly Price**: `$49/month`
 - **Yearly Price**: `$490/year`
-- **Features**: 500 prompts/month, all AI models, custom branding
+- **Features**: 2000 prompts/month, all AI models, custom branding
 
 #### **👥 Team Plan**
 - **Plan ID**: `team` *(must match exactly)*
 - **Name**: `Team`
 - **Monthly Price**: `$99/month`
 - **Yearly Price**: `$990/year`
-- **Features**: 1,400 prompts/month, team collaboration
+- **Features**: 1400 prompts/month, team collaboration, shared workspaces
 
 #### **🏢 Enterprise Plan**
 - **Plan ID**: `enterprise` *(must match exactly)*
 - **Name**: `Enterprise`
-- **Price**: Custom pricing (handle separately)
-- **Features**: Unlimited everything, SSO, dedicated support
+- **Monthly Price**: `$299/month`
+- **Yearly Price**: `$2990/year`
+- **Features**: Unlimited prompts, unlimited team seats, custom integrations
 
 ---
 
-## 🔧 **Step 2: Environment Variables**
+## 🌐 **Step 2: Configure Webhooks**
 
-Add these to your `.env.local` file:
+### 2.1 Set Up Webhook Endpoint
+1. In Clerk Dashboard, go to **"Webhooks"**
+2. Click **"Add Endpoint"**
+3. **Endpoint URL**: `https://yourdomain.com/api/webhooks/clerk`
+4. **Events to send**:
+   - ✅ `user.created`
+   - ✅ `user.updated`
+   - ✅ `user.deleted`
+   - ✅ `billing.subscription.created`
+   - ✅ `billing.subscription.updated`
+   - ✅ `billing.subscription.cancelled`
 
-```env
+### 2.2 Get Webhook Secret
+1. After creating the webhook, copy the **Signing Secret**
+2. Add it to your environment variables as `CLERK_WEBHOOK_SECRET`
+
+---
+
+## 🔧 **Step 3: Environment Variables**
+
+Add these to your `.env.local`:
+
+```bash
 # Clerk Configuration
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
 CLERK_SECRET_KEY=sk_test_...
-
-# Clerk Webhook Secret (get from webhook endpoint settings)
 CLERK_WEBHOOK_SECRET=whsec_...
 
-# MongoDB for usage tracking
-MONGODB_URI=your_mongodb_connection_string
+# MongoDB (for usage tracking)
+MONGODB_URI=mongodb+srv://...
 
-# AI API Keys
-MISTRAL_API_KEY=your_mistral_api_key
-
-# Encryption for API key storage
-ENCRYPTION_KEY=your_32_character_encryption_key
+# AI Provider (for app generation)
+MISTRAL_API_KEY=your_mistral_api_key_here
 ```
 
 ---
 
-## 🎛️ **Step 3: Configure Webhooks**
+## 🎨 **Step 4: Frontend Integration**
 
-### 3.1 Create Webhook Endpoint
-1. In Clerk Dashboard → **"Webhooks"**
-2. Click **"Add Endpoint"**
-3. Enter your endpoint URL:
-   - **Production**: `https://yourdomain.com/api/webhooks/clerk`
-   - **Development**: `https://abc123.ngrok.io/api/webhooks/clerk`
+### 4.1 Pricing Page
+The pricing page (`/pricing`) now includes:
+- Static plan cards for public view
+- Clerk PricingTable for signed-in users
+- Proper plan limits and features
 
-### 3.2 Select Events
-Select these events:
-- `user.created`
-- `user.updated`
-- `user.deleted`
-- `billing.subscription.created`
-- `billing.subscription.updated` 
-- `billing.subscription.cancelled`
+### 4.2 Billing Portal
+Users can access billing management through:
+- Settings page (`/settings`)
+- Direct link to Clerk billing portal
 
-### 3.3 Get Webhook Secret
-1. After creating the endpoint, **click on it** in the list
-2. Copy the **"Signing Secret"** (starts with `whsec_`)
-3. Add it to your `.env.local` as `CLERK_WEBHOOK_SECRET`
+### 4.3 Plan Protection
+The system now uses Clerk's `has()` method for real-time plan checks:
+
+```typescript
+// Check if user has a specific plan
+if (has({ plan: 'pro' })) {
+  // User has Pro plan or higher
+}
+
+// Check feature access
+if (has({ plan: 'plus' })) {
+  // User has Plus plan or higher (custom API keys, etc.)
+}
+```
 
 ---
 
-## 🧪 **Step 4: Test the Integration**
+## 📊 **Step 5: Usage Tracking**
 
-### 4.1 Test Subscription Status API
+### 5.1 Monthly Quotas
+- **Free**: 30 prompts/month
+- **Plus**: 500 prompts/month
+- **Pro**: 2000 prompts/month
+- **Team**: 1400 prompts/month
+- **Enterprise**: Unlimited
+
+### 5.2 Automatic Reset
+- Usage resets on the 1st of each month
+- Automatic detection of new billing periods
+- Real-time quota checking
+
+### 5.3 Usage Analytics
+- Daily usage tracking
+- Monthly usage statistics
+- Usage percentage calculations
+- Reset date tracking
+
+---
+
+## 🔄 **Step 6: API Integration**
+
+### 6.1 Generate API
+The `/api/generate` endpoint now:
+- Checks usage limits before generation
+- Tracks prompt usage after successful generation
+- Returns proper error messages for quota exceeded
+- Supports both new and update operations
+
+### 6.2 Subscription Status API
+The `/api/user/subscription-status` endpoint provides:
+- Current plan information
+- Usage statistics
+- Plan limits and features
+- Reset dates and remaining quotas
+
+### 6.3 Webhook Handlers
+The `/api/webhooks/clerk` endpoint handles:
+- User creation/updates/deletion
+- Subscription changes
+- Plan upgrades/downgrades
+- Automatic plan synchronization
+
+---
+
+## 🧪 **Step 7: Testing**
+
+### 7.1 Test the Setup
+Run the test script:
 ```bash
-curl -H "Authorization: Bearer YOUR_TOKEN" \
-  http://localhost:3000/api/user/subscription-status
+node scripts/test-clerk-billing.js
 ```
 
-### 4.2 Test Plan Protection
-```bash
-curl -H "Authorization: Bearer YOUR_TOKEN" \
-  http://localhost:3000/api/generate
-```
+### 7.2 Test Scenarios
+1. **Free Plan**: Create account, verify 30 prompt limit
+2. **Upgrade**: Subscribe to Plus plan, verify 500 prompt limit
+3. **Usage**: Generate apps, verify usage tracking
+4. **Quota**: Exceed limit, verify proper error messages
+5. **Reset**: Test monthly usage reset
+6. **Downgrade**: Cancel subscription, verify reversion to free
 
-### 4.3 Test PricingTable
-1. Sign up for an account
-2. Go to `/pricing`
-3. Verify Clerk's PricingTable loads with your plans
-4. Test upgrading with Stripe test cards:
-   - **Success**: `4242 4242 4242 4242`
-   - **Declined**: `4000 0000 0000 0002`
-
----
-
-## 🎨 **Step 5: Billing Portal Integration**
-
-The billing portal is automatically integrated in:
-
-1. **Settings Page** → "Billing & Plans" tab → "Open Billing Portal"
-2. **Dashboard Header** → User menu → billing options
-3. **Pricing Page** → PricingTable handles upgrades/downgrades
-
-**Code Example:**
-```typescript
-const handleBillingPortal = () => {
-  if (typeof window !== 'undefined' && window.Clerk && typeof window.Clerk.openBillingPortal === 'function') {
-    window.Clerk.openBillingPortal()
-  } else {
-    window.location.href = '/pricing'
-  }
-}
-```
-
----
-
-## 🛡️ **Step 6: Plan Protection**
-
-Plan protection is now handled by Clerk's `has()` method:
-
-```typescript
-import { auth } from '@clerk/nextjs/server'
-
-export async function POST() {
-  const { userId, has } = await auth()
-  
-  // Check if user has Pro plan or higher
-  if (!has({ plan: 'pro' })) {
-    return NextResponse.json({ 
-      error: 'Upgrade required',
-      message: 'This feature requires Pro plan or higher'
-    }, { status: 402 })
-  }
-  
-  // Continue with protected functionality...
-}
-```
-
-**Plan Hierarchy:**
-- `free` → Free plan (spark)
-- `plus` → Plus plan (pro in our system)
-- `pro` → Pro plan (premium in our system)  
-- `team` → Team plan
-- `enterprise` → Enterprise plan
-
----
-
-## 📊 **Step 7: Usage Tracking**
-
-The system automatically tracks usage in MongoDB while Clerk manages billing:
-
-**What's Tracked:**
-- Monthly prompt usage
-- Monthly project creation
-- Usage percentages and limits
-- Reset dates based on billing cycles
-
-**Database Schema:**
-```typescript
-{
-  clerkId: string,
-  plan: 'spark' | 'pro' | 'premium' | 'team' | 'enterprise',
-  usage: {
-    promptsThisMonth: number,
-    projectsThisMonth: number,
-    lastResetAt: Date
-  },
-  subscription: {
-    planId: string,
-    status: string,
-    currentPeriodEnd: Date
-  }
-}
-```
+### 7.3 Test Cards
+Use Stripe test cards:
+- **Success**: `4242 4242 4242 4242`
+- **Decline**: `4000 0000 0000 0002`
+- **3D Secure**: `4000 0025 0000 3155`
 
 ---
 
@@ -231,6 +218,7 @@ The system automatically tracks usage in MongoDB while Clerk manages billing:
 - [ ] Environment variables set in production
 - [ ] Test complete subscription flow
 - [ ] Verify plan protection works
+- [ ] Test usage tracking and quotas
 
 ### Test Live Flow:
 1. Create real Stripe account with live keys
@@ -238,6 +226,7 @@ The system automatically tracks usage in MongoDB while Clerk manages billing:
 3. Test subscription creation/cancellation
 4. Verify webhooks are received
 5. Test billing portal functionality
+6. Verify usage tracking works correctly
 
 ---
 
@@ -254,9 +243,9 @@ If you had a previous subscription system:
 **Plan ID Mapping:**
 ```
 Internal → Clerk
-spark → free
-pro → plus  
-premium → pro
+free → free
+plus → plus  
+pro → pro
 team → team
 enterprise → enterprise
 ```
@@ -286,6 +275,11 @@ enterprise → enterprise
 - ✅ Check webhook secret is correct
 - ✅ Verify endpoint URL is accessible
 - ✅ Check webhook delivery logs in Clerk Dashboard
+
+**5. Usage tracking issues**
+- ✅ Verify MongoDB connection
+- ✅ Check user creation in database
+- ✅ Verify monthly reset logic
 
 ### Debug Commands:
 ```bash
@@ -322,6 +316,8 @@ Your system is ready when:
 - [ ] Plan protection works in API routes
 - [ ] Webhooks update user plans in database
 - [ ] Usage tracking works correctly
+- [ ] Monthly quotas are enforced
 - [ ] Test cards work in development
+- [ ] Monthly reset works properly
 
-**🎉 Congratulations!** Your Clerk billing system is now fully integrated. 
+**🎉 Congratulations!** Your Clerk billing system is now fully integrated and ready for production use. 

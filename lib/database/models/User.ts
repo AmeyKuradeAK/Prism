@@ -1,18 +1,17 @@
-import mongoose, { Document, Model } from 'mongoose'
+import mongoose, { Document, Schema } from 'mongoose'
 
 export interface IUser extends Document {
-  _id: string
   clerkId: string
   email?: string
   firstName?: string
   lastName?: string
   avatar?: string
-  plan: 'spark' | 'pro' | 'premium' | 'team' | 'enterprise'
-  credits: number  // Based on plan
-  subscription?: {
-    planId: string
+  plan: 'free' | 'plus' | 'pro' | 'team' | 'enterprise'
+  credits: number
+  subscription: {
+    planId?: string
     status: 'active' | 'canceled' | 'past_due' | 'trialing'
-    currentPeriodEnd: Date
+    currentPeriodEnd?: Date
     cancelAtPeriodEnd: boolean
     stripeSubscriptionId?: string
     stripeCustomerId?: string
@@ -21,9 +20,9 @@ export interface IUser extends Document {
     expoVersion: string
     codeStyle: 'typescript' | 'javascript'
     theme: 'light' | 'dark'
-    preferredProvider?: string
-    preferredModel?: string
-    useOwnKeys?: boolean
+    preferredProvider: string
+    preferredModel: string
+    useOwnKeys: boolean
   }
   usage: {
     promptsThisMonth: number
@@ -70,12 +69,12 @@ const UserSchema = new mongoose.Schema<IUser>({
   },
   plan: { 
     type: String, 
-    enum: ['spark', 'pro', 'premium', 'team', 'enterprise'], 
-    default: 'spark' 
+    enum: ['free', 'plus', 'pro', 'team', 'enterprise'], 
+    default: 'free' 
   },
   credits: { 
     type: Number, 
-    default: 10  // Based on plan limits
+    default: 30  // Based on free plan limits
   },
   subscription: {
     planId: { type: String },
@@ -153,9 +152,9 @@ const UserSchema = new mongoose.Schema<IUser>({
       type: Date, 
       default: Date.now 
     },
-    accountAge: {
-      type: Number,
-      default: 0
+    accountAge: { 
+      type: Number, 
+      default: 0 
     }
   },
   bio: { 
@@ -171,11 +170,19 @@ const UserSchema = new mongoose.Schema<IUser>({
   timestamps: true
 })
 
-// Create indexes for better performance
+// Index for efficient queries
 UserSchema.index({ clerkId: 1 })
-UserSchema.index({ email: 1 })
 UserSchema.index({ plan: 1 })
+UserSchema.index({ 'usage.lastResetAt': 1 })
 
-const User: Model<IUser> = mongoose.models.User || mongoose.model<IUser>('User', UserSchema)
+// Pre-save middleware to update account age
+UserSchema.pre('save', function(next) {
+  if (this.isModified('createdAt') || this.isNew) {
+    const now = new Date()
+    const created = this.createdAt || now
+    this.analytics.accountAge = Math.floor((now.getTime() - created.getTime()) / (1000 * 60 * 60 * 24))
+  }
+  next()
+})
 
-export default User 
+export default mongoose.models.User || mongoose.model<IUser>('User', UserSchema) 

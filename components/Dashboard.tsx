@@ -13,10 +13,6 @@ const ProjectsList = dynamic(() => import('./ProjectsList'), {
   loading: () => <div className="card-glass animate-pulse h-64" />
 })
 
-const ProjectsGrid = dynamic(() => import('./dashboard/ProjectsGrid'), {
-  loading: () => <div className="card-glass animate-pulse h-64" />
-})
-
 const QuickActions = dynamic(() => import('./dashboard/QuickActions'), {
   loading: () => <div className="card-glass animate-pulse h-32" />
 })
@@ -304,7 +300,7 @@ export default function Dashboard() {
           ))}
         </div>
 
-        {/* Usage Analytics - Full Width */}
+        {/* Usage Analytics */}
         <div className="mb-8">
           <UsageAnalytics userId={userId || ''} />
         </div>
@@ -312,7 +308,7 @@ export default function Dashboard() {
         {/* Main Dashboard Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Left Column - Projects */}
-          <div className="lg:col-span-2 space-y-8">
+          <div className="lg:col-span-2">
             <div className="card-glass">
               <ProjectsList />
             </div>

@@ -23,8 +23,8 @@ export async function getCurrentPlan(): Promise<string> {
     const { userId, has } = await auth()
     
     if (!userId) {
-      console.log('🔍 No user ID found, returning spark plan')
-      return 'spark'
+      console.log('🔍 No user ID found, returning free plan')
+      return 'free'
     }
 
     console.log('🔍 Checking plan for user:', userId)
@@ -45,24 +45,32 @@ export async function getCurrentPlan(): Promise<string> {
       }
       
       if (has({ plan: 'pro' })) {
-        console.log('✅ User has Pro plan (premium in our system)')
-        return 'premium'
-      }
-      
-      if (has({ plan: 'plus' })) {
-        console.log('✅ User has Plus plan (pro in our system)')
+        console.log('✅ User has Pro plan')
         return 'pro'
       }
       
+      if (has({ plan: 'plus' })) {
+        console.log('✅ User has Plus plan')
+        return 'plus'
+      }
+      
       console.log('❌ No paid plans found, user is on free plan')
-      return 'spark'
+      return 'free'
     } else {
-      console.log('❌ Clerk billing not available')
-      return 'spark'
+      console.log('❌ Clerk billing not available, falling back to database')
+      // Fallback to database check
+      try {
+        await connectToDatabase()
+        const user = await User.findOne({ clerkId: userId })
+        return user?.plan || 'free'
+      } catch (error) {
+        console.error('❌ Database fallback failed:', error)
+        return 'free'
+      }
     }
   } catch (error) {
     console.error('❌ Error getting current plan:', error)
-    return 'spark'
+    return 'free'
   }
 }
 
@@ -72,131 +80,69 @@ export async function getCurrentPlan(): Promise<string> {
 export function getPlanLimits(planId: string): PlanLimits {
   const plan = getPlanById(planId)
   if (!plan) {
-    console.warn(`⚠️ Plan ${planId} not found, using spark limits`)
+    console.warn(`⚠️ Plan ${planId} not found, using free limits`)
     return SUBSCRIPTION_PLANS[0].limits
   }
   return plan.limits
 }
 
 /**
- * Check if user has access to a specific plan or higher
+ * Get current user's plan limits
  */
-export async function hasMinimumPlan(requiredPlan: string): Promise<boolean> {
+export async function getCurrentPlanLimits(): Promise<PlanLimits | null> {
   try {
-    const { has } = await auth()
+    const currentPlan = await getCurrentPlan()
+    const planLimits = getPlanLimits(currentPlan)
     
-    if (!has || typeof has !== 'function') {
-      console.log('❌ Clerk billing not available')
-      return requiredPlan === 'spark' // Only free plan available
-    }
-
-    // Map our internal plan to Clerk plan ID
-    let clerkPlanId: string
-    switch (requiredPlan) {
-      case 'pro':
-        clerkPlanId = 'plus'
-        break
-      case 'premium':
-        clerkPlanId = 'pro'
-        break
-      case 'team':
-        clerkPlanId = 'team'
-        break
-      case 'enterprise':
-        clerkPlanId = 'enterprise'
-        break
-      default:
-        return true // Free plan is always accessible
-    }
-
-    // Check if user has the required plan or higher
-    if (clerkPlanId === 'plus') {
-      return has({ plan: 'plus' }) || has({ plan: 'pro' }) || has({ plan: 'team' }) || has({ plan: 'enterprise' })
-    }
-    if (clerkPlanId === 'pro') {
-      return has({ plan: 'pro' }) || has({ plan: 'team' }) || has({ plan: 'enterprise' })
-    }
-    if (clerkPlanId === 'team') {
-      return has({ plan: 'team' }) || has({ plan: 'enterprise' })
-    }
-    if (clerkPlanId === 'enterprise') {
-      return has({ plan: 'enterprise' })
-    }
-
-    return false
+    console.log('📊 Current plan limits:', { plan: currentPlan, limits: planLimits })
+    return planLimits
   } catch (error) {
-    console.error('❌ Error checking minimum plan:', error)
-    return false
+    console.error('❌ Error getting plan limits:', error)
+    return null
   }
 }
 
 /**
- * Check if user has access to a specific feature
+ * Check if user can access a specific feature
  */
-export async function hasFeatureAccess(feature: keyof PlanLimits): Promise<boolean> {
+export async function canAccessFeature(feature: keyof PlanLimits): Promise<boolean> {
   try {
-    const currentPlan = await getCurrentPlan()
-    const limits = getPlanLimits(currentPlan)
+    const { userId, has } = await auth()
     
-    if (typeof limits[feature] === 'boolean') {
-      return limits[feature] as boolean
+    if (!userId) return false
+
+    // Use Clerk's has() method for feature checks
+    if (has && typeof has === 'function') {
+      switch (feature) {
+        case 'customApiKeys':
+          return has({ plan: 'plus' }) || has({ plan: 'pro' }) || has({ plan: 'team' }) || has({ plan: 'enterprise' })
+        case 'prioritySupport':
+          return has({ plan: 'plus' }) || has({ plan: 'pro' }) || has({ plan: 'team' }) || has({ plan: 'enterprise' })
+        case 'teamCollaboration':
+          return has({ plan: 'team' }) || has({ plan: 'enterprise' })
+        case 'customBranding':
+          return has({ plan: 'pro' }) || has({ plan: 'team' }) || has({ plan: 'enterprise' })
+        case 'apiAccess':
+          return has({ plan: 'pro' }) || has({ plan: 'team' }) || has({ plan: 'enterprise' })
+        case 'exportCode':
+          return true // Available on all plans
+        default:
+          return false
+      }
     }
+
+    // Fallback to database check
+    const planLimits = await getCurrentPlanLimits()
+    if (!planLimits) return false
     
-    // For numeric limits, check if it's unlimited (-1) or greater than 0
-    if (typeof limits[feature] === 'number') {
-      const value = limits[feature] as number
-      return value === -1 || value > 0
-    }
-    
+    const value = planLimits[feature]
+    if (typeof value === 'boolean') return value
+    if (typeof value === 'number') return value > 0 || value === -1
     return false
   } catch (error) {
     console.error('❌ Error checking feature access:', error)
     return false
   }
-}
-
-/**
- * Middleware function to protect routes based on plan requirements
- */
-export async function requirePlan(requiredPlan: string): Promise<NextResponse | null> {
-  const hasAccess = await hasMinimumPlan(requiredPlan)
-  
-  if (!hasAccess) {
-    return NextResponse.json({
-      error: 'Upgrade required',
-      message: `This feature requires ${requiredPlan} plan or higher`,
-      requiredPlan,
-      upgradeUrl: '/pricing'
-    }, { status: 402 })
-  }
-  
-  return null
-}
-
-/**
- * Middleware function to protect features
- */
-export async function requireFeature(feature: keyof PlanLimits): Promise<NextResponse | null> {
-  const hasAccess = await hasFeatureAccess(feature)
-  
-  if (!hasAccess) {
-    return NextResponse.json({
-      error: 'Feature not available',
-      message: `This feature is not available in your current plan`,
-      feature,
-      upgradeUrl: '/pricing'
-    }, { status: 402 })
-  }
-  
-  return null
-}
-
-/**
- * Get usage limits for current user's plan
- */
-export async function getCurrentPlanLimits(): Promise<PlanLimits> {
-  const currentPlan = await getCurrentPlan()
-  return getPlanLimits(currentPlan)
 }
 
 /**
@@ -296,4 +242,105 @@ export function createUsageLimitResponse(limit: number, feature: string) {
     limit,
     upgradeUrl: '/pricing'
   }, { status: 429 })
+}
+
+/**
+ * Middleware to protect routes based on plan
+ */
+export async function requirePlan(requiredPlan: string) {
+  try {
+    const currentPlan = await getCurrentPlan()
+    const planOrder = ['free', 'plus', 'pro', 'team', 'enterprise']
+    
+    const currentIndex = planOrder.indexOf(currentPlan)
+    const requiredIndex = planOrder.indexOf(requiredPlan)
+    
+    if (currentIndex < requiredIndex) {
+      return NextResponse.json({
+        error: 'Plan upgrade required',
+        message: `This feature requires the ${requiredPlan} plan or higher.`,
+        currentPlan,
+        requiredPlan,
+        upgradeUrl: '/pricing'
+      }, { status: 403 })
+    }
+    
+    return null // Allow access
+  } catch (error) {
+    console.error('❌ Error in plan requirement check:', error)
+    return NextResponse.json({
+      error: 'Authentication error',
+      message: 'Unable to verify your subscription status.'
+    }, { status: 500 })
+  }
+}
+
+/**
+ * Check if user has access to a specific plan or higher
+ */
+export async function hasMinimumPlan(requiredPlan: string): Promise<boolean> {
+  try {
+    const { has } = await auth()
+    
+    if (!has || typeof has !== 'function') {
+      console.log('❌ Clerk billing not available')
+      return requiredPlan === 'free' // Only free plan available
+    }
+
+    // Map our internal plan to Clerk plan ID
+    let clerkPlanId: string
+    switch (requiredPlan) {
+      case 'plus':
+        clerkPlanId = 'plus'
+        break
+      case 'pro':
+        clerkPlanId = 'pro'
+        break
+      case 'team':
+        clerkPlanId = 'team'
+        break
+      case 'enterprise':
+        clerkPlanId = 'enterprise'
+        break
+      default:
+        return true // Free plan is always accessible
+    }
+
+    // Check if user has the required plan or higher
+    if (clerkPlanId === 'plus') {
+      return has({ plan: 'plus' }) || has({ plan: 'pro' }) || has({ plan: 'team' }) || has({ plan: 'enterprise' })
+    }
+    if (clerkPlanId === 'pro') {
+      return has({ plan: 'pro' }) || has({ plan: 'team' }) || has({ plan: 'enterprise' })
+    }
+    if (clerkPlanId === 'team') {
+      return has({ plan: 'team' }) || has({ plan: 'enterprise' })
+    }
+    if (clerkPlanId === 'enterprise') {
+      return has({ plan: 'enterprise' })
+    }
+
+    return false
+  } catch (error) {
+    console.error('❌ Error checking minimum plan:', error)
+    return false
+  }
+}
+
+/**
+ * Middleware function to protect features
+ */
+export async function requireFeature(feature: keyof PlanLimits): Promise<NextResponse | null> {
+  const hasAccess = await canAccessFeature(feature)
+  
+  if (!hasAccess) {
+    return NextResponse.json({
+      error: 'Feature not available',
+      message: `This feature is not available in your current plan`,
+      feature,
+      upgradeUrl: '/pricing'
+    }, { status: 402 })
+  }
+  
+  return null
 } 

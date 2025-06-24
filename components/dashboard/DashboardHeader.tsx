@@ -2,7 +2,7 @@
 
 import { UserButton, useUser } from '@clerk/nextjs'
 import { motion } from 'framer-motion'
-import { Bell, Search, Settings, HelpCircle, Wand2, Sparkles, Zap } from 'lucide-react'
+import { Settings, HelpCircle, Wand2, Sparkles, Zap } from 'lucide-react'
 import Link from 'next/link'
 
 declare global {
@@ -25,7 +25,7 @@ export default function DashboardHeader() {
   }
 
   return (
-    <header className="nav-dark sticky top-0 z-50">
+    <header className="nav-professional sticky top-0 z-50">
       <div className="container-professional">
         <div className="flex items-center justify-between py-4">
           {/* Logo and Navigation */}
@@ -33,78 +33,53 @@ export default function DashboardHeader() {
             <motion.div whileHover={{ scale: 1.05 }}>
               <Link href="/dashboard" className="flex items-center space-x-3">
                 <div className="relative">
-                  <div className="w-10 h-10 bg-gradient-primary rounded-xl-professional flex items-center justify-center shadow-professional">
+                  <div className="w-8 h-8 bg-gradient-primary rounded-professional flex items-center justify-center shadow-professional">
                     <Wand2 className="w-5 h-5 text-white" />
                   </div>
                   <Sparkles className="w-3 h-3 text-white absolute -top-1 -right-1 animate-pulse" />
                 </div>
-                <div>
-                  <span className="text-2xl font-bold text-white">
-                    Prism
-                  </span>
-                  <p className="text-xs text-light -mt-1">AI Builder</p>
-                </div>
+                <span className="text-xl font-bold text-professional">Prism</span>
               </Link>
             </motion.div>
             
             <nav className="hidden lg:flex items-center space-x-6">
               <Link 
                 href="/dashboard" 
-                className="text-light hover:text-white transition-professional px-3 py-2 rounded-professional hover:bg-white/10"
+                className="text-muted hover:text-professional transition-professional px-3 py-2 rounded-professional hover:bg-white/10"
               >
                 Dashboard
               </Link>
               <Link 
                 href="/builder" 
-                className="text-light hover:text-white transition-professional px-3 py-2 rounded-professional hover:bg-white/10 flex items-center space-x-2"
+                className="text-muted hover:text-professional transition-professional px-3 py-2 rounded-professional hover:bg-white/10 flex items-center space-x-2"
               >
                 <Zap className="w-4 h-4" />
                 <span>Builder</span>
               </Link>
               <Link 
-                href="/templates" 
-                className="text-light hover:text-white transition-professional px-3 py-2 rounded-professional hover:bg-white/10"
+                href="/pricing" 
+                className="text-muted hover:text-professional transition-professional px-3 py-2 rounded-professional hover:bg-white/10"
               >
-                Templates
+                Pricing
               </Link>
               <Link 
-                href="/community" 
-                className="text-light hover:text-white transition-professional px-3 py-2 rounded-professional hover:bg-white/10"
+                href="/docs" 
+                className="text-muted hover:text-professional transition-professional px-3 py-2 rounded-professional hover:bg-white/10"
               >
-                Community
+                Docs
               </Link>
             </nav>
           </div>
 
-          {/* Search and User Actions */}
+          {/* User Actions */}
           <div className="flex items-center space-x-4">
-            {/* Global Search */}
-            <div className="hidden md:block relative">
-              <Search className="w-4 h-4 absolute left-4 top-1/2 transform -translate-y-1/2 text-light" />
-              <input
-                type="text"
-                placeholder="Search projects, templates..."
-                className="input-dark pl-12 pr-4 py-3 w-80"
-              />
-            </div>
-
             {/* Quick Actions */}
             <div className="flex items-center space-x-2">
-              {/* Notifications */}
-              <motion.button 
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="relative p-3 text-light hover:text-white hover:bg-white/10 transition-professional rounded-professional"
-              >
-                <Bell className="w-5 h-5" />
-                <span className="absolute -top-1 -right-1 w-3 h-3 bg-white rounded-full animate-pulse"></span>
-              </motion.button>
-
               {/* Help */}
               <motion.button 
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                className="p-3 text-light hover:text-white hover:bg-white/10 transition-professional rounded-professional"
+                className="p-3 text-muted hover:text-professional hover:bg-white/10 transition-professional rounded-professional"
               >
                 <HelpCircle className="w-5 h-5" />
               </motion.button>
@@ -113,7 +88,7 @@ export default function DashboardHeader() {
               <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                 <Link 
                   href="/settings"
-                  className="p-3 text-light hover:text-white hover:bg-white/10 transition-professional rounded-professional inline-block"
+                  className="p-3 text-muted hover:text-professional hover:bg-white/10 transition-professional rounded-professional inline-block"
                 >
                   <Settings className="w-5 h-5" />
                 </Link>
@@ -124,10 +99,10 @@ export default function DashboardHeader() {
             <div className="ml-4 flex items-center space-x-2">
               <button
                 onClick={handleBilling}
-                className="px-4 py-2 bg-gradient-glossy text-white rounded-professional font-semibold shadow-professional hover:bg-white/20 transition-professional"
+                className="px-4 py-2 bg-gradient-primary text-white rounded-professional font-semibold shadow-professional hover:bg-white/20 transition-professional"
                 type="button"
               >
-                Manage Billing
+                Billing
               </button>
               <UserButton
                 appearance={{

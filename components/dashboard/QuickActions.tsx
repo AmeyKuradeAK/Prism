@@ -1,7 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { Plus, Layout, Zap, Rocket, FileText, Users, Wand2, Code, Smartphone } from 'lucide-react'
+import { Zap, Code, Wand2 } from 'lucide-react'
 import Link from 'next/link'
 
 export default function QuickActions() {
@@ -19,22 +19,6 @@ export default function QuickActions() {
       description: 'Start with blank Expo template',
       href: '/builder?mode=manual',
       primary: false
-    },
-    {
-      icon: <Layout className="w-5 h-5" />,
-      title: 'Templates',
-      description: 'Coming soon - Curated templates',
-      href: '#',
-      primary: false,
-      disabled: true
-    },
-    {
-      icon: <Users className="w-5 h-5" />,
-      title: 'Community',
-      description: 'Coming soon - Share & discover',
-      href: '#',
-      primary: false,
-      disabled: true
     }
   ]
 
@@ -59,39 +43,25 @@ export default function QuickActions() {
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.4, delay: index * 0.1 }}
-            whileHover={action.disabled ? {} : { scale: 1.02 }}
-            whileTap={action.disabled ? {} : { scale: 0.98 }}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
           >
-            {action.disabled ? (
-              <div className="block p-4 rounded-professional bg-gray-800 opacity-50 cursor-not-allowed group transition-professional">
-                <div className="flex items-center space-x-3">
-                  <div className="flex-shrink-0 text-light">
-                    {action.icon}
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-light">{action.title}</h4>
-                    <p className="text-sm text-muted">{action.description}</p>
-                  </div>
+            <Link
+              href={action.href}
+              className={`block p-4 rounded-professional text-white group transition-professional shadow-professional hover:shadow-glossy ${
+                action.primary ? 'btn-glossy' : 'bg-gray-800 hover:bg-gray-700'
+              }`}
+            >
+              <div className="flex items-center space-x-3">
+                <div className="flex-shrink-0">
+                  {action.icon}
+                </div>
+                <div>
+                  <h4 className="font-semibold">{action.title}</h4>
+                  <p className="text-sm text-light">{action.description}</p>
                 </div>
               </div>
-            ) : (
-              <Link
-                href={action.href}
-                className={`block p-4 rounded-professional text-white group transition-professional shadow-professional hover:shadow-glossy ${
-                  action.primary ? 'btn-glossy' : 'bg-gray-800 hover:bg-gray-700'
-                }`}
-              >
-                <div className="flex items-center space-x-3">
-                  <div className="flex-shrink-0">
-                    {action.icon}
-                  </div>
-                  <div>
-                    <h4 className="font-semibold">{action.title}</h4>
-                    <p className="text-sm text-light">{action.description}</p>
-                  </div>
-                </div>
-              </Link>
-            )}
+            </Link>
           </motion.div>
         ))}
       </div>

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
-import { getCurrentPlan, getPlanLimits } from '@/lib/utils/plan-protection'
+import { getCurrentPlan, getCurrentPlanLimits } from '@/lib/utils/plan-protection'
 import { getPlanById } from '@/lib/utils/subscription-plans'
 import connectToDatabase from '@/lib/database/mongodb'
 import User from '@/lib/database/models/User'
@@ -17,13 +17,13 @@ export async function GET() {
 
     // Get current plan from Clerk's billing system
     const currentPlan = await getCurrentPlan()
-    const planLimits = getPlanLimits(currentPlan)
+    const planLimits = await getCurrentPlanLimits()
     const planInfo = getPlanById(currentPlan)
 
     console.log('✅ Current plan from Clerk:', currentPlan)
 
     // Get or create user in database for usage tracking
-    let user = null
+    let user: any = null
     try {
       await connectToDatabase()
       user = await User.findOne({ clerkId: userId }).lean()
@@ -32,7 +32,7 @@ export async function GET() {
         console.log('📊 Creating new user with plan:', currentPlan)
         const newUser = await User.create({
           clerkId: userId,
-          plan: currentPlan as 'spark' | 'pro' | 'premium' | 'team' | 'enterprise',
+          plan: currentPlan as 'free' | 'plus' | 'pro' | 'team' | 'enterprise',
           usage: {
             promptsThisMonth: 0,
             projectsThisMonth: 0,
@@ -52,10 +52,10 @@ export async function GET() {
         console.log(`📊 Updating user plan from ${user.plan} to ${currentPlan}`)
         await User.findOneAndUpdate(
           { clerkId: userId },
-          { plan: currentPlan as 'spark' | 'pro' | 'premium' | 'team' | 'enterprise' },
+          { plan: currentPlan as 'free' | 'plus' | 'pro' | 'team' | 'enterprise' },
           { new: true }
         )
-        user.plan = currentPlan as 'spark' | 'pro' | 'premium' | 'team' | 'enterprise'
+        user.plan = currentPlan as 'free' | 'plus' | 'pro' | 'team' | 'enterprise'
       }
 
       // Check if we need to reset monthly usage (new month)
@@ -89,8 +89,8 @@ export async function GET() {
     const promptsUsed = user?.usage?.promptsThisMonth || 0
     const projectsUsed = user?.usage?.projectsThisMonth || 0
     
-    const promptLimit = planLimits.promptsPerMonth
-    const projectLimit = planLimits.projectsPerMonth
+    const promptLimit = planLimits?.promptsPerMonth || 30
+    const projectLimit = planLimits?.projectsPerMonth || 3
     
     // Calculate usage percentages
     let promptUsagePercent = 0
@@ -132,7 +132,16 @@ export async function GET() {
         price: planInfo.price,
         features: planInfo.features
       } : null,
-      limits: planLimits,
+      limits: planLimits || {
+        promptsPerMonth: 30,
+        projectsPerMonth: 3,
+        customApiKeys: false,
+        prioritySupport: false,
+        exportCode: true,
+        teamCollaboration: false,
+        customBranding: false,
+        apiAccess: false
+      },
       usage: {
         promptsThisMonth: promptsUsed,
         projectsThisMonth: projectsUsed,
@@ -150,18 +159,18 @@ export async function GET() {
         projectsRemaining
       },
       features: {
-        customApiKeys: planLimits.customApiKeys,
-        prioritySupport: planLimits.prioritySupport,
-        teamCollaboration: planLimits.teamCollaboration,
-        customBranding: planLimits.customBranding,
-        apiAccess: planLimits.apiAccess,
-        exportCode: planLimits.exportCode
+        customApiKeys: planLimits?.customApiKeys || false,
+        prioritySupport: planLimits?.prioritySupport || false,
+        teamCollaboration: planLimits?.teamCollaboration || false,
+        customBranding: planLimits?.customBranding || false,
+        apiAccess: planLimits?.apiAccess || false,
+        exportCode: planLimits?.exportCode || true
       },
       subscription: {
         status: 'active', // Clerk manages the actual status
         source: 'clerk_billing',
         billingCycle: 'monthly', // Default, Clerk manages this
-        isFree: currentPlan === 'spark'
+        isFree: currentPlan === 'free'
       },
       canUseAI,
       lastResetAt: user?.usage?.lastResetAt || new Date(),
@@ -173,16 +182,16 @@ export async function GET() {
     
     // Return safe defaults for free plan
     return NextResponse.json({
-      plan: 'spark',
+      plan: 'free',
       planInfo: {
-        id: 'spark',
-        name: '⚡ Spark',
-        tagline: 'Perfect for hobbyists and learners',
+        id: 'free',
+        name: 'Free',
+        tagline: 'Perfect for getting started',
         price: { monthly: 0, yearly: 0 },
-        features: ['15 prompts per month', '3 projects per month', 'Basic templates']
+        features: ['30 prompts per month', '3 projects per month', 'Basic templates']
       },
       limits: {
-        promptsPerMonth: 15,
+        promptsPerMonth: 30,
         projectsPerMonth: 3,
         customApiKeys: false,
         prioritySupport: false,
@@ -194,14 +203,14 @@ export async function GET() {
       usage: {
         promptsThisMonth: 0,
         projectsThisMonth: 0,
-        promptsRemaining: 15,
-        promptLimit: 15,
+        promptsRemaining: 30,
+        promptLimit: 30,
         projectLimit: 3,
         promptUsagePercent: 0,
         projectUsagePercent: 0,
         generationsThisMonth: 0,
-        generationsRemaining: 15,
-        generationLimit: 15,
+        generationsRemaining: 30,
+        generationLimit: 30,
         generationUsagePercent: 0,
         projectsUsed: 0,
         projectsRemaining: 3

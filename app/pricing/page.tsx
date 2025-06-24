@@ -39,151 +39,17 @@ export default function PricingPage() {
           </p>
         </motion.div>
 
-        {/* Simple Plan Cards for Public View */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16">
-          {/* Free Plan */}
-          <motion.div 
-            className="card-glass p-8 relative"
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.1 }}
-            whileHover={{ scale: 1.02 }}
-          >
-            <div className="text-center">
-              <h3 className="text-2xl font-bold text-white mb-2">Free</h3>
-              <div className="text-4xl font-bold text-white mb-4">$0</div>
-              <p className="text-light mb-6">Perfect for getting started</p>
-              
-              <ul className="space-y-3 text-left mb-8">
-                <li className="flex items-center space-x-3">
-                  <CheckCircle className="w-5 h-5 text-green-400" />
-                  <span className="text-white">30 AI prompts/month</span>
-                </li>
-                <li className="flex items-center space-x-3">
-                  <CheckCircle className="w-5 h-5 text-green-400" />
-                  <span className="text-white">3 projects</span>
-                </li>
-                <li className="flex items-center space-x-3">
-                  <CheckCircle className="w-5 h-5 text-green-400" />
-                  <span className="text-white">Code export</span>
-                </li>
-                <li className="flex items-center space-x-3">
-                  <CheckCircle className="w-5 h-5 text-green-400" />
-                  <span className="text-white">Community support</span>
-                </li>
-              </ul>
-
-              <Link 
-                href={isSignedIn ? "/dashboard" : "/sign-up"}
-                className="btn-glossy w-full inline-flex items-center justify-center space-x-2"
-              >
-                <span>Get Started</span>
-                <ArrowRight className="w-4 h-4" />
-              </Link>
-            </div>
-          </motion.div>
-
-          {/* Plus Plan */}
-          <motion.div 
-            className="card-glass p-8 relative border-2 border-white/20"
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.2 }}
-            whileHover={{ scale: 1.02 }}
-          >
-            <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
-              <div className="bg-gradient-primary px-4 py-2 rounded-professional text-white text-sm font-medium">
-                Popular
-              </div>
-            </div>
-
-            <div className="text-center">
-              <h3 className="text-2xl font-bold text-white mb-2">Plus</h3>
-              <div className="text-4xl font-bold text-white mb-4">$20<span className="text-lg text-light">/month</span></div>
-              <p className="text-light mb-6">For serious developers</p>
-              
-              <ul className="space-y-3 text-left mb-8">
-                <li className="flex items-center space-x-3">
-                  <CheckCircle className="w-5 h-5 text-green-400" />
-                  <span className="text-white">200 AI prompts/month</span>
-                </li>
-                <li className="flex items-center space-x-3">
-                  <CheckCircle className="w-5 h-5 text-green-400" />
-                  <span className="text-white">Unlimited projects</span>
-                </li>
-                <li className="flex items-center space-x-3">
-                  <CheckCircle className="w-5 h-5 text-green-400" />
-                  <span className="text-white">Priority support</span>
-                </li>
-                <li className="flex items-center space-x-3">
-                  <CheckCircle className="w-5 h-5 text-green-400" />
-                  <span className="text-white">Custom API keys</span>
-                </li>
-              </ul>
-
-              <Link 
-                href={isSignedIn ? "/settings" : "/sign-up"}
-                className="btn-glossy w-full inline-flex items-center justify-center space-x-2"
-              >
-                <span>Upgrade to Plus</span>
-                <ArrowRight className="w-4 h-4" />
-              </Link>
-            </div>
-          </motion.div>
-
-          {/* Pro Plan */}
-          <motion.div 
-            className="card-glass p-8 relative"
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.3 }}
-            whileHover={{ scale: 1.02 }}
-          >
-            <div className="text-center">
-              <h3 className="text-2xl font-bold text-white mb-2">Pro</h3>
-              <div className="text-4xl font-bold text-white mb-4">$49<span className="text-lg text-light">/month</span></div>
-              <p className="text-light mb-6">For power users</p>
-              
-              <ul className="space-y-3 text-left mb-8">
-                <li className="flex items-center space-x-3">
-                  <CheckCircle className="w-5 h-5 text-green-400" />
-                  <span className="text-white">1000 AI prompts/month</span>
-                </li>
-                <li className="flex items-center space-x-3">
-                  <CheckCircle className="w-5 h-5 text-green-400" />
-                  <span className="text-white">Unlimited projects</span>
-                </li>
-                <li className="flex items-center space-x-3">
-                  <CheckCircle className="w-5 h-5 text-green-400" />
-                  <span className="text-white">Custom branding</span>
-                </li>
-                <li className="flex items-center space-x-3">
-                  <CheckCircle className="w-5 h-5 text-green-400" />
-                  <span className="text-white">API access</span>
-                </li>
-              </ul>
-
-              <Link 
-                href={isSignedIn ? "/settings" : "/sign-up"}
-                className="btn-glossy w-full inline-flex items-center justify-center space-x-2"
-              >
-                <span>Upgrade to Pro</span>
-                <ArrowRight className="w-4 h-4" />
-              </Link>
-            </div>
-          </motion.div>
-        </div>
-
-        {/* Clerk Pricing Table for Signed-in Users */}
-        {isSignedIn && (
+        {/* Pricing Table - Clerk for signed-in, Static for public */}
+        {isSignedIn ? (
+          // Signed-in users see Clerk PricingTable
           <motion.div 
             className="mb-16"
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.4 }}
+            transition={{ duration: 0.8, delay: 0.2 }}
           >
             <div className="text-center mb-8">
-              <h2 className="text-3xl font-bold text-white mb-4">Manage Your Subscription</h2>
+              <h2 className="text-3xl font-bold text-white mb-4">Select Your Plan</h2>
               <p className="text-light">Upgrade, downgrade, or manage your billing preferences</p>
             </div>
 
@@ -205,6 +71,137 @@ export default function PricingPage() {
               </div>
             </div>
           </motion.div>
+        ) : (
+          // Public users see static plan cards
+          <motion.div 
+            className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16"
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.2 }}
+          >
+            {/* Free Plan */}
+            <motion.div 
+              className="card-glass p-8 relative"
+              whileHover={{ scale: 1.02 }}
+            >
+              <div className="text-center">
+                <h3 className="text-2xl font-bold text-white mb-2">Free</h3>
+                <div className="text-4xl font-bold text-white mb-4">$0</div>
+                <p className="text-light mb-6">Perfect for getting started</p>
+                
+                <ul className="space-y-3 text-left mb-8">
+                  <li className="flex items-center space-x-3">
+                    <CheckCircle className="w-5 h-5 text-green-400" />
+                    <span className="text-white">30 AI prompts/month</span>
+                  </li>
+                  <li className="flex items-center space-x-3">
+                    <CheckCircle className="w-5 h-5 text-green-400" />
+                    <span className="text-white">3 projects</span>
+                  </li>
+                  <li className="flex items-center space-x-3">
+                    <CheckCircle className="w-5 h-5 text-green-400" />
+                    <span className="text-white">Code export</span>
+                  </li>
+                  <li className="flex items-center space-x-3">
+                    <CheckCircle className="w-5 h-5 text-green-400" />
+                    <span className="text-white">Community support</span>
+                  </li>
+                </ul>
+
+                <Link 
+                  href="/sign-up"
+                  className="btn-glossy w-full inline-flex items-center justify-center space-x-2"
+                >
+                  <span>Get Started</span>
+                  <ArrowRight className="w-4 h-4" />
+                </Link>
+              </div>
+            </motion.div>
+
+            {/* Plus Plan */}
+            <motion.div 
+              className="card-glass p-8 relative border-2 border-white/20"
+              whileHover={{ scale: 1.02 }}
+            >
+              <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
+                <div className="bg-gradient-primary px-4 py-2 rounded-professional text-white text-sm font-medium">
+                  Popular
+                </div>
+              </div>
+
+              <div className="text-center">
+                <h3 className="text-2xl font-bold text-white mb-2">Plus</h3>
+                <div className="text-4xl font-bold text-white mb-4">$19<span className="text-lg text-light">/month</span></div>
+                <p className="text-light mb-6">For serious developers</p>
+                
+                <ul className="space-y-3 text-left mb-8">
+                  <li className="flex items-center space-x-3">
+                    <CheckCircle className="w-5 h-5 text-green-400" />
+                    <span className="text-white">500 AI prompts/month</span>
+                  </li>
+                  <li className="flex items-center space-x-3">
+                    <CheckCircle className="w-5 h-5 text-green-400" />
+                    <span className="text-white">Unlimited projects</span>
+                  </li>
+                  <li className="flex items-center space-x-3">
+                    <CheckCircle className="w-5 h-5 text-green-400" />
+                    <span className="text-white">Priority support</span>
+                  </li>
+                  <li className="flex items-center space-x-3">
+                    <CheckCircle className="w-5 h-5 text-green-400" />
+                    <span className="text-white">Custom API keys</span>
+                  </li>
+                </ul>
+
+                <Link 
+                  href="/sign-up"
+                  className="btn-glossy w-full inline-flex items-center justify-center space-x-2"
+                >
+                  <span>Start Free Trial</span>
+                  <ArrowRight className="w-4 h-4" />
+                </Link>
+              </div>
+            </motion.div>
+
+            {/* Pro Plan */}
+            <motion.div 
+              className="card-glass p-8 relative"
+              whileHover={{ scale: 1.02 }}
+            >
+              <div className="text-center">
+                <h3 className="text-2xl font-bold text-white mb-2">Pro</h3>
+                <div className="text-4xl font-bold text-white mb-4">$49<span className="text-lg text-light">/month</span></div>
+                <p className="text-light mb-6">For power users</p>
+                
+                <ul className="space-y-3 text-left mb-8">
+                  <li className="flex items-center space-x-3">
+                    <CheckCircle className="w-5 h-5 text-green-400" />
+                    <span className="text-white">2000 AI prompts/month</span>
+                  </li>
+                  <li className="flex items-center space-x-3">
+                    <CheckCircle className="w-5 h-5 text-green-400" />
+                    <span className="text-white">Unlimited projects</span>
+                  </li>
+                  <li className="flex items-center space-x-3">
+                    <CheckCircle className="w-5 h-5 text-green-400" />
+                    <span className="text-white">Custom branding</span>
+                  </li>
+                  <li className="flex items-center space-x-3">
+                    <CheckCircle className="w-5 h-5 text-green-400" />
+                    <span className="text-white">API access</span>
+                  </li>
+                </ul>
+
+                <Link 
+                  href="/sign-up"
+                  className="btn-glossy w-full inline-flex items-center justify-center space-x-2"
+                >
+                  <span>Start Free Trial</span>
+                  <ArrowRight className="w-4 h-4" />
+                </Link>
+              </div>
+            </motion.div>
+          </motion.div>
         )}
 
         {/* Features Comparison */}
@@ -212,7 +209,7 @@ export default function PricingPage() {
           className="mb-16"
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 0.5 }}
+          transition={{ duration: 0.8, delay: 0.4 }}
         >
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold text-white mb-4">Why Choose Prism?</h2>
@@ -259,7 +256,7 @@ export default function PricingPage() {
           className="mb-16"
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 0.6 }}
+          transition={{ duration: 0.8, delay: 0.5 }}
         >
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold text-white mb-4">Frequently Asked Questions</h2>
@@ -297,7 +294,7 @@ export default function PricingPage() {
           className="text-center"
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 0.7 }}
+          transition={{ duration: 0.8, delay: 0.6 }}
         >
           <div className="card-glass p-12">
             <h2 className="text-3xl font-bold text-white mb-4">Ready to Start Building?</h2>

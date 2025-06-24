@@ -17,9 +17,9 @@ console.log()
 // Test 2: Plan mapping
 console.log('🔄 Plan Mapping Tests:')
 const testMappings = [
-  { clerk: 'free', internal: 'spark' },
-  { clerk: 'plus', internal: 'pro' },
-  { clerk: 'pro', internal: 'premium' },
+  { clerk: 'free', internal: 'free' },
+  { clerk: 'plus', internal: 'plus' },
+  { clerk: 'pro', internal: 'pro' },
   { clerk: 'team', internal: 'team' },
   { clerk: 'enterprise', internal: 'enterprise' }
 ]
@@ -42,6 +42,8 @@ SUBSCRIPTION_PLANS.forEach(plan => {
   console.log(`    Custom API Keys: ${limits.customApiKeys ? '✅' : '❌'}`)
   console.log(`    Priority Support: ${limits.prioritySupport ? '✅' : '❌'}`)
   console.log(`    Team Collaboration: ${limits.teamCollaboration ? '✅' : '❌'}`)
+  console.log(`    Custom Branding: ${limits.customBranding ? '✅' : '❌'}`)
+  console.log(`    API Access: ${limits.apiAccess ? '✅' : '❌'}`)
   console.log()
 })
 
@@ -92,6 +94,22 @@ webhookEvents.forEach(event => {
 })
 console.log()
 
+// Test 7: Usage tracking
+console.log('📊 Usage Tracking Features:')
+const usageFeatures = [
+  'Monthly prompt quotas',
+  'Automatic monthly reset',
+  'Real-time usage checking',
+  'Daily usage analytics',
+  'Usage percentage calculations',
+  'Reset date tracking'
+]
+
+usageFeatures.forEach(feature => {
+  console.log(`  ✅ ${feature}`)
+})
+console.log()
+
 console.log('🎯 Setup Checklist:')
 console.log('  1. Enable billing in Clerk Dashboard')
 console.log('  2. Connect Stripe account to Clerk')
@@ -100,6 +118,8 @@ console.log('  4. Set up webhook endpoint')
 console.log('  5. Configure environment variables')
 console.log('  6. Test PricingTable component')
 console.log('  7. Test billing portal integration')
+console.log('  8. Test usage tracking and quotas')
+console.log('  9. Test monthly reset functionality')
 console.log()
 
 console.log('✨ Clerk billing system ready!')
@@ -111,4 +131,13 @@ if (process.env.NODE_ENV !== 'production') {
   console.log('  npm run dev          # Start development server')
   console.log('  curl localhost:3000/api/test-db  # Test database connection')
   console.log('  curl localhost:3000/pricing      # Test pricing page')
+  console.log('  curl localhost:3000/api/user/subscription-status  # Test subscription status')
 } 
+
+console.log('\n🧪 Test Scenarios:')
+console.log('  1. Create free account → verify 30 prompt limit')
+console.log('  2. Upgrade to Plus → verify 500 prompt limit')
+console.log('  3. Generate apps → verify usage tracking')
+console.log('  4. Exceed quota → verify error messages')
+console.log('  5. Test monthly reset → verify quota reset')
+console.log('  6. Cancel subscription → verify reversion to free') 

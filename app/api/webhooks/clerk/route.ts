@@ -32,120 +32,100 @@ type ClerkWebhookEvent = {
 }
 
 export async function POST(request: NextRequest) {
-  // Verify the webhook signature
-  const WEBHOOK_SECRET = process.env.CLERK_WEBHOOK_SECRET
-
-  if (!WEBHOOK_SECRET) {
-    console.error('Missing CLERK_WEBHOOK_SECRET environment variable')
-    return NextResponse.json(
-      { error: 'Webhook secret not configured' },
-      { status: 500 }
-    )
-  }
-
-  // Get headers from the request
-  const svixId = request.headers.get('svix-id')
-  const svixTimestamp = request.headers.get('svix-timestamp')
-  const svixSignature = request.headers.get('svix-signature')
-
-  // If there are no headers, error out
-  if (!svixId || !svixTimestamp || !svixSignature) {
-    return NextResponse.json(
-      { error: 'Missing svix headers' },
-      { status: 400 }
-    )
-  }
-
-  // Get the body
-  const payload = await request.text()
-
-  // Create a new Svix instance with your secret
-  const webhook = new Webhook(WEBHOOK_SECRET)
-
-  let event: ClerkWebhookEvent
-
-  // Verify the payload with the headers
   try {
-    event = webhook.verify(payload, {
-      'svix-id': svixId,
-      'svix-timestamp': svixTimestamp,
-      'svix-signature': svixSignature,
-    }) as ClerkWebhookEvent
-  } catch (err) {
-    console.error('Error verifying webhook:', err)
-    return NextResponse.json(
-      { error: 'Invalid signature' },
-      { status: 400 }
-    )
-  }
+    const webhookSecret = process.env.CLERK_WEBHOOK_SECRET
+    
+    if (!webhookSecret) {
+      console.error('❌ CLERK_WEBHOOK_SECRET not configured')
+      return NextResponse.json({ error: 'Webhook secret not configured' }, { status: 500 })
+    }
 
-  console.log('📨 Received Clerk webhook:', event.type)
+    const body = await request.text()
+    const headers = request.headers
 
-  try {
-    await connectToDatabase()
+    // Verify webhook signature
+    const wh = new Webhook(webhookSecret)
+    let event: ClerkWebhookEvent
 
+    try {
+      event = wh.verify(body, {
+        'svix-id': headers.get('svix-id') || '',
+        'svix-timestamp': headers.get('svix-timestamp') || '',
+        'svix-signature': headers.get('svix-signature') || ''
+      }) as ClerkWebhookEvent
+    } catch (error) {
+      console.error('❌ Webhook signature verification failed:', error)
+      return NextResponse.json({ error: 'Invalid signature' }, { status: 400 })
+    }
+
+    console.log('📨 Received Clerk webhook:', event.type)
+
+    // Handle different event types
     switch (event.type) {
       case 'user.created':
         await handleUserCreated(event.data)
         break
+      
       case 'user.updated':
         await handleUserUpdated(event.data)
         break
+      
       case 'user.deleted':
         await handleUserDeleted(event.data)
         break
-      // Clerk billing webhook events
-      case 'subscription.created':
-        await handleSubscriptionCreated(event.data)
-        break
-      case 'subscription.updated':
-        await handleSubscriptionUpdated(event.data)
-        break
-      case 'subscription.cancelled':
-        await handleSubscriptionCancelled(event.data)
-        break
-      case 'subscription.renewed':
-        await handleSubscriptionRenewed(event.data)
-        break
+      
+      // Billing events
       case 'billing.subscription.created':
         await handleBillingSubscriptionCreated(event.data)
         break
+      
       case 'billing.subscription.updated':
         await handleBillingSubscriptionUpdated(event.data)
         break
+      
       case 'billing.subscription.cancelled':
         await handleBillingSubscriptionCancelled(event.data)
         break
+      
+      // Legacy subscription events (keep for backward compatibility)
+      case 'subscription.created':
+        await handleSubscriptionCreated(event.data)
+        break
+      
+      case 'subscription.updated':
+        await handleSubscriptionUpdated(event.data)
+        break
+      
+      case 'subscription.cancelled':
+        await handleSubscriptionCancelled(event.data)
+        break
+      
       default:
-        console.log(`Unhandled webhook event type: ${event.type}`)
+        console.log('⚠️ Unhandled webhook event type:', event.type)
     }
 
-    return NextResponse.json({ received: true })
+    return NextResponse.json({ success: true })
+
   } catch (error) {
-    console.error('Error processing webhook:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    console.error('❌ Webhook processing error:', error)
+    return NextResponse.json({ error: 'Webhook processing failed' }, { status: 500 })
   }
 }
 
-async function handleUserCreated(userData: ClerkWebhookEvent['data']) {
+// User management handlers
+async function handleUserCreated(data: ClerkWebhookEvent['data']) {
   try {
-    const primaryEmail = userData.email_addresses?.[0]?.email_address
-
-    const newUser = new User({
-      clerkId: userData.id,
-      email: primaryEmail,
-      firstName: userData.first_name,
-      lastName: userData.last_name,
-      avatar: userData.image_url,
-      plan: 'spark', // Start with free plan
-      preferences: {
-        expoVersion: '53.0.0',
-        codeStyle: 'typescript',
-        theme: 'light'
-      },
+    console.log('👤 User created:', data.id)
+    
+    await connectToDatabase()
+    
+    const user = await User.create({
+      clerkId: data.id,
+      email: data.email_addresses?.[0]?.email_address,
+      firstName: data.first_name,
+      lastName: data.last_name,
+      avatar: data.image_url,
+      plan: 'free', // Default to free plan
       usage: {
         promptsThisMonth: 0,
         projectsThisMonth: 0,
@@ -161,42 +141,48 @@ async function handleUserCreated(userData: ClerkWebhookEvent['data']) {
       }
     })
 
-    await newUser.save()
-    console.log('✅ Created user in MongoDB:', userData.id)
+    console.log('✅ User created in database:', user._id)
   } catch (error) {
-    console.error('Error creating user:', error)
+    console.error('❌ Error creating user:', error)
     throw error
   }
 }
 
-async function handleUserUpdated(userData: ClerkWebhookEvent['data']) {
+async function handleUserUpdated(data: ClerkWebhookEvent['data']) {
   try {
-    const primaryEmail = userData.email_addresses?.[0]?.email_address
-
+    console.log('👤 User updated:', data.id)
+    
+    await connectToDatabase()
+    
     await User.findOneAndUpdate(
-      { clerkId: userData.id },
+      { clerkId: data.id },
       {
-        email: primaryEmail,
-        firstName: userData.first_name,
-        lastName: userData.last_name,
-        avatar: userData.image_url,
+        email: data.email_addresses?.[0]?.email_address,
+        firstName: data.first_name,
+        lastName: data.last_name,
+        avatar: data.image_url,
         updatedAt: new Date()
       }
     )
 
-    console.log('✅ Updated user in MongoDB:', userData.id)
+    console.log('✅ User updated in database')
   } catch (error) {
-    console.error('Error updating user:', error)
+    console.error('❌ Error updating user:', error)
     throw error
   }
 }
 
-async function handleUserDeleted(userData: ClerkWebhookEvent['data']) {
+async function handleUserDeleted(data: ClerkWebhookEvent['data']) {
   try {
-    await User.findOneAndDelete({ clerkId: userData.id })
-    console.log('✅ Deleted user from MongoDB:', userData.id)
+    console.log('👤 User deleted:', data.id)
+    
+    await connectToDatabase()
+    
+    await User.findOneAndDelete({ clerkId: data.id })
+
+    console.log('✅ User deleted from database')
   } catch (error) {
-    console.error('Error deleting user:', error)
+    console.error('❌ Error deleting user:', error)
     throw error
   }
 }
@@ -217,6 +203,7 @@ async function handleBillingSubscriptionCreated(data: ClerkWebhookEvent['data'])
     // Map Clerk plan ID to our internal plan
     const internalPlan = mapClerkPlanToInternal(planId)
 
+    await connectToDatabase()
     await User.findOneAndUpdate(
       { clerkId: userId },
       {
@@ -250,8 +237,9 @@ async function handleBillingSubscriptionUpdated(data: ClerkWebhookEvent['data'])
     }
 
     // Map Clerk plan ID to our internal plan
-    const internalPlan = planId ? mapClerkPlanToInternal(planId) : 'spark'
+    const internalPlan = planId ? mapClerkPlanToInternal(planId) : 'free'
 
+    await connectToDatabase()
     await User.findOneAndUpdate(
       { clerkId: userId },
       {
@@ -281,10 +269,11 @@ async function handleBillingSubscriptionCancelled(data: ClerkWebhookEvent['data'
       return
     }
 
+    await connectToDatabase()
     await User.findOneAndUpdate(
       { clerkId: userId },
       {
-        plan: 'spark', // Revert to free plan
+        plan: 'free', // Revert to free plan
         'subscription.status': 'canceled',
         'subscription.cancelAtPeriodEnd': true,
         updatedAt: new Date()
@@ -309,8 +298,9 @@ async function handleSubscriptionCreated(data: ClerkWebhookEvent['data']) {
       return
     }
 
-    const internalPlan = data.plan_id ? mapClerkPlanToInternal(data.plan_id) : 'spark'
+    const internalPlan = data.plan_id ? mapClerkPlanToInternal(data.plan_id) : 'free'
 
+    await connectToDatabase()
     await User.findOneAndUpdate(
       { clerkId: userId },
       {
@@ -341,8 +331,9 @@ async function handleSubscriptionUpdated(data: ClerkWebhookEvent['data']) {
       return
     }
 
-    const internalPlan = data.plan_id ? mapClerkPlanToInternal(data.plan_id) : 'spark'
+    const internalPlan = data.plan_id ? mapClerkPlanToInternal(data.plan_id) : 'free'
 
+    await connectToDatabase()
     await User.findOneAndUpdate(
       { clerkId: userId },
       {
@@ -372,10 +363,11 @@ async function handleSubscriptionCancelled(data: ClerkWebhookEvent['data']) {
       return
     }
 
+    await connectToDatabase()
     await User.findOneAndUpdate(
       { clerkId: userId },
       {
-        plan: 'spark', // Revert to free plan
+        plan: 'free', // Revert to free plan
         'subscription.status': 'canceled',
         'subscription.cancelAtPeriodEnd': true,
         updatedAt: new Date()
@@ -385,33 +377,6 @@ async function handleSubscriptionCancelled(data: ClerkWebhookEvent['data']) {
     console.log(`✅ Cancelled user subscription: ${userId}`)
   } catch (error) {
     console.error('Error handling subscription cancelled:', error)
-    throw error
-  }
-}
-
-async function handleSubscriptionRenewed(data: ClerkWebhookEvent['data']) {
-  try {
-    console.log('💳 Legacy subscription renewed:', data.subscription_id)
-    
-    const userId = data.user_id || data.id
-    if (!userId) {
-      console.error('No user ID in subscription renewed event')
-      return
-    }
-
-    await User.findOneAndUpdate(
-      { clerkId: userId },
-      {
-        'subscription.status': 'active',
-        'subscription.currentPeriodEnd': data.current_period_end ? new Date(data.current_period_end * 1000) : null,
-        'subscription.cancelAtPeriodEnd': false,
-        updatedAt: new Date()
-      }
-    )
-
-    console.log(`✅ Renewed user subscription: ${userId}`)
-  } catch (error) {
-    console.error('Error handling subscription renewed:', error)
     throw error
   }
 } 

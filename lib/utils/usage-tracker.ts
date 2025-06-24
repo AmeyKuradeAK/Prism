@@ -1,6 +1,6 @@
 import connectToDatabase from '@/lib/database/mongodb'
 import User from '@/lib/database/models/User'
-import { SUBSCRIPTION_PLANS, getMonthlyLimit } from './subscription-plans'
+import { getMonthlyLimit } from './subscription-plans'
 
 export interface UsageStats {
   promptsUsed: number
@@ -45,7 +45,7 @@ export async function trackPromptUsage(userId: string): Promise<boolean> {
     user.analytics.lastActiveAt = new Date()
 
     // Update daily usage
-    const todayUsage = user.usage.dailyUsage.find(day => 
+    const todayUsage = user.usage.dailyUsage.find((day: any) => 
       day.date.getTime() === today.getTime()
     )
 
@@ -61,8 +61,8 @@ export async function trackPromptUsage(userId: string): Promise<boolean> {
 
     // Keep only last 30 days of daily usage
     user.usage.dailyUsage = user.usage.dailyUsage
-      .filter(day => day.date >= new Date(Date.now() - 30 * 24 * 60 * 60 * 1000))
-      .sort((a, b) => b.date.getTime() - a.date.getTime())
+      .filter((day: any) => day.date >= new Date(Date.now() - 30 * 24 * 60 * 60 * 1000))
+      .sort((a: any, b: any) => b.date.getTime() - a.date.getTime())
 
     await user.save()
     return true
@@ -93,7 +93,7 @@ export async function trackProjectCreation(userId: string): Promise<boolean> {
     user.analytics.lastActiveAt = new Date()
 
     // Update daily usage
-    const todayUsage = user.usage.dailyUsage.find(day => 
+    const todayUsage = user.usage.dailyUsage.find((day: any) => 
       day.date.getTime() === today.getTime()
     )
 
@@ -109,8 +109,8 @@ export async function trackProjectCreation(userId: string): Promise<boolean> {
 
     // Keep only last 30 days
     user.usage.dailyUsage = user.usage.dailyUsage
-      .filter(day => day.date >= new Date(Date.now() - 30 * 24 * 60 * 60 * 1000))
-      .sort((a, b) => b.date.getTime() - a.date.getTime())
+      .filter((day: any) => day.date >= new Date(Date.now() - 30 * 24 * 60 * 60 * 1000))
+      .sort((a: any, b: any) => b.date.getTime() - a.date.getTime())
 
     await user.save()
     return true
@@ -133,7 +133,7 @@ export async function getUserUsageStats(userId: string): Promise<UsageStats> {
       console.log(`Creating new user with free plan defaults: ${userId}`)
       user = await User.create({
         clerkId: userId,
-        plan: 'spark', // Free plan
+        plan: 'free', // Free plan
         usage: {
           promptsThisMonth: 0,
           projectsThisMonth: 0,
@@ -153,19 +153,15 @@ export async function getUserUsageStats(userId: string): Promise<UsageStats> {
     // Check if we need to reset monthly usage
     await checkAndResetMonthlyUsage(user)
 
-    // Get plan limits - ensure minimum values for free plan
+    // Get plan limits
     const promptsLimit = getMonthlyLimit(user.plan, 'promptsPerMonth')
     const projectsLimit = getMonthlyLimit(user.plan, 'projectsPerMonth')
-    
-    // Ensure free plan has correct limits
-    const finalPromptsLimit = user.plan === 'spark' ? Math.max(15, promptsLimit === Infinity ? 15 : promptsLimit) : promptsLimit
-    const finalProjectsLimit = user.plan === 'spark' ? Math.max(3, projectsLimit === Infinity ? 3 : projectsLimit) : projectsLimit
 
     const promptsUsed = user.usage.promptsThisMonth || 0
     const projectsCreated = user.usage.projectsThisMonth || 0
 
-    const isOverPromptLimit = finalPromptsLimit !== Infinity && promptsUsed >= finalPromptsLimit
-    const isOverProjectLimit = finalProjectsLimit !== Infinity && projectsCreated >= finalProjectsLimit
+    const isOverPromptLimit = promptsLimit > 0 && promptsUsed >= promptsLimit
+    const isOverProjectLimit = projectsLimit > 0 && projectsCreated >= projectsLimit
 
     // Calculate next reset date (first day of next month)
     const resetDate = new Date()
@@ -175,9 +171,9 @@ export async function getUserUsageStats(userId: string): Promise<UsageStats> {
 
     const stats = {
       promptsUsed,
-      promptsLimit: finalPromptsLimit === Infinity ? -1 : finalPromptsLimit,
+      promptsLimit: promptsLimit === -1 ? -1 : promptsLimit,
       projectsCreated,
-      projectsLimit: finalProjectsLimit === Infinity ? -1 : finalProjectsLimit,
+      projectsLimit: projectsLimit === -1 ? -1 : projectsLimit,
       isOverLimit: isOverPromptLimit || isOverProjectLimit,
       canUseAI: !isOverPromptLimit, // AI generation is prompt-based
       resetDate
@@ -197,7 +193,7 @@ export async function getUserUsageStats(userId: string): Promise<UsageStats> {
     // Return safe defaults with proper free tier limits
     const defaultStats = {
       promptsUsed: 0,
-      promptsLimit: 15, // Free tier default
+      promptsLimit: 30, // Free tier default
       projectsCreated: 0,
       projectsLimit: 3,
       isOverLimit: false,
@@ -224,9 +220,9 @@ export async function getUserDailyUsage(userId: string, days: number = 30): Prom
     const cutoffDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
     
     return user.usage.dailyUsage
-      .filter(day => day.date >= cutoffDate)
-      .sort((a, b) => a.date.getTime() - b.date.getTime())
-      .map(day => ({
+      .filter((day: any) => day.date >= cutoffDate)
+      .sort((a: any, b: any) => a.date.getTime() - b.date.getTime())
+      .map((day: any) => ({
         date: day.date,
         promptsUsed: day.promptsUsed,
         projectsCreated: day.projectsCreated
@@ -246,6 +242,8 @@ async function checkAndResetMonthlyUsage(user: any): Promise<void> {
   
   // Reset if it's a new month
   if (now.getMonth() !== lastReset.getMonth() || now.getFullYear() !== lastReset.getFullYear()) {
+    console.log(`📊 Resetting monthly usage for user ${user.clerkId} (new billing period)`)
+    
     user.usage.promptsThisMonth = 0
     user.usage.projectsThisMonth = 0
     user.usage.lastResetAt = new Date(now.getFullYear(), now.getMonth(), 1)
@@ -290,4 +288,30 @@ export function formatUsageText(used: number, limit: number): string {
     return `${used.toLocaleString()} used`
   }
   return `${used.toLocaleString()} / ${limit.toLocaleString()}`
+}
+
+/**
+ * Reset user's monthly usage (for testing or manual reset)
+ */
+export async function resetMonthlyUsage(userId: string): Promise<boolean> {
+  try {
+    await connectToDatabase()
+    
+    const user = await User.findOne({ clerkId: userId })
+    if (!user) {
+      throw new Error('User not found')
+    }
+
+    user.usage.promptsThisMonth = 0
+    user.usage.projectsThisMonth = 0
+    user.usage.lastResetAt = new Date()
+    
+    await user.save()
+    
+    console.log(`✅ Reset monthly usage for user ${userId}`)
+    return true
+  } catch (error) {
+    console.error('Error resetting monthly usage:', error)
+    return false
+  }
 } 
