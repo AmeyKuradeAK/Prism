@@ -122,7 +122,7 @@ export default function PricingPage() {
               </ul>
 
               <Link 
-                href={isSignedIn ? "/dashboard/pricing" : "/sign-up"}
+                href={isSignedIn ? "/settings" : "/sign-up"}
                 className="btn-glossy w-full inline-flex items-center justify-center space-x-2"
               >
                 <span>Upgrade to Plus</span>
@@ -164,7 +164,7 @@ export default function PricingPage() {
               </ul>
 
               <Link 
-                href={isSignedIn ? "/dashboard/pricing" : "/sign-up"}
+                href={isSignedIn ? "/settings" : "/sign-up"}
                 className="btn-glossy w-full inline-flex items-center justify-center space-x-2"
               >
                 <span>Upgrade to Pro</span>

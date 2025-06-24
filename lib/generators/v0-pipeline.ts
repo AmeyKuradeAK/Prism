@@ -9,7 +9,7 @@
  * 5. Build Validation & Error Recovery
  */
 
-import { generateDemo1BaseTemplate } from '@/lib/generators/templates/complete-demo1-template'
+import { generateStandardReactNativeTemplate } from '@/lib/generators/templates/standard-react-native-template'
 
 // 🚦 Rate Limiting for Mistral API (1 RPS, 500k tokens/minute)
 class MistralRateLimiter {
@@ -160,7 +160,7 @@ export async function runV0Pipeline(prompt: string): Promise<{ [key: string]: st
     
     // STEP 3: Base Template (Foundation - always created)
     console.log('📱 Step 3: Creating base template foundation...')
-    const baseFiles = generateDemo1BaseTemplate(plan.appName)
+    const baseFiles = generateStandardReactNativeTemplate(plan.appName)
     console.log(`✅ Base foundation: ${Object.keys(baseFiles).length} files`)
     
     if (Object.keys(baseFiles).length === 0) {
