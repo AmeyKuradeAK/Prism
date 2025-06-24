@@ -1,14 +1,10 @@
-import { Metadata } from 'next'
+'use client'
+
 import Documentation from '@/components/Documentation'
 import { motion } from 'framer-motion'
 import Header from '@/components/Header'
 import { BookOpen, Code, Zap, Smartphone, Download, Users, Star, ArrowRight, CheckCircle } from 'lucide-react'
 import Link from 'next/link'
-
-export const metadata: Metadata = {
-  title: 'Documentation | Prism - AI-Powered React Native Builder',
-  description: 'Comprehensive documentation for building React Native apps with AI',
-}
 
 export default function DocsPage() {
   const features = [
